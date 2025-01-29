@@ -9,6 +9,12 @@ set(HERMES_VERSION_MINOR 0)
 set(HERMES_VERSION_PATCH 0)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --diag-suppress=20012")
 
+# ------------------------------------------------------------------------------
+# DOTENV
+# ------------------------------------------------------------------------------
+if(EXISTS ${CMAKE_SOURCE_DIR}/.env.cmake)
+    include(.env.cmake)
+endif()
 
 # -----------------------------------------------------------------------------
 # Define Options
