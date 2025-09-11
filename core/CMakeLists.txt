@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.10)
+
+# Binary output directory is configured in parent CMakeLists.txt to use build/bin
+# All .so, .a, and executable files will be placed in build/bin directory
+
+# Find yaml-cpp for configuration management
+find_package(yaml-cpp REQUIRED)
+
+# Create both client and runtime libraries for CTE core module
+# This creates targets: wrp_cte_core_runtime and wrp_cte_core_client
+add_chimod_both(
+  CHIMOD_NAME core
+  RUNTIME_SOURCES 
+    src/core_runtime.cc
+    src/core_config.cc
+    src/autogen/core_lib_exec.cc
+  CLIENT_SOURCES 
+    src/core_client.cc
+)
+
+# Link yaml-cpp to the runtime library
+target_link_libraries(wrp_cte_core_runtime PRIVATE yaml-cpp)
+
+# Install the ChiMod
+# Automatically finds and installs the targets created above
+install_chimod(
+  CHIMOD_NAME core
+)

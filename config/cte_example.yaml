@@ -1,0 +1,72 @@
+# Content Transfer Engine (CTE) Configuration File
+# This file defines the configuration for the CTE core module
+
+# Worker configuration
+worker_count: 4
+
+# Target management settings
+targets:
+  max_targets: 100
+  default_target_timeout_ms: 30000
+  auto_unregister_failed: true
+
+# Performance tuning
+performance:
+  target_stat_interval_ms: 5000
+  blob_cache_size_mb: 512
+  max_concurrent_operations: 64
+  score_threshold: 0.7
+
+# Queue configuration
+queues:
+  target_management:
+    lane_count: 2
+    priority: "low_latency"
+  
+  tag_management:
+    lane_count: 2
+    priority: "low_latency"
+  
+  blob_operations:
+    lane_count: 4
+    priority: "high_latency"
+  
+  stats:
+    lane_count: 1
+    priority: "high_latency"
+
+# Storage block device configuration
+storage:
+  # High-performance NVMe storage for primary data
+  - path: "/mnt/nvme/cte_primary"
+    bdev_type: "file"
+    capacity_limit: "1TB"
+  
+  # RAM-based storage for temporary/cache data
+  - path: "/tmp/cte_cache"
+    bdev_type: "ram"
+    capacity_limit: "8GB"
+  
+  # Secondary storage on traditional SSDs
+  - path: "/mnt/ssd/cte_secondary"
+    bdev_type: "file"
+    capacity_limit: "500GB"
+  
+  # Additional NVMe for high-throughput workloads
+  - path: "/mnt/nvme2/cte_bulk"
+    bdev_type: "file"
+    capacity_limit: "2TB"
+
+# Data Placement Engine configuration
+dpe:
+  dpe_type: "max_bw"  # Options: "random", "round_robin", "max_bw"
+
+# Optional: Logging configuration
+logging:
+  level: "info"
+  file_path: "/var/log/cte/cte.log"
+
+# Optional: Network configuration
+network:
+  port: 8080
+  max_connections: 1000
