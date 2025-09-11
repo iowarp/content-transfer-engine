@@ -469,27 +469,41 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       return;
     }
 
-    // Generate blob name if empty
+    // Validate blob name and ID - both must be provided (no automatic generation)
     if (blob_name.empty()) {
-      blob_name = "blob_" + std::to_string(tag_id) + "_" + std::to_string(blob_id);
-      task->blob_name_ = chi::string(main_allocator_, blob_name);
-    }
-
-    // Assign blob ID if not provided
-    if (blob_id == 0) {
-      blob_id = GetOrAssignBlobId(tag_id, blob_name, 0);
-      task->blob_id_ = blob_id;
-    }
-
-    // Check if blob already exists
-    auto blob_it = blob_id_to_info_.find(blob_id);
-    if (blob_it != blob_id_to_info_.end()) {
-      // Blob exists, this could be an update - for now return error
       task->result_code_ = 1;
-      task->error_message_ = chi::string(main_allocator_, 
-          "Blob with ID " + std::to_string(blob_id) + " already exists");
+      task->error_message_ = chi::string(main_allocator_, "Blob name must be provided (automatic generation disabled)");
       return;
     }
+    
+    if (blob_id == 0) {
+      task->result_code_ = 1;
+      task->error_message_ = chi::string(main_allocator_, "Blob ID must be provided (automatic generation disabled)");
+      return;
+    }
+
+    // Check if blob already exists - PutBlob can get or create
+    auto blob_it = blob_id_to_info_.find(blob_id);
+    bool blob_exists = (blob_it != blob_id_to_info_.end());
+    
+    if (blob_exists) {
+      // Blob exists - verify the name matches
+      if (blob_it->second.blob_name_.str() != blob_name) {
+        task->result_code_ = 1;
+        task->error_message_ = chi::string(main_allocator_, 
+            "Blob with ID " + std::to_string(blob_id) + " exists but has different name '" 
+            + blob_it->second.blob_name_.str() + "' (expected '" + blob_name + "')");
+        return;
+      }
+      
+      // TODO: For existing blobs, we could perform an update operation
+      // For now, just return success for existing blobs without modifying them
+      task->result_code_ = 0;
+      std::cout << "PutBlob: Found existing blob_id=" << blob_id << ", name=" << blob_name << std::endl;
+      return;
+    }
+    
+    // Blob is new - proceed with creation
 
     // Get all available targets for data placement
     std::vector<TargetInfo> available_targets;

@@ -29,6 +29,7 @@ class Client : public chi::ContainerClient {
       const hipc::MemContext& mctx,
       const chi::PoolQuery& pool_query,
       const CreateParams& params = CreateParams()) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     // CRITICAL: CreateTask MUST use admin pool for GetOrCreatePool processing
@@ -71,6 +72,7 @@ class Client : public chi::ContainerClient {
       chimaera::bdev::BdevType bdev_type,
       const std::string& file_path,
       chi::u64 total_size) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<RegisterTargetTask>(
@@ -104,6 +106,7 @@ class Client : public chi::ContainerClient {
   hipc::FullPtr<UnregisterTargetTask> AsyncUnregisterTarget(
       const hipc::MemContext& mctx,
       const std::string& target_name) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<UnregisterTargetTask>(
@@ -139,6 +142,7 @@ class Client : public chi::ContainerClient {
    */
   hipc::FullPtr<ListTargetsTask> AsyncListTargets(
       const hipc::MemContext& mctx) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<ListTargetsTask>(
@@ -166,6 +170,7 @@ class Client : public chi::ContainerClient {
    */
   hipc::FullPtr<StatTargetsTask> AsyncStatTargets(
       const hipc::MemContext& mctx) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<StatTargetsTask>(
@@ -198,6 +203,7 @@ class Client : public chi::ContainerClient {
       const hipc::MemContext& mctx,
       const std::string& tag_name,
       chi::u32 tag_id = 0) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<GetOrCreateTagTask>(
@@ -244,6 +250,7 @@ class Client : public chi::ContainerClient {
       hipc::Pointer blob_data,
       float score,
       chi::u32 flags) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<PutBlobTask>(
@@ -292,6 +299,7 @@ class Client : public chi::ContainerClient {
       chi::u64 offset,
       chi::u64 size,
       chi::u32 flags) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<GetBlobTask>(
@@ -329,6 +337,7 @@ class Client : public chi::ContainerClient {
       const hipc::MemContext& mctx,
       chi::u32 blob_id,
       float new_score) {
+    (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
     auto task = ipc_manager->NewTask<ReorganizeBlobTask>(

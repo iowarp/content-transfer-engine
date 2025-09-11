@@ -53,4 +53,12 @@ message(STATUS "Found Chimaera framework - building full ChiMod implementation")
 # Add the core ChiMod
 add_subdirectory(core)
 
+# Add unit tests (optional, controlled by BUILD_TESTING)
+option(BUILD_TESTING "Build unit tests" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(test/unit)
+    message(STATUS "CTE unit tests configured for compilation")
+endif()
+
 message(STATUS "CTE Core ChiMod configured for compilation")
