@@ -46,13 +46,11 @@ endif()
 # Require Chimaera framework packages
 find_package(chimaera-core REQUIRED)
 find_package(chimaera-admin REQUIRED)
+# Note: chimaera-bdev functionality is included in chimaera-core
 
 message(STATUS "Found Chimaera framework - building full ChiMod implementation")
 
 # Add the core ChiMod
 add_subdirectory(core)
 
-# Add the bdev ChiMod
-add_subdirectory(chimods/bdev)
-
-message(STATUS "CTE Core and Bdev ChiMods configured for compilation")
+message(STATUS "CTE Core ChiMod configured for compilation")

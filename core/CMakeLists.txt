@@ -13,6 +13,7 @@ add_chimod_both(
   RUNTIME_SOURCES 
     src/core_runtime.cc
     src/core_config.cc
+    src/core_dpe.cc
     src/autogen/core_lib_exec.cc
   CLIENT_SOURCES 
     src/core_client.cc
@@ -20,6 +21,8 @@ add_chimod_both(
 
 # Link yaml-cpp to the runtime library
 target_link_libraries(wrp_cte_core_runtime PRIVATE yaml-cpp)
+
+# Note: bdev functionality should be available through chimaera-core
 
 # Install the ChiMod
 # Automatically finds and installs the targets created above

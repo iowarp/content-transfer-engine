@@ -173,6 +173,24 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     // Generate bdev pool name
     std::string bdev_pool_name = "bdev_pool_" + target_name;
 
+    // Get initial statistics from the bdev
+    chi::u64 remaining_size = 0;
+    chimaera::bdev::PerfMetrics perf_metrics;
+    try {
+      perf_metrics = bdev_client.GetStats(HSHM_MCTX, remaining_size);
+    } catch (const std::exception &stats_ex) {
+      // Log warning but continue - statistics collection is not critical for registration
+      std::cout << "Warning: Failed to collect initial statistics for target '" 
+                << target_name << "': " << stats_ex.what() << std::endl;
+      // Use default values
+      perf_metrics.read_bandwidth_mbps_ = 0.0;
+      perf_metrics.write_bandwidth_mbps_ = 0.0;
+      perf_metrics.read_latency_us_ = 0.0;
+      perf_metrics.write_latency_us_ = 0.0;
+      perf_metrics.iops_ = 0.0;
+      remaining_size = total_size;  // Fallback to full capacity
+    }
+
     // Create target info with bdev client and performance stats
     TargetInfo target_info(main_allocator_);
     target_info.target_name_ = target_name;
@@ -182,11 +200,11 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     target_info.bytes_written_ = 0;
     target_info.ops_read_ = 0;
     target_info.ops_written_ = 0;
-    target_info.avg_latency_us_ = 0.0f;
-    target_info.target_score_ = 0.0f;
-    target_info.remaining_space_ = total_size;  // Initialize with full capacity
-    target_info.read_bandwidth_mbps_ = 0.0;
-    target_info.write_bandwidth_mbps_ = 0.0;
+    target_info.avg_latency_us_ = static_cast<float>((perf_metrics.read_latency_us_ + perf_metrics.write_latency_us_) / 2.0);
+    target_info.target_score_ = 0.0f;  // Will be calculated based on performance metrics
+    target_info.remaining_space_ = remaining_size;  // Use actual remaining space from bdev
+    target_info.read_bandwidth_mbps_ = perf_metrics.read_bandwidth_mbps_;
+    target_info.write_bandwidth_mbps_ = perf_metrics.write_bandwidth_mbps_;
 
     // Register the target
     {
@@ -198,7 +216,11 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     std::cout << "Target '" << target_name
               << "' registered with bdev pool: " << bdev_pool_name 
               << " (type=" << static_cast<chi::u32>(bdev_type) << ", path=" << file_path
-              << ", size=" << total_size << ")" << std::endl;
+              << ", size=" << total_size << ", remaining=" << remaining_size << ")" << std::endl;
+    std::cout << "  Initial statistics: read_bw=" << perf_metrics.read_bandwidth_mbps_ << " MB/s"
+              << ", write_bw=" << perf_metrics.write_bandwidth_mbps_ << " MB/s"
+              << ", avg_latency=" << target_info.avg_latency_us_ << " μs"
+              << ", iops=" << perf_metrics.iops_ << std::endl;
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
@@ -290,7 +312,7 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
     std::vector<std::unique_ptr<chi::ScopedCoRwReadLock>> locks;
     locks.reserve(target_locks_.size());
     for (size_t i = 0; i < target_locks_.size(); ++i) {
-      locks.emplace_back(std::make_unique<chi::ScopedCoRwReadLock>(target_locks_[i]));
+      locks.emplace_back(std::make_unique<chi::ScopedCoRwReadLock>(*target_locks_[i]));
     }
 
     task->targets_.reserve(registered_targets_.size());
