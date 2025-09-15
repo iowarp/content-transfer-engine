@@ -19,6 +19,14 @@ class Client : public chi::ContainerClient {
               const CreateParams& params = CreateParams()) {
     auto task = AsyncCreate(mctx, pool_query, params);
     task->Wait();
+    
+    // Check if CreateTask succeeded and update client's pool_id_ to the actual pool created/found
+    // This is required because CreateTask is a GetOrCreatePoolTask that may return a different
+    // pool ID than what was requested if the pool already existed
+    if (task->return_code_ == 0) {
+      pool_id_ = task->new_pool_id_;
+    }
+    
     CHI_IPC->DelTask(task);
   }
 
@@ -39,7 +47,6 @@ class Client : public chi::ContainerClient {
         pool_query,
         "wrp_cte_core",     // ChiMod name
         std::to_string(pool_id_.ToU64()),   // Pool name as string
-        0,                  // Domain flags
         pool_id_,          // Target pool ID
         params);            // CreateParams with configuration
     
@@ -199,14 +206,14 @@ class Client : public chi::ContainerClient {
   /**
    * Asynchronous get or create tag - returns immediately
    */
-  hipc::FullPtr<GetOrCreateTagTask> AsyncGetOrCreateTag(
+  hipc::FullPtr<GetOrCreateTagTask<CreateParams>> AsyncGetOrCreateTag(
       const hipc::MemContext& mctx,
       const std::string& tag_name,
       chi::u32 tag_id = 0) {
     (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
-    auto task = ipc_manager->NewTask<GetOrCreateTagTask>(
+    auto task = ipc_manager->NewTask<GetOrCreateTagTask<CreateParams>>(
         chi::CreateTaskNode(),
         pool_id_,
         chi::PoolQuery::Local(),

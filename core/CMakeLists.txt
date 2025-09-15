@@ -1,7 +1,10 @@
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 cmake_minimum_required(VERSION 3.10)
 
 # Binary output directory is configured in parent CMakeLists.txt to use build/bin
 # All .so, .a, and executable files will be placed in build/bin directory
+# The global CMAKE_RUNTIME_OUTPUT_DIRECTORY, CMAKE_LIBRARY_OUTPUT_DIRECTORY, 
+# and CMAKE_ARCHIVE_OUTPUT_DIRECTORY variables are set in the parent CMakeLists.txt
 
 # Find yaml-cpp for configuration management
 find_package(yaml-cpp REQUIRED)

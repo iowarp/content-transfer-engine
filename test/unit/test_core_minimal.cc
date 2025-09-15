@@ -64,7 +64,7 @@ public:
     }
     
     // Create unique pool ID for this test session
-    core_pool_id_ = chi::PoolId(42);  // Using fixed ID for testing
+    core_pool_id_ = chi::PoolId(42, 0);  // Using fixed ID for testing (major=42, minor=0)
     
     // Create CTE core client
     core_client_ = std::make_unique<wrp_cte::core::Client>(core_pool_id_);

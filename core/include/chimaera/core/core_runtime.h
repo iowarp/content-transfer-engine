@@ -49,6 +49,17 @@ class Runtime : public chi::Container {
                      chi::RunContext& ctx);
 
   /**
+   * Destroy the container (Method::kDestroy)
+   */
+  void Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor destroy progress
+   */
+  void MonitorDestroy(chi::MonitorModeId mode, hipc::FullPtr<DestroyTask> task,
+                      chi::RunContext& ctx);
+
+  /**
    * Register a target (Method::kRegisterTarget)
    */
   void RegisterTarget(hipc::FullPtr<RegisterTargetTask> task, chi::RunContext& ctx);
@@ -99,13 +110,15 @@ class Runtime : public chi::Container {
   /**
    * Get or create a tag (Method::kGetOrCreateTag)
    */
-  void GetOrCreateTag(hipc::FullPtr<GetOrCreateTagTask> task, chi::RunContext& ctx);
+  template<typename CreateParamsT = CreateParams>
+  void GetOrCreateTag(hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task, chi::RunContext& ctx);
 
   /**
    * Monitor get or create tag operation
    */
+  template<typename CreateParamsT = CreateParams>
   void MonitorGetOrCreateTag(chi::MonitorModeId mode, 
-                           hipc::FullPtr<GetOrCreateTagTask> task,
+                           hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task,
                            chi::RunContext& ctx);
 
   /**

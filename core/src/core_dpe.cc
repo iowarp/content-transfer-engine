@@ -118,13 +118,14 @@ std::string MaxBwDpe::SelectTarget(const std::vector<TargetInfo>& targets,
     // Sort by write bandwidth (descending)
     std::sort(target_pairs.begin(), target_pairs.end(),
               [](const auto& a, const auto& b) {
-                return a.first.write_bandwidth_mbps_ > b.first.write_bandwidth_mbps_;
+                return a.first.perf_metrics_.write_bandwidth_mbps_ > b.first.perf_metrics_.write_bandwidth_mbps_;
               });
   } else {
     // Sort by latency (ascending - lower is better)
     std::sort(target_pairs.begin(), target_pairs.end(),
               [](const auto& a, const auto& b) {
-                return a.first.avg_latency_us_ < b.first.avg_latency_us_;
+                return (a.first.perf_metrics_.read_latency_us_ + a.first.perf_metrics_.write_latency_us_) / 2.0 < 
+                       (b.first.perf_metrics_.read_latency_us_ + b.first.perf_metrics_.write_latency_us_) / 2.0;
               });
   }
 

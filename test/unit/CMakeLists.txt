@@ -4,12 +4,18 @@
 
 cmake_minimum_required(VERSION 3.10)
 
+# Note: Binary output directory is configured in root CMakeLists.txt to use build/bin
+# The test executable will be placed in build/bin directory due to global
+# CMAKE_RUNTIME_OUTPUT_DIRECTORY setting
+
 # Find required test dependencies
 find_package(Catch2 REQUIRED)
 
 # Create the test executable
 add_executable(cte_core_unit_tests
     test_core_minimal.cc
+    test_core_functionality.cc
+    test_core_functionality_simple.cc
 )
 
 # Link against required libraries

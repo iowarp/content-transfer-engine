@@ -39,6 +39,16 @@ struct CreateParams {
       : config_file_path_(alloc, other.config_file_path_.str()), 
         worker_count_(other.worker_count_) {}
   
+  // Constructor with allocator, pool_id, and CreateParams (required for admin task creation)
+  CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+               const chi::PoolId& pool_id,
+               const CreateParams& other)
+      : config_file_path_(alloc, other.config_file_path_.str()), 
+        worker_count_(other.worker_count_) {
+    // pool_id is used by the admin task framework, but we don't need to store it
+    (void)pool_id;  // Suppress unused parameter warning
+  }
+  
   // Serialization support for cereal
   template<class Archive>
   void serialize(Archive& ar) {
@@ -54,6 +64,12 @@ struct CreateParams {
 using CreateTask = chimaera::admin::GetOrCreatePoolTask<CreateParams>;
 
 /**
+ * DestroyTask - Destroy the CTE Core container
+ * Type alias for DestroyPoolTask (uses kDestroy method)
+ */
+using DestroyTask = chimaera::admin::DestroyTask;
+
+/**
  * Target information structure
  */
 struct TargetInfo {
@@ -64,18 +80,15 @@ struct TargetInfo {
   chi::u64 bytes_written_;
   chi::u64 ops_read_;
   chi::u64 ops_written_;
-  float avg_latency_us_;
   float target_score_;                  // Target score (0-1, normalized log bandwidth)
   chi::u64 remaining_space_;           // Remaining allocatable space in bytes
-  double read_bandwidth_mbps_;         // Current read bandwidth in MB/s
-  double write_bandwidth_mbps_;        // Current write bandwidth in MB/s
+  chimaera::bdev::PerfMetrics perf_metrics_;  // Performance metrics from bdev
 
   TargetInfo() = default;
   
   explicit TargetInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : bytes_read_(0), bytes_written_(0), ops_read_(0), ops_written_(0), 
-        avg_latency_us_(0.0f), target_score_(0.0f), remaining_space_(0),
-        read_bandwidth_mbps_(0.0), write_bandwidth_mbps_(0.0) {
+        target_score_(0.0f), remaining_space_(0) {
     // std::string doesn't need allocator, chi::u64 and float are POD types
     (void)alloc; // Suppress unused parameter warning
   }
@@ -271,7 +284,9 @@ struct BlobInfo {
 
 /**
  * GetOrCreateTag task - Get or create a tag for blob grouping
+ * Template parameter allows different CreateParams types
  */
+template<typename CreateParamsT = CreateParams>
 struct GetOrCreateTagTask : public chi::Task {
   IN chi::string tag_name_;           // Tag name (required)
   INOUT chi::u32 tag_id_;            // Tag unique ID (default 0, output on creation)
