@@ -61,9 +61,8 @@ class Client : public chi::ContainerClient {
   chi::u32 RegisterTarget(const hipc::MemContext& mctx, 
                          const std::string& target_name,
                          chimaera::bdev::BdevType bdev_type,
-                         const std::string& file_path,
                          chi::u64 total_size) {
-    auto task = AsyncRegisterTarget(mctx, target_name, bdev_type, file_path, total_size);
+    auto task = AsyncRegisterTarget(mctx, target_name, bdev_type, total_size);
     task->Wait();
     chi::u32 result = task->result_code_;
     CHI_IPC->DelTask(task);
@@ -77,7 +76,6 @@ class Client : public chi::ContainerClient {
       const hipc::MemContext& mctx,
       const std::string& target_name,
       chimaera::bdev::BdevType bdev_type,
-      const std::string& file_path,
       chi::u64 total_size) {
     (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
@@ -88,7 +86,6 @@ class Client : public chi::ContainerClient {
         chi::PoolQuery::Local(),
         target_name,
         bdev_type,
-        file_path,
         total_size);
     
     ipc_manager->Enqueue(task);

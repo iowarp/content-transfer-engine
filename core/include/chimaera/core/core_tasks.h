@@ -99,9 +99,8 @@ struct TargetInfo {
  */
 struct RegisterTargetTask : public chi::Task {
   // Task-specific data using HSHM macros
-  IN chi::string target_name_;        // Name of the target to register
+  IN chi::string target_name_;        // Name and file path of the target to register
   IN chimaera::bdev::BdevType bdev_type_;  // Block device type enum
-  IN chi::string file_path_;          // Path to block device file (for kFile type)
   IN chi::u64 total_size_;            // Total size for allocation
   OUT chi::u32 result_code_;          // Output result (0 = success)
   OUT chi::string error_message_;     // Error description if failed
@@ -111,7 +110,6 @@ struct RegisterTargetTask : public chi::Task {
       : chi::Task(alloc), 
         target_name_(alloc), 
         bdev_type_(chimaera::bdev::BdevType::kFile),
-        file_path_(alloc),
         total_size_(0),
         result_code_(0),
         error_message_(alloc) {}
@@ -124,12 +122,10 @@ struct RegisterTargetTask : public chi::Task {
       const chi::PoolQuery &pool_query,
       const std::string &target_name,
       chimaera::bdev::BdevType bdev_type,
-      const std::string &file_path,
       chi::u64 total_size)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kRegisterTarget),
         target_name_(alloc, target_name),
         bdev_type_(bdev_type),
-        file_path_(alloc, file_path),
         total_size_(total_size),
         result_code_(0),
         error_message_(alloc) {

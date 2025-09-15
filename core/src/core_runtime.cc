@@ -200,7 +200,6 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
   try {
     std::string target_name = task->target_name_.str();
     chimaera::bdev::BdevType bdev_type = task->bdev_type_;
-    std::string file_path = task->file_path_.str();
     chi::u64 total_size = task->total_size_;
 
     // Check if target is already registered
@@ -217,11 +216,11 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
     // Create bdev client and container
     chimaera::bdev::Client bdev_client;
-    std::string bdev_pool_name = file_path;  // Use file_path as the bdev pool name
+    std::string bdev_pool_name = target_name;  // Use target_name as the bdev pool name
     
     // Create the bdev container using the client
     chi::PoolQuery pool_query = chi::PoolQuery::Local();
-    bdev_client.Create(hipc::MemContext(), pool_query, file_path, bdev_type, total_size);
+    bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_type, total_size);
     
     // Check if creation was successful
     if (bdev_client.return_code_ != 0) {
@@ -259,7 +258,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     std::cout << "Target '" << target_name
               << "' registered with bdev pool: " << bdev_pool_name
               << " (type=" << static_cast<int>(bdev_type)
-              << ", path=" << file_path << ", size=" << total_size
+              << ", path=" << target_name << ", size=" << total_size
               << ", remaining=" << remaining_size << ")" << std::endl;
     std::cout << "  Initial statistics: read_bw="
               << perf_metrics.read_bandwidth_mbps_ << " MB/s"

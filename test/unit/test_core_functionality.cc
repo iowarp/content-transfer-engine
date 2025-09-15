@@ -350,11 +350,11 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target", "
   INFO("Core pool created successfully");
   
   SECTION("FUNCTIONAL - Register file-based bdev target with real file operations") {
-    const std::string target_name = "functional_test_target";
+    // Use the test_storage_path_ as target_name since that's what matters for bdev creation
+    const std::string target_name = test_storage_path_;
     
     INFO("=== Testing REAL core_client_->RegisterTarget() call ===");
-    INFO("Target name: " << target_name);
-    INFO("Target path: " << test_storage_path_);
+    INFO("Target name (file path): " << target_name);
     INFO("Target size: " << kTestTargetSize << " bytes");
     
     // ACTUAL FUNCTIONAL TEST - call the real RegisterTarget API
@@ -362,7 +362,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target", "
         mctx_,
         target_name,
         chimaera::bdev::BdevType::kFile,
-        test_storage_path_,
         kTestTargetSize
     );
     
@@ -397,7 +396,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target", "
         mctx_,
         "",  // Empty name should cause failure
         chimaera::bdev::BdevType::kFile,
-        test_storage_path_,
         kTestTargetSize
     );
     
@@ -408,7 +406,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target", "
   }
   
   SECTION("FUNCTIONAL - Asynchronous target registration with real task management") {
-    const std::string target_name = "functional_async_target";
+    // Use the test_storage_path_ as target_name since that's what matters for bdev creation
+    const std::string target_name = test_storage_path_;
     
     INFO("=== Testing REAL core_client_->AsyncRegisterTarget() call ===");
     
@@ -417,7 +416,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target", "
         mctx_,
         target_name,
         chimaera::bdev::BdevType::kFile,
-        test_storage_path_,
         kTestTargetSize
     );
     
@@ -455,12 +453,12 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "PutBlob", "[cte][core][blob][put
   
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
   
-  const std::string target_name = "test_target_putblob";
+  // Use the test_storage_path_ as target_name since that's what matters for bdev creation
+  const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
       mctx_,
       target_name,
       chimaera::bdev::BdevType::kFile,
-      test_storage_path_,
       kTestTargetSize
   );
   REQUIRE(reg_result == 0);
@@ -559,12 +557,12 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "GetBlob", "[cte][core][blob][get
   
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
   
-  const std::string target_name = "test_target_getblob";
+  // Use the test_storage_path_ as target_name since that's what matters for bdev creation
+  const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
       mctx_,
       target_name,
       chimaera::bdev::BdevType::kFile,
-      test_storage_path_,
       kTestTargetSize
   );
   REQUIRE(reg_result == 0);
@@ -712,12 +710,13 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow", "
   INFO("Step 1 completed: CTE core pool initialized");
   
   // Step 2: Register multiple targets
-  const std::vector<std::string> target_names = {"target_1", "target_2"};
-  for (const auto& target_name : target_names) {
-    std::string target_path = test_storage_path_ + "_" + target_name;
+  const std::vector<std::string> target_suffixes = {"target_1", "target_2"};
+  for (const auto& suffix : target_suffixes) {
+    // Use the actual file path as target_name since that's what matters for bdev creation
+    std::string target_name = test_storage_path_ + "_" + suffix;
     chi::u32 result = core_client_->RegisterTarget(
         mctx_, target_name, chimaera::bdev::BdevType::kFile,
-        target_path, kTestTargetSize
+        kTestTargetSize
     );
     REQUIRE(result == 0);
   }
@@ -780,6 +779,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow", "
   
   // Verify targets are still listed correctly
   auto final_targets = core_client_->ListTargets(mctx_);
-  REQUIRE(final_targets.size() >= target_names.size());
+  REQUIRE(final_targets.size() >= target_suffixes.size());
   INFO("Integration test completed successfully - all steps verified");
 }
