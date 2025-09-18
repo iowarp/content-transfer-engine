@@ -103,7 +103,6 @@ struct RegisterTargetTask : public chi::Task {
   IN chimaera::bdev::BdevType bdev_type_;  // Block device type enum
   IN chi::u64 total_size_;            // Total size for allocation
   OUT chi::u32 result_code_;          // Output result (0 = success)
-  OUT chi::string error_message_;     // Error description if failed
 
   // SHM constructor
   explicit RegisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
@@ -111,8 +110,7 @@ struct RegisterTargetTask : public chi::Task {
         target_name_(alloc), 
         bdev_type_(chimaera::bdev::BdevType::kFile),
         total_size_(0),
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit RegisterTargetTask(
@@ -127,8 +125,7 @@ struct RegisterTargetTask : public chi::Task {
         target_name_(alloc, target_name),
         bdev_type_(bdev_type),
         total_size_(total_size),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kRegisterTarget;
@@ -143,14 +140,12 @@ struct RegisterTargetTask : public chi::Task {
 struct UnregisterTargetTask : public chi::Task {
   IN chi::string target_name_;        // Name of the target to unregister
   OUT chi::u32 result_code_;          // Output result (0 = success)
-  OUT chi::string error_message_;     // Error description if failed
 
   // SHM constructor
   explicit UnregisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
         target_name_(alloc), 
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit UnregisterTargetTask(
@@ -161,8 +156,7 @@ struct UnregisterTargetTask : public chi::Task {
       const std::string &target_name)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kUnregisterTarget),
         target_name_(alloc, target_name),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kUnregisterTarget;
@@ -177,14 +171,12 @@ struct UnregisterTargetTask : public chi::Task {
 struct ListTargetsTask : public chi::Task {
   OUT chi::vector<TargetInfo> targets_;  // List of registered targets
   OUT chi::u32 result_code_;             // Output result (0 = success)
-  OUT chi::string error_message_;        // Error description if failed
 
   // SHM constructor
   explicit ListTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
         targets_(alloc),
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit ListTargetsTask(
@@ -194,8 +186,7 @@ struct ListTargetsTask : public chi::Task {
       const chi::PoolQuery &pool_query)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kListTargets),
         targets_(alloc),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kListTargets;
@@ -209,13 +200,11 @@ struct ListTargetsTask : public chi::Task {
  */
 struct StatTargetsTask : public chi::Task {
   OUT chi::u32 result_code_;          // Output result (0 = success)
-  OUT chi::string error_message_;     // Error description if failed
 
   // SHM constructor
   explicit StatTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit StatTargetsTask(
@@ -224,8 +213,7 @@ struct StatTargetsTask : public chi::Task {
       const chi::PoolId &pool_id,
       const chi::PoolQuery &pool_query)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kStatTargets),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kStatTargets;
@@ -235,47 +223,103 @@ struct StatTargetsTask : public chi::Task {
 };
 
 /**
+ * TagId type definition
+ * Uses chi::UniqueId with node_id as major and atomic counter as minor
+ */
+using TagId = chi::UniqueId;
+
+/**
+ * BlobId type definition
+ * Uses chi::UniqueId with node_id as major and atomic counter as minor
+ */
+using BlobId = chi::UniqueId;
+
+} // namespace wrp_cte::core
+
+// Hash specialization for TagId (TagId uses same hash as chi::UniqueId)
+namespace hshm {
+template<>
+struct hash<wrp_cte::core::TagId> {
+  std::size_t operator()(const wrp_cte::core::TagId& id) const {
+    std::hash<chi::u32> hasher;
+    return hasher(id.major_) ^ (hasher(id.minor_) << 1);
+  }
+};
+} // namespace hshm
+
+namespace wrp_cte::core {
+
+/**
  * Tag information structure for blob grouping
  */
 struct TagInfo {
-  chi::string tag_name_;
-  chi::u32 tag_id_;
-  chi::unordered_map<chi::u32, chi::u32> blob_ids_;  // Map of blob IDs in this tag (using as set)
+  std::string tag_name_;
+  TagId tag_id_;
+  std::unordered_map<BlobId, chi::u32> blob_ids_;  // Map of blob IDs in this tag (using as set)
 
   TagInfo() = default;
   
   explicit TagInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : tag_name_(alloc), tag_id_(0), blob_ids_(alloc) {}
+      : tag_name_(), tag_id_(TagId{0, 0}), blob_ids_() {
+    (void)alloc; // Suppress unused parameter warning
+  }
       
   TagInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-          const std::string &tag_name, chi::u32 tag_id)
-      : tag_name_(alloc, tag_name), tag_id_(tag_id), blob_ids_(alloc) {}
+          const std::string &tag_name, const TagId& tag_id)
+      : tag_name_(tag_name), tag_id_(tag_id), blob_ids_() {
+    (void)alloc; // Suppress unused parameter warning
+  }
 };
 
 /**
- * Blob information structure
+ * Block structure for blob management
+ * Each block represents a portion of a blob stored in a target
+ */
+struct BlobBlock {
+  chimaera::bdev::Client bdev_client_; // Bdev client for this block's target
+  chi::u64 target_offset_;            // Offset within target where this block is stored
+  chi::u64 size_;                     // Size of this block in bytes
+  
+  BlobBlock() = default;
+  
+  BlobBlock(const chimaera::bdev::Client& client, chi::u64 offset, chi::u64 size)
+      : bdev_client_(client), target_offset_(offset), size_(size) {}
+};
+
+/**
+ * Blob information structure with block-based management
  */
 struct BlobInfo {
-  chi::u32 blob_id_;
-  chi::string blob_name_;
-  chi::string target_name_;
-  chi::u64 offset_;
-  chi::u64 size_;
-  float score_;  // 0-1 score for reorganization
+  BlobId blob_id_;
+  std::string blob_name_;
+  std::vector<BlobBlock> blocks_;     // Vector of blocks that make up this blob (ordered)
+  float score_;                       // 0-1 score for reorganization
 
   BlobInfo() = default;
   
   explicit BlobInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : blob_id_(0), blob_name_(alloc), target_name_(alloc), 
-        offset_(0), size_(0), score_(0.0f) {}
+      : blob_id_(BlobId{0, 0}), blob_name_(), blocks_(), score_(0.0f) {
+    (void)alloc; // Suppress unused parameter warning
+  }
         
   BlobInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-           chi::u32 blob_id, const std::string &blob_name,
-           const std::string &target_name, chi::u64 offset, 
-           chi::u64 size, float score)
-      : blob_id_(blob_id), blob_name_(alloc, blob_name), 
-        target_name_(alloc, target_name), offset_(offset), 
-        size_(size), score_(score) {}
+           const BlobId& blob_id, const std::string &blob_name,
+           float score)
+      : blob_id_(blob_id), blob_name_(blob_name), 
+        blocks_(), score_(score) {
+    (void)alloc; // Suppress unused parameter warning
+  }
+        
+  /**
+   * Get total size of blob by summing all block sizes
+   */
+  chi::u64 GetTotalSize() const {
+    chi::u64 total = 0;
+    for (size_t i = 0; i < blocks_.size(); ++i) {
+      total += blocks_[i].size_;
+    }
+    return total;
+  }
 };
 
 /**
@@ -285,19 +329,17 @@ struct BlobInfo {
 template<typename CreateParamsT = CreateParams>
 struct GetOrCreateTagTask : public chi::Task {
   IN chi::string tag_name_;           // Tag name (required)
-  INOUT chi::u32 tag_id_;            // Tag unique ID (default 0, output on creation)
+  INOUT TagId tag_id_;               // Tag unique ID (default null, output on creation)
   OUT TagInfo tag_info_;             // Complete tag information
   OUT chi::u32 result_code_;         // Output result (0 = success)
-  OUT chi::string error_message_;    // Error description if failed
 
   // SHM constructor
   explicit GetOrCreateTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
         tag_name_(alloc),
-        tag_id_(0),
+        tag_id_(TagId{0, 0}),
         tag_info_(alloc),
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit GetOrCreateTagTask(
@@ -306,13 +348,12 @@ struct GetOrCreateTagTask : public chi::Task {
       const chi::PoolId &pool_id,
       const chi::PoolQuery &pool_query,
       const std::string &tag_name,
-      chi::u32 tag_id = 0)
+      const TagId& tag_id = TagId{0, 0})
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kGetOrCreateTag),
         tag_name_(alloc, tag_name),
         tag_id_(tag_id),
         tag_info_(alloc),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kGetOrCreateTag;
@@ -325,30 +366,28 @@ struct GetOrCreateTagTask : public chi::Task {
  * PutBlob task - Store a blob (unimplemented for now)
  */
 struct PutBlobTask : public chi::Task {
-  IN chi::u32 tag_id_;                // Tag ID for blob grouping
+  IN TagId tag_id_;                  // Tag ID for blob grouping
   INOUT chi::string blob_name_;       // Blob name (optional, generated if empty)
-  INOUT chi::u32 blob_id_;           // Blob ID (optional, generated if 0)
-  IN chi::u64 offset_;               // Offset within target
+  INOUT BlobId blob_id_;             // Blob ID (optional, generated if null)
+  IN chi::u64 offset_;               // Offset within blob
   IN chi::u64 size_;                 // Size of blob data
   IN hipc::Pointer blob_data_;       // Blob data (shared memory pointer)
   IN float score_;                   // Score 0-1 for placement decisions
   IN chi::u32 flags_;                // Operation flags
   OUT chi::u32 result_code_;         // Output result (0 = success)
-  OUT chi::string error_message_;    // Error description if failed
 
   // SHM constructor
   explicit PutBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
-        tag_id_(0),
+        tag_id_(TagId{0, 0}),
         blob_name_(alloc),
-        blob_id_(0),
+        blob_id_(BlobId{0, 0}),
         offset_(0),
         size_(0),
         blob_data_(hipc::Pointer::GetNull()),
         score_(0.5f),
         flags_(0),
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit PutBlobTask(
@@ -356,9 +395,9 @@ struct PutBlobTask : public chi::Task {
       const chi::TaskNode &task_node,
       const chi::PoolId &pool_id,
       const chi::PoolQuery &pool_query,
-      chi::u32 tag_id,
+      const TagId& tag_id,
       const std::string &blob_name,
-      chi::u32 blob_id,
+      const BlobId& blob_id,
       chi::u64 offset,
       chi::u64 size,
       hipc::Pointer blob_data,
@@ -373,8 +412,7 @@ struct PutBlobTask : public chi::Task {
         blob_data_(blob_data),
         score_(score),
         flags_(flags),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kPutBlob;
@@ -387,28 +425,26 @@ struct PutBlobTask : public chi::Task {
  * GetBlob task - Retrieve a blob (unimplemented for now)
  */
 struct GetBlobTask : public chi::Task {
-  IN chi::u32 tag_id_;                // Tag ID for blob lookup
+  IN TagId tag_id_;                  // Tag ID for blob lookup
   INOUT chi::string blob_name_;       // Blob name (optional)
-  INOUT chi::u32 blob_id_;           // Blob ID (optional)
+  INOUT BlobId blob_id_;             // Blob ID (optional)
   IN chi::u64 offset_;               // Offset within blob
   IN chi::u64 size_;                 // Size of data to retrieve
   IN chi::u32 flags_;                // Operation flags
-  OUT hipc::Pointer blob_data_;      // Retrieved blob data (shared memory pointer)
+  IN hipc::Pointer blob_data_;       // Input buffer for blob data (shared memory pointer)
   OUT chi::u32 result_code_;         // Output result (0 = success)
-  OUT chi::string error_message_;    // Error description if failed
 
   // SHM constructor
   explicit GetBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
-        tag_id_(0),
+        tag_id_(TagId{0, 0}),
         blob_name_(alloc),
-        blob_id_(0),
+        blob_id_(BlobId{0, 0}),
         offset_(0),
         size_(0),
         flags_(0),
         blob_data_(hipc::Pointer::GetNull()),
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit GetBlobTask(
@@ -416,12 +452,13 @@ struct GetBlobTask : public chi::Task {
       const chi::TaskNode &task_node,
       const chi::PoolId &pool_id,
       const chi::PoolQuery &pool_query,
-      chi::u32 tag_id,
+      const TagId& tag_id,
       const std::string &blob_name,
-      chi::u32 blob_id,
+      const BlobId& blob_id,
       chi::u64 offset,
       chi::u64 size,
-      chi::u32 flags)
+      chi::u32 flags,
+      hipc::Pointer blob_data)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kGetBlob),
         tag_id_(tag_id),
         blob_name_(alloc, blob_name),
@@ -429,9 +466,8 @@ struct GetBlobTask : public chi::Task {
         offset_(offset),
         size_(size),
         flags_(flags),
-        blob_data_(hipc::Pointer::GetNull()),
-        result_code_(0),
-        error_message_(alloc) {
+        blob_data_(blob_data),
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kGetBlob;
@@ -444,18 +480,16 @@ struct GetBlobTask : public chi::Task {
  * ReorganizeBlob task - Change blob score (unimplemented for now)
  */
 struct ReorganizeBlobTask : public chi::Task {
-  IN chi::u32 blob_id_;              // Blob ID to reorganize
+  IN BlobId blob_id_;                // Blob ID to reorganize
   IN float new_score_;               // New score (0-1)
   OUT chi::u32 result_code_;         // Output result (0 = success)
-  OUT chi::string error_message_;    // Error description if failed
 
   // SHM constructor
   explicit ReorganizeBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
-        blob_id_(0),
+        blob_id_(BlobId{0, 0}),
         new_score_(0.5f),
-        result_code_(0),
-        error_message_(alloc) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit ReorganizeBlobTask(
@@ -463,13 +497,12 @@ struct ReorganizeBlobTask : public chi::Task {
       const chi::TaskNode &task_node,
       const chi::PoolId &pool_id,
       const chi::PoolQuery &pool_query,
-      chi::u32 blob_id,
+      const BlobId& blob_id,
       float new_score)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kReorganizeBlob),
         blob_id_(blob_id),
         new_score_(new_score),
-        result_code_(0),
-        error_message_(alloc) {
+        result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kReorganizeBlob;

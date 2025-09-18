@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <iostream>
 #include <chrono>
+#include "hermes_shm/util/logging.h"
 
 namespace wrp_cte::core {
 
@@ -17,7 +18,7 @@ DpeType StringToDpeType(const std::string& dpe_str) {
   } else if (dpe_str == "max_bw" || dpe_str == "maxbw") {
     return DpeType::kMaxBW;
   } else {
-    std::cerr << "Unknown DPE type: " << dpe_str << ", defaulting to random" << std::endl;
+    HELOG(kError, "Unknown DPE type: {}, defaulting to random", dpe_str);
     return DpeType::kRandom;
   }
 }
@@ -39,105 +40,122 @@ std::string DpeTypeToString(DpeType dpe_type) {
 RandomDpe::RandomDpe() : rng_(std::chrono::steady_clock::now().time_since_epoch().count()) {
 }
 
-std::string RandomDpe::SelectTarget(const std::vector<TargetInfo>& targets, 
-                                   float blob_score, 
-                                   chi::u64 data_size) {
+std::vector<TargetInfo> RandomDpe::SelectTargets(const std::vector<TargetInfo>& targets, 
+                                                float blob_score, 
+                                                chi::u64 data_size) {
+  std::vector<TargetInfo> result;
+  
   if (targets.empty()) {
-    return "";
+    return result;
   }
 
-  // Create list of targets with sufficient space
-  std::vector<size_t> available_targets;
-  for (size_t i = 0; i < targets.size(); ++i) {
-    if (targets[i].remaining_space_ >= data_size) {
-      available_targets.push_back(i);
+  // Filter targets with sufficient space
+  for (const auto& target : targets) {
+    if (target.remaining_space_ >= data_size) {
+      result.push_back(target);
     }
   }
 
-  if (available_targets.empty()) {
-    return "";  // No targets have space
+  if (result.empty()) {
+    return result;  // No targets have space
   }
 
-  // Randomly select from available targets
-  std::uniform_int_distribution<size_t> dist(0, available_targets.size() - 1);
-  size_t selected_idx = available_targets[dist(rng_)];
+  // Randomly shuffle the filtered targets
+  std::shuffle(result.begin(), result.end(), rng_);
   
-  return targets[selected_idx].target_name_;
+  return result;
 }
 
 // RoundRobinDpe Implementation  
 RoundRobinDpe::RoundRobinDpe() {
 }
 
-std::string RoundRobinDpe::SelectTarget(const std::vector<TargetInfo>& targets, 
-                                       float blob_score, 
-                                       chi::u64 data_size) {
+std::vector<TargetInfo> RoundRobinDpe::SelectTargets(const std::vector<TargetInfo>& targets, 
+                                                    float blob_score, 
+                                                    chi::u64 data_size) {
+  std::vector<TargetInfo> result;
+  
   if (targets.empty()) {
-    return "";
+    return result;
   }
 
-  chi::u32 counter = round_robin_counter_.fetch_add(1);
-  size_t start_idx = counter % targets.size();
-  
-  // Try each target starting from the round-robin position
-  for (size_t i = 0; i < targets.size(); ++i) {
-    size_t target_idx = (start_idx + i) % targets.size();
-    if (targets[target_idx].remaining_space_ >= data_size) {
-      return targets[target_idx].target_name_;
+  // Filter targets with sufficient space
+  for (const auto& target : targets) {
+    if (target.remaining_space_ >= data_size) {
+      result.push_back(target);
     }
   }
 
-  return "";  // No targets have space
+  if (result.empty()) {
+    return result;  // No targets have space
+  }
+
+  // Shift the target vector to the left (circular rotation)
+  chi::u32 counter = round_robin_counter_.fetch_add(1);
+  size_t shift_amount = counter % result.size();
+  
+  if (shift_amount > 0) {
+    std::rotate(result.begin(), result.begin() + shift_amount, result.end());
+  }
+  
+  return result;
 }
 
 // MaxBwDpe Implementation
 MaxBwDpe::MaxBwDpe() {
 }
 
-std::string MaxBwDpe::SelectTarget(const std::vector<TargetInfo>& targets, 
-                                  float blob_score, 
-                                  chi::u64 data_size) {
+std::vector<TargetInfo> MaxBwDpe::SelectTargets(const std::vector<TargetInfo>& targets, 
+                                               float blob_score, 
+                                               chi::u64 data_size) {
+  std::vector<TargetInfo> result;
+  
   if (targets.empty()) {
-    return "";
+    return result;
   }
 
-  // Create a copy of targets to sort
-  std::vector<std::pair<TargetInfo, size_t>> target_pairs;
-  for (size_t i = 0; i < targets.size(); ++i) {
-    if (targets[i].remaining_space_ >= data_size) {
-      target_pairs.emplace_back(targets[i], i);
+  // Filter targets with sufficient space
+  std::vector<TargetInfo> available_targets;
+  for (const auto& target : targets) {
+    if (target.remaining_space_ >= data_size) {
+      available_targets.push_back(target);
     }
   }
 
-  if (target_pairs.empty()) {
-    return "";  // No targets have space
+  if (available_targets.empty()) {
+    return result;  // No targets have space
   }
 
-  // Sort by bandwidth (for I/O >= 32KB) or latency (for I/O < 32KB)
+  // Sort targets by performance metrics
   if (data_size >= kLatencyThreshold) {
     // Sort by write bandwidth (descending)
-    std::sort(target_pairs.begin(), target_pairs.end(),
-              [](const auto& a, const auto& b) {
-                return a.first.perf_metrics_.write_bandwidth_mbps_ > b.first.perf_metrics_.write_bandwidth_mbps_;
+    std::sort(available_targets.begin(), available_targets.end(),
+              [](const TargetInfo& a, const TargetInfo& b) {
+                return a.perf_metrics_.write_bandwidth_mbps_ > b.perf_metrics_.write_bandwidth_mbps_;
               });
   } else {
     // Sort by latency (ascending - lower is better)
-    std::sort(target_pairs.begin(), target_pairs.end(),
-              [](const auto& a, const auto& b) {
-                return (a.first.perf_metrics_.read_latency_us_ + a.first.perf_metrics_.write_latency_us_) / 2.0 < 
-                       (b.first.perf_metrics_.read_latency_us_ + b.first.perf_metrics_.write_latency_us_) / 2.0;
+    std::sort(available_targets.begin(), available_targets.end(),
+              [](const TargetInfo& a, const TargetInfo& b) {
+                double avg_latency_a = (a.perf_metrics_.read_latency_us_ + a.perf_metrics_.write_latency_us_) / 2.0;
+                double avg_latency_b = (b.perf_metrics_.read_latency_us_ + b.perf_metrics_.write_latency_us_) / 2.0;
+                return avg_latency_a < avg_latency_b;
               });
   }
 
-  // Find first target with score lower than blob score
-  for (const auto& target_pair : target_pairs) {
-    if (target_pair.first.target_score_ <= blob_score) {
-      return target_pair.first.target_name_;
+  // Filter out targets that have too high of a score
+  for (const auto& target : available_targets) {
+    if (target.target_score_ <= blob_score) {
+      result.push_back(target);
     }
   }
 
-  // If no target has lower score, return the best performing one
-  return target_pairs[0].first.target_name_;
+  // If no target has acceptable score, return the best performing one
+  if (result.empty() && !available_targets.empty()) {
+    result.push_back(available_targets[0]);
+  }
+
+  return result;
 }
 
 // DpeFactory Implementation
@@ -150,7 +168,7 @@ std::unique_ptr<DataPlacementEngine> DpeFactory::CreateDpe(DpeType dpe_type) {
     case DpeType::kMaxBW:
       return std::make_unique<MaxBwDpe>();
     default:
-      std::cerr << "Unknown DPE type, defaulting to Random" << std::endl;
+      HELOG(kError, "Unknown DPE type, defaulting to Random");
       return std::make_unique<RandomDpe>();
   }
 }

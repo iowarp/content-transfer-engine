@@ -191,17 +191,18 @@ class Runtime : public chi::Container {
   Client client_;
 
   // Target management data structures
-  std::unordered_map<std::string, TargetInfo> registered_targets_;
+  std::unordered_map<chi::PoolId, TargetInfo> registered_targets_;
+  std::unordered_map<std::string, chi::PoolId> target_name_to_id_;  // reverse lookup: target_name -> target_id
   
   // Tag management data structures
-  std::unordered_map<std::string, chi::u32> tag_name_to_id_;  // tag_name -> tag_id
-  std::unordered_map<chi::u32, TagInfo> tag_id_to_info_;      // tag_id -> TagInfo
-  std::unordered_map<chi::u32, std::unordered_map<std::string, chi::u32>> tag_blob_name_to_id_;  // tag_id.blob_name -> blob_id
-  std::unordered_map<chi::u32, BlobInfo> blob_id_to_info_;    // blob_id -> BlobInfo
+  std::unordered_map<std::string, TagId> tag_name_to_id_;     // tag_name -> tag_id
+  std::unordered_map<TagId, TagInfo> tag_id_to_info_;         // tag_id -> TagInfo
+  std::unordered_map<std::string, BlobId> tag_blob_name_to_id_;  // "tag_id.blob_name" -> blob_id
+  std::unordered_map<BlobId, BlobInfo> blob_id_to_info_;      // blob_id -> BlobInfo
   
   // Atomic counters for thread-safe ID generation
-  std::atomic<chi::u32> next_tag_id_;
-  std::atomic<chi::u32> next_blob_id_;
+  std::atomic<chi::u32> next_tag_id_minor_;   // Minor counter for TagId UniqueId generation
+  std::atomic<chi::u32> next_blob_id_minor_;  // Minor counter for BlobId UniqueId generation
 
   // Synchronization primitives for thread-safe access to data structures
   // Use a set of locks based on maximum number of lanes for better concurrency
@@ -217,37 +218,114 @@ class Runtime : public chi::Container {
    */
   const Config& GetConfig() const;
 
-  /**
-   * Helper function to create a bdev client for target registration
-   */
-  std::string CreateBdevForTarget(const std::string& target_name, 
-                                 const StorageDeviceConfig& device_config);
 
   /**
    * Helper function to update target performance statistics
    */
-  void UpdateTargetStats(const std::string& target_name, TargetInfo& target_info);
+  void UpdateTargetStats(const chi::PoolId& target_id, TargetInfo& target_info);
 
   /**
    * Helper function to get or assign a tag ID
    */
-  chi::u32 GetOrAssignTagId(const std::string& tag_name, chi::u32 preferred_id = 0);
+  TagId GetOrAssignTagId(const std::string& tag_name, const TagId& preferred_id = TagId{0, 0});
+
+  /**
+   * Helper function to generate a new TagId using node_id as major and atomic counter as minor
+   */
+  TagId GenerateNewTagId();
+
+  /**
+   * Helper function to generate a new BlobId using node_id as major and atomic counter as minor
+   */
+  BlobId GenerateNewBlobId();
 
   /**
    * Helper function to get or assign a blob ID
    */
-  chi::u32 GetOrAssignBlobId(chi::u32 tag_id, const std::string& blob_name, 
-                            chi::u32 preferred_id = 0);
+  BlobId GetOrAssignBlobId(const TagId& tag_id, const std::string& blob_name, 
+                          const BlobId& preferred_id = BlobId{0, 0});
   
   /**
-   * Get target lock index based on target name hash
+   * Get target lock index based on TargetId hash
    */
-  size_t GetTargetLockIndex(const std::string& target_name) const;
+  size_t GetTargetLockIndex(const chi::PoolId& target_id) const;
   
   /**
    * Get tag lock index based on tag name hash
    */
   size_t GetTagLockIndex(const std::string& tag_name) const;
+  
+  /**
+   * Get blob lock index based on blob ID hash
+   */
+  size_t GetBlobLockIndex(const BlobId& blob_id) const;
+  
+  /**
+   * Allocate space from a target for new blob data
+   * @param target_info Target to allocate from
+   * @param size Size to allocate
+   * @param allocated_offset Output parameter for allocated offset
+   * @return True if allocation succeeded, false otherwise
+   */
+  bool AllocateFromTarget(TargetInfo& target_info, chi::u64 size, 
+                         chi::u64& allocated_offset);
+
+  /**
+   * Check if blob exists and return pointer to BlobInfo if found
+   * @param blob_id BlobId to search for (can be null)
+   * @param blob_name Blob name to search for (can be empty)
+   * @param tag_id Tag ID to search within
+   * @param found_blob_id Output parameter for the actual blob ID found
+   * @return Pointer to BlobInfo if found, nullptr if not found
+   */
+  BlobInfo* CheckBlobExists(const BlobId& blob_id, const std::string& blob_name, 
+                           const TagId& tag_id, BlobId& found_blob_id);
+
+  /**
+   * Create new blob with given parameters
+   * @param blob_name Name for the new blob (required)
+   * @param tag_id Tag ID to associate blob with
+   * @param blob_score Score/priority for the blob
+   * @param created_blob_id Output parameter for the generated blob ID
+   * @return Pointer to created BlobInfo, nullptr on failure
+   */
+  BlobInfo* CreateNewBlob(const std::string& blob_name, const TagId& tag_id, 
+                         float blob_score, BlobId& created_blob_id);
+
+  /**
+   * Allocate new data blocks for blob expansion
+   * @param blob_info Blob to extend with new data blocks
+   * @param offset Offset where data starts (for determining required size)
+   * @param size Size of data to accommodate
+   * @param blob_score Score for target selection
+   * @return Error code: 0 for success, 1 for failure
+   */
+  chi::u32 AllocateNewData(BlobInfo& blob_info, chi::u64 offset, chi::u64 size, 
+                          float blob_score);
+
+  /**
+   * Write data to existing blob blocks
+   * @param blob_info Blob containing the blocks to write to
+   * @param offset Offset within blob where data starts
+   * @param size Size of data to write
+   * @param blob_data Pointer to data to write
+   * @return Error code: 0 for success, 1 for failure
+   */
+  chi::u32 ModifyExistingData(const std::vector<BlobBlock> &blocks, 
+                             hipc::Pointer data, size_t data_size, 
+                             size_t data_offset_in_blob);
+  
+  /**
+   * Read existing blob data from blocks
+   * @param blocks Vector of blob blocks to read from
+   * @param data Output buffer to read data into
+   * @param data_size Size of data to read
+   * @param data_offset_in_blob Offset within blob where reading starts
+   * @return Error code: 0 for success, 1 for failure
+   */
+  chi::u32 ReadData(const std::vector<BlobBlock> &blocks, 
+                   hipc::Pointer data, size_t data_size, 
+                   size_t data_offset_in_blob);
 };
 
 }  // namespace wrp_cte::core

@@ -114,7 +114,7 @@ class CuFileApi : public RealApi {
 
     if (!cuFileHandleRegister || !cuFileHandleDeregister || !cuFileRead ||
         !cuFileWrite || !cuFileBufRegister || !cuFileBufDeregister) {
-      std::cerr << "Failed to load cuFile symbols: " << dlerror() << std::endl;
+      HELOG(kError, "Failed to load cuFile symbols: {}", dlerror());
       exit(EXIT_FAILURE);
     }
   }

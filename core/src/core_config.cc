@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <cstdio>
+#include "hermes_shm/util/logging.h"
 
 namespace wrp_cte::core {
 
@@ -12,14 +13,14 @@ namespace wrp_cte::core {
 bool Config::LoadFromFile(const std::string &config_file_path) {
   try {
     if (config_file_path.empty()) {
-      std::cerr << "Config error: Empty config file path provided" << std::endl;
+      HELOG(kError, "Config error: Empty config file path provided");
       return false;
     }
     
     // Check if file exists
     std::ifstream file_test(config_file_path);
     if (!file_test.good()) {
-      std::cerr << "Config error: Cannot open config file: " << config_file_path << std::endl;
+      HELOG(kError, "Config error: Cannot open config file: {}", config_file_path);
       return false;
     }
     file_test.close();
@@ -29,24 +30,24 @@ bool Config::LoadFromFile(const std::string &config_file_path) {
     
     // Parse configuration using base class method
     if (!ParseYamlNode(root)) {
-      std::cerr << "Config error: Failed to parse YAML configuration" << std::endl;
+      HELOG(kError, "Config error: Failed to parse YAML configuration");
       return false;
     }
     
     // Validate configuration
     if (!Validate()) {
-      std::cerr << "Config error: Configuration validation failed" << std::endl;
+      HELOG(kError, "Config error: Configuration validation failed");
       return false;
     }
     
-    std::cout << "Configuration loaded successfully from: " << config_file_path << std::endl;
+    HILOG(kInfo, "Configuration loaded successfully from: {}", config_file_path);
     return true;
     
   } catch (const YAML::Exception &e) {
-    std::cerr << "YAML parsing error: " << e.what() << std::endl;
+    HELOG(kError, "YAML parsing error: {}", e.what());
     return false;
   } catch (const std::exception &e) {
-    std::cerr << "Config loading error: " << e.what() << std::endl;
+    HELOG(kError, "Config loading error: {}", e.what());
     return false;
   }
 }
@@ -54,8 +55,7 @@ bool Config::LoadFromFile(const std::string &config_file_path) {
 bool Config::LoadFromEnvironment() {
   const char *env_path = std::getenv(config_env_var_.c_str());
   if (env_path == nullptr) {
-    std::cerr << "Config info: Environment variable " << config_env_var_ 
-              << " not set, using default configuration" << std::endl;
+    HILOG(kInfo, "Config info: Environment variable {} not set, using default configuration", config_env_var_);
     return true; // Not an error, use defaults
   }
   
@@ -66,7 +66,7 @@ bool Config::SaveToFile(const std::string &config_file_path) const {
   try {
     std::ofstream file(config_file_path);
     if (!file.is_open()) {
-      std::cerr << "Config error: Cannot create config file: " << config_file_path << std::endl;
+      HELOG(kError, "Config error: Cannot create config file: {}", config_file_path);
       return false;
     }
     
@@ -75,11 +75,11 @@ bool Config::SaveToFile(const std::string &config_file_path) const {
     file << emitter.c_str();
     file.close();
     
-    std::cout << "Configuration saved to: " << config_file_path << std::endl;
+    HILOG(kInfo, "Configuration saved to: {}", config_file_path);
     return true;
     
   } catch (const std::exception &e) {
-    std::cerr << "Config save error: " << e.what() << std::endl;
+    HELOG(kError, "Config save error: {}", e.what());
     return false;
   }
 }
@@ -87,8 +87,7 @@ bool Config::SaveToFile(const std::string &config_file_path) const {
 bool Config::Validate() const {
   // Validate worker count
   if (worker_count_ == 0 || worker_count_ > 1024) {
-    std::cerr << "Config validation error: Invalid worker_count " 
-              << worker_count_ << " (must be 1-1024)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid worker_count {} (must be 1-1024)", worker_count_);
     return false;
   }
   
@@ -102,39 +101,33 @@ bool Config::Validate() const {
   
   // Validate performance configuration
   if (performance_.target_stat_interval_ms_ == 0 || performance_.target_stat_interval_ms_ > 60000) {
-    std::cerr << "Config validation error: Invalid target_stat_interval_ms " 
-              << performance_.target_stat_interval_ms_ << " (must be 1-60000)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid target_stat_interval_ms {} (must be 1-60000)", performance_.target_stat_interval_ms_);
     return false;
   }
   
   if (performance_.blob_cache_size_mb_ == 0 || performance_.blob_cache_size_mb_ > 4096) {
-    std::cerr << "Config validation error: Invalid blob_cache_size_mb " 
-              << performance_.blob_cache_size_mb_ << " (must be 1-4096)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid blob_cache_size_mb {} (must be 1-4096)", performance_.blob_cache_size_mb_);
     return false;
   }
   
   if (performance_.max_concurrent_operations_ == 0 || performance_.max_concurrent_operations_ > 1024) {
-    std::cerr << "Config validation error: Invalid max_concurrent_operations " 
-              << performance_.max_concurrent_operations_ << " (must be 1-1024)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid max_concurrent_operations {} (must be 1-1024)", performance_.max_concurrent_operations_);
     return false;
   }
   
   if (performance_.score_threshold_ < 0.0f || performance_.score_threshold_ > 1.0f) {
-    std::cerr << "Config validation error: Invalid score_threshold " 
-              << performance_.score_threshold_ << " (must be 0.0-1.0)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid score_threshold {} (must be 0.0-1.0)", performance_.score_threshold_);
     return false;
   }
   
   // Validate target configuration
   if (targets_.max_targets_ == 0 || targets_.max_targets_ > 1024) {
-    std::cerr << "Config validation error: Invalid max_targets " 
-              << targets_.max_targets_ << " (must be 1-1024)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid max_targets {} (must be 1-1024)", targets_.max_targets_);
     return false;
   }
   
   if (targets_.default_target_timeout_ms_ == 0 || targets_.default_target_timeout_ms_ > 300000) {
-    std::cerr << "Config validation error: Invalid default_target_timeout_ms " 
-              << targets_.default_target_timeout_ms_ << " (must be 1-300000)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid default_target_timeout_ms {} (must be 1-300000)", targets_.default_target_timeout_ms_);
     return false;
   }
   
@@ -209,8 +202,7 @@ bool Config::SetParameterFromString(const std::string &param_name,
     return false; // Parameter not found
     
   } catch (const std::exception &e) {
-    std::cerr << "Config error: Invalid value '" << value 
-              << "' for parameter '" << param_name << "': " << e.what() << std::endl;
+    HELOG(kError, "Config error: Invalid value '{}' for parameter '{}': {}", value, param_name, e.what());
     return false;
   }
 }
@@ -388,7 +380,7 @@ bool Config::ParseTargetConfig(const YAML::Node &node) {
 
 bool Config::ParseStorageConfig(const YAML::Node &node) {
   if (!node.IsSequence()) {
-    std::cerr << "Config error: Storage configuration must be a sequence" << std::endl;
+    HELOG(kError, "Config error: Storage configuration must be a sequence");
     return false;
   }
   
@@ -400,54 +392,52 @@ bool Config::ParseStorageConfig(const YAML::Node &node) {
     
     // Parse path (required)
     if (!device_node["path"]) {
-      std::cerr << "Config error: Storage device missing required 'path' field" << std::endl;
+      HELOG(kError, "Config error: Storage device missing required 'path' field");
       return false;
     }
     device_config.path_ = device_node["path"].as<std::string>();
     
     // Parse bdev_type (required)
     if (!device_node["bdev_type"]) {
-      std::cerr << "Config error: Storage device missing required 'bdev_type' field" << std::endl;
+      HELOG(kError, "Config error: Storage device missing required 'bdev_type' field");
       return false;
     }
     device_config.bdev_type_ = device_node["bdev_type"].as<std::string>();
     
     // Validate bdev_type
     if (device_config.bdev_type_ != "file" && device_config.bdev_type_ != "ram") {
-      std::cerr << "Config error: Invalid bdev_type '" << device_config.bdev_type_ 
-                << "' (must be 'file' or 'ram')" << std::endl;
+      HELOG(kError, "Config error: Invalid bdev_type '{}' (must be 'file' or 'ram')", device_config.bdev_type_);
       return false;
     }
     
     // Parse capacity_limit (required)
     if (!device_node["capacity_limit"]) {
-      std::cerr << "Config error: Storage device missing required 'capacity_limit' field" << std::endl;
+      HELOG(kError, "Config error: Storage device missing required 'capacity_limit' field");
       return false;
     }
     std::string capacity_str = device_node["capacity_limit"].as<std::string>();
     
     // Parse size string to bytes
     if (!ParseSizeString(capacity_str, device_config.capacity_limit_)) {
-      std::cerr << "Config error: Invalid capacity_limit format '" << capacity_str 
-                << "' for device " << device_config.path_ << std::endl;
+      HELOG(kError, "Config error: Invalid capacity_limit format '{}' for device {}", capacity_str, device_config.path_);
       return false;
     }
     
     // Validate parsed values
     if (device_config.path_.empty()) {
-      std::cerr << "Config error: Storage device path cannot be empty" << std::endl;
+      HELOG(kError, "Config error: Storage device path cannot be empty");
       return false;
     }
     
     if (device_config.capacity_limit_ == 0) {
-      std::cerr << "Config error: Storage device capacity_limit must be greater than 0" << std::endl;
+      HELOG(kError, "Config error: Storage device capacity_limit must be greater than 0");
       return false;
     }
     
     storage_.devices_.push_back(std::move(device_config));
   }
   
-  std::cout << "Parsed " << storage_.devices_.size() << " storage devices" << std::endl;
+  HILOG(kInfo, "Parsed {} storage devices", storage_.devices_.size());
   return true;
 }
 
@@ -458,15 +448,14 @@ bool Config::ParseDpeConfig(const YAML::Node &node) {
     // Validate DPE type
     if (dpe_type != "random" && dpe_type != "round_robin" && 
         dpe_type != "roundrobin" && dpe_type != "max_bw" && dpe_type != "maxbw") {
-      std::cerr << "Config error: Invalid dpe_type '" << dpe_type 
-                << "' (must be 'random', 'round_robin', or 'max_bw')" << std::endl;
+      HELOG(kError, "Config error: Invalid dpe_type '{}' (must be 'random', 'round_robin', or 'max_bw')", dpe_type);
       return false;
     }
     
     dpe_.dpe_type_ = dpe_type;
   }
   
-  std::cout << "Parsed DPE configuration: type=" << dpe_.dpe_type_ << std::endl;
+  HILOG(kInfo, "Parsed DPE configuration: type={}", dpe_.dpe_type_);
   return true;
 }
 
@@ -592,17 +581,14 @@ chi::QueuePriority Config::StringToPriority(const std::string &priority_str) con
     return chi::kHighLatency;
   }
   
-  std::cerr << "Config warning: Unknown priority '" << priority_str 
-            << "', using default (low_latency)" << std::endl;
+  HELOG(kError, "Config warning: Unknown priority '{}', using default (low_latency)", priority_str);
   return chi::kLowLatency;
 }
 
 bool Config::ValidateQueueConfig(const QueueConfig &config, 
                                  const std::string &queue_name) const {
   if (config.lane_count_ == 0 || config.lane_count_ > 64) {
-    std::cerr << "Config validation error: Invalid lane_count " 
-              << config.lane_count_ << " for " << queue_name 
-              << " (must be 1-64)" << std::endl;
+    HELOG(kError, "Config validation error: Invalid lane_count {} for {} (must be 1-64)", config.lane_count_, queue_name);
     return false;
   }
   
@@ -624,7 +610,7 @@ void ConfigManager::Initialize(void *alloc) {
 
 bool ConfigManager::LoadConfig(const std::string &config_file_path) {
   if (!initialized_) {
-    std::cerr << "ConfigManager error: Not initialized" << std::endl;
+    HELOG(kError, "ConfigManager error: Not initialized");
     return false;
   }
   
@@ -634,7 +620,7 @@ bool ConfigManager::LoadConfig(const std::string &config_file_path) {
 
 bool ConfigManager::LoadConfigFromEnvironment() {
   if (!initialized_) {
-    std::cerr << "ConfigManager error: Not initialized" << std::endl;
+    HELOG(kError, "ConfigManager error: Not initialized");
     return false;
   }
   
@@ -645,7 +631,7 @@ bool ConfigManager::LoadConfigFromEnvironment() {
 const Config& ConfigManager::GetConfig() const {
   if (!initialized_ || !config_) {
     static Config default_config;
-    std::cerr << "ConfigManager warning: Using default configuration" << std::endl;
+    HELOG(kError, "ConfigManager warning: Using default configuration");
     return default_config;
   }
   
@@ -655,7 +641,7 @@ const Config& ConfigManager::GetConfig() const {
 Config& ConfigManager::GetMutableConfig() {
   if (!initialized_ || !config_) {
     static Config default_config;
-    std::cerr << "ConfigManager warning: Using default configuration" << std::endl;
+    HELOG(kError, "ConfigManager warning: Using default configuration");
     return default_config;
   }
   

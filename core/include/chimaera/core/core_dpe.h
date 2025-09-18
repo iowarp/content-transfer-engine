@@ -37,15 +37,15 @@ public:
   virtual ~DataPlacementEngine() = default;
   
   /**
-   * Select a target for data placement
+   * Select targets for data placement
    * @param targets Available targets for placement
    * @param blob_score Score of the blob (0-1)
    * @param data_size Size of data to be placed
-   * @return Target name for placement, empty string if no suitable target
+   * @return Vector of ordered targets, empty if no suitable targets
    */
-  virtual std::string SelectTarget(const std::vector<TargetInfo>& targets, 
-                                  float blob_score, 
-                                  chi::u64 data_size) = 0;
+  virtual std::vector<TargetInfo> SelectTargets(const std::vector<TargetInfo>& targets, 
+                                               float blob_score, 
+                                               chi::u64 data_size) = 0;
   
   /**
    * Get the DPE type
@@ -60,9 +60,9 @@ class RandomDpe : public DataPlacementEngine {
 public:
   RandomDpe();
   
-  std::string SelectTarget(const std::vector<TargetInfo>& targets, 
-                          float blob_score, 
-                          chi::u64 data_size) override;
+  std::vector<TargetInfo> SelectTargets(const std::vector<TargetInfo>& targets, 
+                                       float blob_score, 
+                                       chi::u64 data_size) override;
   
   DpeType GetType() const override { return DpeType::kRandom; }
 
@@ -77,9 +77,9 @@ class RoundRobinDpe : public DataPlacementEngine {
 public:
   RoundRobinDpe();
   
-  std::string SelectTarget(const std::vector<TargetInfo>& targets, 
-                          float blob_score, 
-                          chi::u64 data_size) override;
+  std::vector<TargetInfo> SelectTargets(const std::vector<TargetInfo>& targets, 
+                                       float blob_score, 
+                                       chi::u64 data_size) override;
   
   DpeType GetType() const override { return DpeType::kRoundRobin; }
 
@@ -94,9 +94,9 @@ class MaxBwDpe : public DataPlacementEngine {
 public:
   MaxBwDpe();
   
-  std::string SelectTarget(const std::vector<TargetInfo>& targets, 
-                          float blob_score, 
-                          chi::u64 data_size) override;
+  std::vector<TargetInfo> SelectTargets(const std::vector<TargetInfo>& targets, 
+                                       float blob_score, 
+                                       chi::u64 data_size) override;
   
   DpeType GetType() const override { return DpeType::kMaxBW; }
 

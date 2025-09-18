@@ -191,7 +191,7 @@ class Client : public chi::ContainerClient {
    */
   TagInfo GetOrCreateTag(const hipc::MemContext& mctx,
                         const std::string& tag_name,
-                        chi::u32 tag_id = 0) {
+                        const TagId& tag_id = TagId{0, 0}) {
     auto task = AsyncGetOrCreateTag(mctx, tag_name, tag_id);
     task->Wait();
     
@@ -206,7 +206,7 @@ class Client : public chi::ContainerClient {
   hipc::FullPtr<GetOrCreateTagTask<CreateParams>> AsyncGetOrCreateTag(
       const hipc::MemContext& mctx,
       const std::string& tag_name,
-      chi::u32 tag_id = 0) {
+      const TagId& tag_id = TagId{0, 0}) {
     (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
@@ -222,21 +222,21 @@ class Client : public chi::ContainerClient {
   }
 
   /**
-   * Synchronous put blob - waits for completion (unimplemented for now)
+   * Synchronous put blob - waits for completion
    */
-  chi::u32 PutBlob(const hipc::MemContext& mctx,
-                  chi::u32 tag_id,
-                  const std::string& blob_name,
-                  chi::u32 blob_id,
-                  chi::u64 offset,
-                  chi::u64 size,
-                  hipc::Pointer blob_data,
-                  float score,
-                  chi::u32 flags) {
+  bool PutBlob(const hipc::MemContext& mctx,
+              const TagId& tag_id,
+              const std::string& blob_name,
+              const BlobId& blob_id,
+              chi::u64 offset,
+              chi::u64 size,
+              hipc::Pointer blob_data,
+              float score,
+              chi::u32 flags) {
     auto task = AsyncPutBlob(mctx, tag_id, blob_name, blob_id, 
                             offset, size, blob_data, score, flags);
     task->Wait();
-    chi::u32 result = task->result_code_;
+    bool result = (task->result_code_ == 0);
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -246,9 +246,9 @@ class Client : public chi::ContainerClient {
    */
   hipc::FullPtr<PutBlobTask> AsyncPutBlob(
       const hipc::MemContext& mctx,
-      chi::u32 tag_id,
+      const TagId& tag_id,
       const std::string& blob_name,
-      chi::u32 blob_id,
+      const BlobId& blob_id,
       chi::u64 offset,
       chi::u64 size,
       hipc::Pointer blob_data,
@@ -275,34 +275,36 @@ class Client : public chi::ContainerClient {
   }
 
   /**
-   * Synchronous get blob - waits for completion (unimplemented for now)
+   * Synchronous get blob - waits for completion
    */
-  hipc::Pointer GetBlob(const hipc::MemContext& mctx,
-                       chi::u32 tag_id,
-                       const std::string& blob_name,
-                       chi::u32 blob_id,
-                       chi::u64 offset,
-                       chi::u64 size,
-                       chi::u32 flags) {
+  bool GetBlob(const hipc::MemContext& mctx,
+              const TagId& tag_id,
+              const std::string& blob_name,
+              const BlobId& blob_id,
+              chi::u64 offset,
+              chi::u64 size,
+              chi::u32 flags,
+              hipc::Pointer blob_data) {
     auto task = AsyncGetBlob(mctx, tag_id, blob_name, blob_id, 
-                            offset, size, flags);
+                            offset, size, flags, blob_data);
     task->Wait();
-    hipc::Pointer result = task->blob_data_;
+    bool result = (task->result_code_ == 0);
     CHI_IPC->DelTask(task);
     return result;
   }
 
   /**
-   * Asynchronous get blob - returns immediately (unimplemented for now)
+   * Asynchronous get blob - returns immediately
    */
   hipc::FullPtr<GetBlobTask> AsyncGetBlob(
       const hipc::MemContext& mctx,
-      chi::u32 tag_id,
+      const TagId& tag_id,
       const std::string& blob_name,
-      chi::u32 blob_id,
+      const BlobId& blob_id,
       chi::u64 offset,
       chi::u64 size,
-      chi::u32 flags) {
+      chi::u32 flags,
+      hipc::Pointer blob_data) {
     (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
@@ -315,7 +317,8 @@ class Client : public chi::ContainerClient {
         blob_id,
         offset,
         size,
-        flags);
+        flags,
+        blob_data);
     
     ipc_manager->Enqueue(task);
     return task;
@@ -325,7 +328,7 @@ class Client : public chi::ContainerClient {
    * Synchronous reorganize blob - waits for completion (unimplemented for now)
    */
   chi::u32 ReorganizeBlob(const hipc::MemContext& mctx,
-                         chi::u32 blob_id,
+                         const BlobId& blob_id,
                          float new_score) {
     auto task = AsyncReorganizeBlob(mctx, blob_id, new_score);
     task->Wait();
@@ -339,7 +342,7 @@ class Client : public chi::ContainerClient {
    */
   hipc::FullPtr<ReorganizeBlobTask> AsyncReorganizeBlob(
       const hipc::MemContext& mctx,
-      chi::u32 blob_id,
+      const BlobId& blob_id,
       float new_score) {
     (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;

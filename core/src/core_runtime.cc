@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chimaera/core/core_config.h>
 #include <chimaera/core/core_dpe.h>
 #include <chimaera/core/core_runtime.h>
@@ -5,10 +6,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <string>
-#include <algorithm>
+#include "hermes_shm/util/logging.h"
 
 namespace wrp_cte::core {
 
@@ -25,6 +25,10 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
     target_locks_.emplace_back(std::make_unique<chi::CoRwLock>());
     tag_locks_.emplace_back(std::make_unique<chi::CoRwLock>());
   }
+
+  // Initialize atomic counters
+  next_tag_id_minor_ = 1;
+  next_blob_id_minor_ = 1;
 
   // Initialize configuration manager with allocator
   auto *config_manager = &ConfigManager::GetInstance();
@@ -53,7 +57,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
   // Register targets for each configured storage device during initialization
   if (!storage_devices_.empty()) {
-    std::cout << "Registering targets for storage devices:" << std::endl;
+    HILOG(kInfo, "Registering targets for storage devices:");
 
     for (size_t i = 0; i < storage_devices_.size(); ++i) {
       const auto &device = storage_devices_[i];
@@ -61,22 +65,19 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
       // TODO: Implement target registration when bdev module is available
       // For now, simulate successful target registration
-      chi::u32 result = 0;  // Success
-      
+      chi::u32 result = 0; // Success
+
       // Store device information for later use
-      (void)device;  // Suppress unused variable warning
+      (void)device; // Suppress unused variable warning
 
       if (result == 0) {
-        std::cout << "  - Registered target '" << target_name
-                  << "': " << device.path_ << " (" << device.bdev_type_ << ", "
-                  << device.capacity_limit_ << " bytes)" << std::endl;
+        HILOG(kInfo, "  - Registered target '{}': {} ({}, {} bytes)", target_name, device.path_, device.bdev_type_, device.capacity_limit_);
       } else {
-        std::cout << "  - Failed to register target '" << target_name
-                  << "' (error code: " << result << ")" << std::endl;
+        HILOG(kInfo, "  - Failed to register target '{}' (error code: {})", target_name, result);
       }
     }
   } else {
-    std::cout << "Warning: No storage devices configured" << std::endl;
+    HILOG(kInfo, "Warning: No storage devices configured");
   }
 
   // Create local queues using configuration settings
@@ -93,24 +94,21 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
                    config.stats_queue_.priority_);
 
   // Initialize atomic counters
-  next_tag_id_.store(1);  // Start tag IDs from 1
-  next_blob_id_.store(1); // Start blob IDs from 1
+  next_tag_id_minor_.store(1);  // Start tag ID minors from 1
+  next_blob_id_minor_.store(1); // Start blob ID minors from 1
 
-  std::cout << "CTE Core container created and initialized for pool: "
-            << pool_name_ << " (ID: " << task->pool_id_ << ")" << std::endl;
+  HILOG(kInfo, "CTE Core container created and initialized for pool: {} (ID: {})", pool_name_, task->pool_id_);
 
-  std::cout << "Configuration: worker_count=" << config.worker_count_
-            << ", max_targets=" << config.targets_.max_targets_ << std::endl;
+  HILOG(kInfo, "Configuration: worker_count={}, max_targets={}", config.worker_count_, config.targets_.max_targets_);
 
   if (config_loaded) {
     if (!config_path.empty()) {
-      std::cout << "Configuration loaded from file: " << config_path
-                << std::endl;
+      HILOG(kInfo, "Configuration loaded from file: {}", config_path);
     } else {
-      std::cout << "Configuration loaded from environment" << std::endl;
+      HILOG(kInfo, "Configuration loaded from environment");
     }
   } else {
-    std::cout << "Using default configuration" << std::endl;
+    HILOG(kInfo, "Using default configuration");
   }
 }
 
@@ -122,7 +120,7 @@ void Runtime::MonitorCreate(chi::MonitorModeId mode,
     // Route to target management queue for container initialization
     auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -142,6 +140,7 @@ void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
   try {
     // Clear all registered targets and their associated data
     registered_targets_.clear();
+    target_name_to_id_.clear();
 
     // Clear tag and blob management structures
     tag_name_to_id_.clear();
@@ -150,8 +149,8 @@ void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
     blob_id_to_info_.clear();
 
     // Reset atomic counters
-    next_tag_id_.store(1);
-    next_blob_id_.store(1);
+    next_tag_id_minor_.store(1);
+    next_blob_id_minor_.store(1);
 
     // Clear storage device configuration
     storage_devices_.clear();
@@ -162,12 +161,9 @@ void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
 
     // Set success status
     task->return_code_ = 0;
-    task->error_message_ =
-        chi::string(main_allocator_, "Container destroyed successfully");
 
   } catch (const std::exception &e) {
     task->return_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -179,7 +175,7 @@ void Runtime::MonitorDestroy(chi::MonitorModeId mode,
     // Route to target management queue for container cleanup
     auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -202,38 +198,39 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     chimaera::bdev::BdevType bdev_type = task->bdev_type_;
     chi::u64 total_size = task->total_size_;
 
-    // Check if target is already registered
-    size_t lock_index = GetTargetLockIndex(target_name);
+    // Create bdev client and container first to get the TargetId (pool_id)
+    chimaera::bdev::Client bdev_client;
+    std::string bdev_pool_name =
+        target_name; // Use target_name as the bdev pool name
+
+    // Create the bdev container using the client
+    chi::PoolQuery pool_query = chi::PoolQuery::Local();
+    bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_type,
+                       total_size);
+
+    // Check if creation was successful
+    if (bdev_client.return_code_ != 0) {
+      task->result_code_ = 1;
+      return;
+    }
+
+    // Get the TargetId (bdev_client's pool_id) for indexing
+    chi::PoolId target_id = bdev_client.pool_id_;
+
+    // Check if target is already registered using TargetId
+    size_t lock_index = GetTargetLockIndex(target_id);
     {
       chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
-      if (registered_targets_.find(target_name) != registered_targets_.end()) {
+      if (registered_targets_.find(target_id) != registered_targets_.end()) {
         task->result_code_ = 1;
-        task->error_message_ = chi::string(
-            main_allocator_, "Target '" + target_name + "' already registered");
         return;
       }
     }
 
-    // Create bdev client and container
-    chimaera::bdev::Client bdev_client;
-    std::string bdev_pool_name = target_name;  // Use target_name as the bdev pool name
-    
-    // Create the bdev container using the client
-    chi::PoolQuery pool_query = chi::PoolQuery::Local();
-    bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_type, total_size);
-    
-    // Check if creation was successful
-    if (bdev_client.return_code_ != 0) {
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "Failed to create bdev client for target '" + target_name + "'");
-      return;
-    }
-
     // Get actual statistics from bdev using GetStats method
     chi::u64 remaining_size;
-    chimaera::bdev::PerfMetrics perf_metrics = bdev_client.GetStats(hipc::MemContext(), remaining_size);
+    chimaera::bdev::PerfMetrics perf_metrics =
+        bdev_client.GetStats(hipc::MemContext(), remaining_size);
 
     // Create target info with bdev client and performance stats
     TargetInfo target_info(main_allocator_);
@@ -244,31 +241,26 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     target_info.bytes_written_ = 0;
     target_info.ops_read_ = 0;
     target_info.ops_written_ = 0;
-    target_info.target_score_ = 0.0f; // Will be calculated based on performance metrics
-    target_info.remaining_space_ = remaining_size; // Use actual remaining space from bdev
-    target_info.perf_metrics_ = perf_metrics; // Store the entire PerfMetrics structure
+    target_info.target_score_ =
+        0.0f; // Will be calculated based on performance metrics
+    target_info.remaining_space_ =
+        remaining_size; // Use actual remaining space from bdev
+    target_info.perf_metrics_ =
+        perf_metrics; // Store the entire PerfMetrics structure
 
-    // Register the target
+    // Register the target using TargetId as key
     {
       chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
-      registered_targets_[target_name] = target_info;
+      registered_targets_[target_id] = target_info;
+      target_name_to_id_[target_name] = target_id; // Maintain reverse lookup
     }
 
     task->result_code_ = 0; // Success
-    std::cout << "Target '" << target_name
-              << "' registered with bdev pool: " << bdev_pool_name
-              << " (type=" << static_cast<int>(bdev_type)
-              << ", path=" << target_name << ", size=" << total_size
-              << ", remaining=" << remaining_size << ")" << std::endl;
-    std::cout << "  Initial statistics: read_bw="
-              << perf_metrics.read_bandwidth_mbps_ << " MB/s"
-              << ", write_bw=" << perf_metrics.write_bandwidth_mbps_ << " MB/s"
-              << ", avg_latency=" << (target_info.perf_metrics_.read_latency_us_ + target_info.perf_metrics_.write_latency_us_) / 2.0 << " μs"
-              << ", iops=" << perf_metrics.iops_ << std::endl;
+    HILOG(kInfo, "Target '{}' registered with bdev pool: {} (type={}, path={}, size={}, remaining={})", target_name, bdev_pool_name, static_cast<int>(bdev_type), target_name, total_size, remaining_size);
+    HILOG(kInfo, "  Initial statistics: read_bw={} MB/s, write_bw={} MB/s, avg_latency={} μs, iops={}", perf_metrics.read_bandwidth_mbps_, perf_metrics.write_bandwidth_mbps_, (target_info.perf_metrics_.read_latency_us_ + target_info.perf_metrics_.write_latency_us_) / 2.0, perf_metrics.iops_);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -280,7 +272,7 @@ void Runtime::MonitorRegisterTarget(chi::MonitorModeId mode,
     // Route to target management queue (round-robin on lanes)
     auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -299,27 +291,34 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
   try {
     std::string target_name = task->target_name_.str();
 
+    // Look up TargetId from target_name
+    auto name_it = target_name_to_id_.find(target_name);
+    if (name_it == target_name_to_id_.end()) {
+      task->result_code_ = 1;
+      return;
+    }
+
+    chi::PoolId target_id = name_it->second;
+
     // Check if target exists and remove it (don't destroy bdev container)
-    size_t lock_index = GetTargetLockIndex(target_name);
+    size_t lock_index = GetTargetLockIndex(target_id);
     {
       chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
-      auto it = registered_targets_.find(target_name);
+      auto it = registered_targets_.find(target_id);
       if (it == registered_targets_.end()) {
         task->result_code_ = 1;
-        task->error_message_ = chi::string(
-            main_allocator_, "Target '" + target_name + "' not found");
         return;
       }
 
       registered_targets_.erase(it);
+      target_name_to_id_.erase(target_name); // Remove reverse lookup
     }
 
     task->result_code_ = 0; // Success
-    std::cout << "Target '" << target_name << "' unregistered" << std::endl;
+    HILOG(kInfo, "Target '{}' unregistered", target_name);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -331,7 +330,7 @@ void Runtime::MonitorUnregisterTarget(chi::MonitorModeId mode,
     // Route to target management queue (round-robin on lanes)
     auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -351,25 +350,22 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
     // Clear the output vector and populate with current targets
     task->targets_.clear();
 
-    // For listing all targets, we need to acquire all target locks
-    // Use a simple approach: acquire locks in order to avoid deadlocks
-    std::vector<std::unique_ptr<chi::ScopedCoRwReadLock>> locks;
-    locks.reserve(target_locks_.size());
-    for (size_t i = 0; i < target_locks_.size(); ++i) {
-      locks.emplace_back(
-          std::make_unique<chi::ScopedCoRwReadLock>(*target_locks_[i]));
-    }
+    // Use a single lock based on hash of operation type for listing
+    size_t lock_index =
+        std::hash<std::string>{}("list_targets") % target_locks_.size();
+    chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
 
+    // Populate target list while lock is held
     task->targets_.reserve(registered_targets_.size());
     for (const auto &pair : registered_targets_) {
-      task->targets_.emplace_back(pair.second);
+      const TargetInfo &target_info = pair.second;
+      task->targets_.emplace_back(target_info);
     }
 
     task->result_code_ = 0; // Success
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -381,7 +377,7 @@ void Runtime::MonitorListTargets(chi::MonitorModeId mode,
     // Route to target management queue (any lane is fine for read operations)
     auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -399,23 +395,22 @@ void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
                           chi::RunContext &ctx) {
   try {
     // Update performance stats for all registered targets
-    // Acquire all target locks in order to avoid deadlocks
-    std::vector<std::unique_ptr<chi::ScopedCoRwWriteLock>> locks;
-    locks.reserve(target_locks_.size());
-    for (size_t i = 0; i < target_locks_.size(); ++i) {
-      locks.emplace_back(
-          std::make_unique<chi::ScopedCoRwWriteLock>(*target_locks_[i]));
-    }
+    // Use a single lock based on hash of operation type for stats
+    size_t lock_index =
+        std::hash<std::string>{}("stat_targets") % target_locks_.size();
+    chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
 
+    // Update stats for all targets while lock is held
     for (auto &pair : registered_targets_) {
-      UpdateTargetStats(pair.first, pair.second);
+      const chi::PoolId &target_id = pair.first;
+      TargetInfo &target_info = pair.second;
+      UpdateTargetStats(target_id, target_info);
     }
 
     task->result_code_ = 0; // Success
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -427,7 +422,7 @@ void Runtime::MonitorStatTargets(chi::MonitorModeId mode,
     // Route to stats queue for performance monitoring
     auto lane_ptr = GetLaneFullPtr(kStatsQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -447,10 +442,10 @@ void Runtime::GetOrCreateTag(
     chi::RunContext &ctx) {
   try {
     std::string tag_name = task->tag_name_.str();
-    chi::u32 preferred_id = task->tag_id_;
+    TagId preferred_id = task->tag_id_;
 
     // Get or assign tag ID
-    chi::u32 tag_id = GetOrAssignTagId(tag_name, preferred_id);
+    TagId tag_id = GetOrAssignTagId(tag_name, preferred_id);
     task->tag_id_ = tag_id;
 
     // Populate tag info
@@ -467,7 +462,6 @@ void Runtime::GetOrCreateTag(
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -481,7 +475,7 @@ void Runtime::MonitorGetOrCreateTag(
     // Route to tag management queue (round-robin on lanes)
     auto lane_ptr = GetLaneFullPtr(kTagManagementQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -497,212 +491,73 @@ void Runtime::MonitorGetOrCreateTag(
 
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
   try {
-    chi::u32 tag_id = task->tag_id_;
+    // Extract input parameters
+    TagId tag_id = task->tag_id_;
     std::string blob_name = task->blob_name_.str();
-    chi::u32 blob_id = task->blob_id_;
+    BlobId blob_id = task->blob_id_;
     chi::u64 offset = task->offset_;
     chi::u64 size = task->size_;
     hipc::Pointer blob_data = task->blob_data_;
     float blob_score = task->score_;
     chi::u32 flags = task->flags_;
 
+    // Suppress unused variable warning for flags - may be used in future
+    (void)flags;
+
     // Validate input parameters
-    if (size == 0) {
+    if (size == 0 || blob_data.IsNull()) {
       task->result_code_ = 1;
-      task->error_message_ =
-          chi::string(main_allocator_, "Blob size cannot be zero");
       return;
     }
 
-    if (blob_data.IsNull()) {
+    // Validate that either blob_id or blob_name is provided
+    bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
+    bool blob_name_provided = !blob_name.empty();
+
+    if (!blob_id_provided && !blob_name_provided) {
       task->result_code_ = 1;
-      task->error_message_ =
-          chi::string(main_allocator_, "Blob data pointer is null");
       return;
     }
 
-    // Validate blob name and ID - both must be provided (no automatic
-    // generation)
-    if (blob_name.empty()) {
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "Blob name must be provided (automatic generation disabled)");
-      return;
-    }
+    // Step 1: Check if blob exists
+    BlobId found_blob_id;
+    BlobInfo *blob_info_ptr =
+        CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
+    bool blob_found = (blob_info_ptr != nullptr);
 
-    if (blob_id == 0) {
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "Blob ID must be provided (automatic generation disabled)");
-      return;
-    }
-
-    // Check if blob already exists - PutBlob can get or create
-    auto blob_it = blob_id_to_info_.find(blob_id);
-    bool blob_exists = (blob_it != blob_id_to_info_.end());
-
-    if (blob_exists) {
-      // Blob exists - verify the name matches
-      if (blob_it->second.blob_name_.str() != blob_name) {
+    // Step 2: Create blob if it doesn't exist
+    if (!blob_found) {
+      blob_info_ptr =
+          CreateNewBlob(blob_name, tag_id, blob_score, found_blob_id);
+      if (blob_info_ptr == nullptr) {
         task->result_code_ = 1;
-        task->error_message_ = chi::string(
-            main_allocator_, "Blob with ID " + std::to_string(blob_id) +
-                                 " exists but has different name '" +
-                                 blob_it->second.blob_name_.str() +
-                                 "' (expected '" + blob_name + "')");
         return;
       }
+      task->blob_id_ = found_blob_id;
+    }
 
-      // TODO: For existing blobs, we could perform an update operation
-      // For now, just return success for existing blobs without modifying them
-      task->result_code_ = 0;
-      std::cout << "PutBlob: Found existing blob_id=" << blob_id
-                << ", name=" << blob_name << std::endl;
+    // Step 3: Allocate additional space if needed for blob extension
+    chi::u32 allocation_result =
+        AllocateNewData(*blob_info_ptr, offset, size, blob_score);
+    if (allocation_result != 0) {
+      task->result_code_ = allocation_result;
       return;
     }
 
-    // Blob is new - proceed with creation
-
-    // Get all available targets for data placement
-    std::vector<TargetInfo> available_targets;
-    {
-      // Acquire all target locks to get a consistent view
-      std::vector<std::unique_ptr<chi::ScopedCoRwReadLock>> locks;
-      locks.reserve(target_locks_.size());
-      for (size_t i = 0; i < target_locks_.size(); ++i) {
-        locks.emplace_back(
-            std::make_unique<chi::ScopedCoRwReadLock>(*target_locks_[i]));
-      }
-
-      available_targets.reserve(registered_targets_.size());
-      for (const auto &pair : registered_targets_) {
-        available_targets.push_back(pair.second);
-      }
-    }
-
-    if (available_targets.empty()) {
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_, "No targets available for data placement");
+    // Step 4: Write data to blob blocks
+    chi::u32 write_result =
+        ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
+    if (write_result != 0) {
+      task->result_code_ = write_result;
       return;
     }
 
-    // Create Data Placement Engine based on configuration
-    const Config &config = GetConfig();
-    std::unique_ptr<DataPlacementEngine> dpe =
-        DpeFactory::CreateDpe(config.dpe_.dpe_type_);
-
-    // Select target using DPE algorithm
-    std::string selected_target =
-        dpe->SelectTarget(available_targets, blob_score, size);
-
-    if (selected_target.empty()) {
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "No suitable target found for blob placement (insufficient space)");
-      return;
-    }
-
-    // Find the selected target info for allocation
-    size_t target_lock_index = GetTargetLockIndex(selected_target);
-    TargetInfo *target_info = nullptr;
-    {
-      chi::ScopedCoRwWriteLock write_lock(*target_locks_[target_lock_index]);
-      auto target_it = registered_targets_.find(selected_target);
-      if (target_it == registered_targets_.end()) {
-        task->result_code_ = 1;
-        task->error_message_ =
-            chi::string(main_allocator_, "Selected target '" + selected_target +
-                                             "' no longer exists");
-        return;
-      }
-      target_info = &target_it->second;
-
-      // Double-check space availability (may have changed since DPE selection)
-      if (target_info->remaining_space_ < size) {
-        task->result_code_ = 1;
-        task->error_message_ = chi::string(
-            main_allocator_, "Selected target '" + selected_target +
-                                 "' no longer has sufficient space");
-        return;
-      }
-
-      // Reserve space on the target
-      target_info->remaining_space_ -= size;
-    }
-
-    // Implement actual bdev write operation using bdev client
-    chi::u64 allocated_offset = offset; // Use provided offset or calculate new one
-    
-    try {
-      // Create block for write operation
-      chimaera::bdev::Block block(allocated_offset, size, 0); // Use block_type 0 for now
-      
-      // Create data vector for write operation
-      // TODO: Extract actual data from task->blob_data_ when pointer access is fixed
-      std::vector<hshm::u8> data_vector(size, 0x41); // Fill with test data for now
-      
-      // Perform write operation using bdev client
-      chi::u64 bytes_written = target_info->bdev_client_.Write(hipc::MemContext(), block, data_vector);
-      
-      if (bytes_written != size) {
-        // Restore reserved space on partial write
-        target_info->remaining_space_ += size;
-        task->result_code_ = 1;
-        task->error_message_ = chi::string(
-            main_allocator_,
-            "Partial write for blob '" + blob_name + "': wrote " + std::to_string(bytes_written) + " of " + std::to_string(size) + " bytes");
-        return;
-      }
-      
-      // TODO: Handle multi-block writes if blob spans multiple blocks
-      // TODO: Add proper async operation completion handling
-      
-    } catch (const std::exception& e) {
-      // Restore reserved space on error
-      target_info->remaining_space_ += size;
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "Failed to write blob '" + blob_name + "': " + e.what());
-      return;
-    }
-
-    // Create blob info
-    BlobInfo blob_info(main_allocator_);
-    blob_info.blob_id_ = blob_id;
-    blob_info.blob_name_ = chi::string(main_allocator_, blob_name);
-    blob_info.target_name_ = chi::string(main_allocator_, selected_target);
-    blob_info.offset_ = allocated_offset;
-    blob_info.size_ = size;
-    blob_info.score_ = blob_score;
-
-    // Store blob info in global blob tracking
-    blob_id_to_info_[blob_id] = blob_info;
-
-    // Update tag's blob set if tag exists
-    auto tag_it = tag_id_to_info_.find(tag_id);
-    if (tag_it != tag_id_to_info_.end()) {
-      size_t tag_lock_index = GetTagLockIndex(tag_it->second.tag_name_.str());
-      chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
-      tag_it->second.blob_ids_[blob_id] = blob_id;
-    }
-
-    // TODO: Perform async write operation to bdev
-    // For now, just mark as successful
-    task->result_code_ = 0; // Success
-
-    std::cout << "PutBlob: blob_id=" << blob_id << ", name=" << blob_name
-              << ", target=" << selected_target << ", size=" << size
-              << ", score=" << blob_score << ", dpe=" << config.dpe_.dpe_type_
-              << std::endl;
+    // Success - log operation details
+    task->result_code_ = 0;
+    HILOG(kInfo, "PutBlob successful: blob_id={},{}, name={}, offset={}, size={}, score={}, blocks={}", found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size, blob_score, blob_info_ptr->blocks_.size());
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -714,7 +569,7 @@ void Runtime::MonitorPutBlob(chi::MonitorModeId mode,
     // Route to blob operations queue (round-robin on lanes)
     auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -729,153 +584,67 @@ void Runtime::MonitorPutBlob(chi::MonitorModeId mode,
 
 void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
   try {
-    chi::u32 tag_id = task->tag_id_;
+    // Extract input parameters
+    TagId tag_id = task->tag_id_;
     std::string blob_name = task->blob_name_.str();
-    chi::u32 blob_id = task->blob_id_;
+    BlobId blob_id = task->blob_id_;
     chi::u64 offset = task->offset_;
     chi::u64 size = task->size_;
     chi::u32 flags = task->flags_;
 
+    // Suppress unused variable warning for flags - may be used in future
+    (void)flags;
+
     // Validate input parameters
     if (size == 0) {
       task->result_code_ = 1;
-      task->error_message_ =
-          chi::string(main_allocator_, "Read size cannot be zero");
       return;
     }
 
-    // Find blob by ID or name within tag
-    BlobInfo blob_info;
-    bool found = false;
+    // Check if blob name is non-empty and exists. If it does, then check if the ID exists. If it doesn't, error.
+    bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
+    bool blob_name_provided = !blob_name.empty();
 
-    if (blob_id != 0) {
-      // Find blob by ID
-      auto blob_it = blob_id_to_info_.find(blob_id);
-      if (blob_it != blob_id_to_info_.end()) {
-        blob_info = blob_it->second;
-        found = true;
-      }
-    } else if (!blob_name.empty() && tag_id != 0) {
-      // Find blob by name within tag
-      size_t tag_lock_index = GetTagLockIndex(blob_name);
-      chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
-
-      auto tag_blob_it = tag_blob_name_to_id_.find(tag_id);
-      if (tag_blob_it != tag_blob_name_to_id_.end()) {
-        auto name_it = tag_blob_it->second.find(blob_name);
-        if (name_it != tag_blob_it->second.end()) {
-          chi::u32 found_blob_id = name_it->second;
-          auto blob_it = blob_id_to_info_.find(found_blob_id);
-          if (blob_it != blob_id_to_info_.end()) {
-            blob_info = blob_it->second;
-            found = true;
-            task->blob_id_ = found_blob_id; // Set the blob_id in the task
-          }
-        }
-      }
-    }
-
-    if (!found) {
+    if (!blob_id_provided && !blob_name_provided) {
       task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_, "Blob not found (tag_id=" + std::to_string(tag_id) +
-                               ", blob_id=" + std::to_string(blob_id) +
-                               ", blob_name='" + blob_name + "')");
       return;
     }
 
-    // Validate read parameters against blob size
-    if (offset >= blob_info.size_) {
+    // Step 1: Check if blob exists
+    BlobId found_blob_id;
+    BlobInfo *blob_info_ptr =
+        CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
+    
+    // If blob doesn't exist, error
+    if (blob_info_ptr == nullptr) {
       task->result_code_ = 1;
-      task->error_message_ =
-          chi::string(main_allocator_, "Read offset " + std::to_string(offset) +
-                                           " exceeds blob size " +
-                                           std::to_string(blob_info.size_));
       return;
     }
 
-    // Adjust size if reading beyond blob end
-    chi::u64 available_size = blob_info.size_ - offset;
-    chi::u64 actual_size = std::min(size, available_size);
-
-    // Find target containing the blob
-    std::string target_name = blob_info.target_name_.str();
-    size_t target_lock_index = GetTargetLockIndex(target_name);
-    TargetInfo target_info;
-    bool target_found = false;
-
-    {
-      chi::ScopedCoRwReadLock read_lock(*target_locks_[target_lock_index]);
-      auto target_it = registered_targets_.find(target_name);
-      if (target_it != registered_targets_.end()) {
-        target_info = target_it->second;
-        target_found = true;
-      }
-    }
-
-    if (!target_found) {
+    // Check if blob id is non-null and exists. If it doesn't, error.
+    if (blob_id_provided && 
+        (found_blob_id.major_ != blob_id.major_ || found_blob_id.minor_ != blob_id.minor_)) {
       task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "Target '" + target_name + "' containing blob no longer exists");
       return;
     }
 
-    // Allocate memory for blob data if not provided
-    if (task->blob_data_.IsNull()) {
-      // TODO: Allocate shared memory buffer for blob data
-      // For now, simulate successful allocation
-      task->blob_data_ = hipc::Pointer::GetNull(); // Placeholder
-    }
+    // Use the pre-provided data pointer from the task
+    hipc::Pointer blob_data_ptr = task->blob_data_;
 
-    // Calculate actual read offset within target
-    chi::u64 target_offset = blob_info.offset_ + offset;
-
-    // Perform read operation from bdev
-    try {
-      // Create block for read operation
-      chimaera::bdev::Block block(target_offset, actual_size, 0); // Use block_type 0 for now
-      
-      // Perform read operation using bdev client
-      std::vector<hshm::u8> read_data = target_info.bdev_client_.Read(hipc::MemContext(), block);
-      
-      if (read_data.size() != actual_size) {
-        task->result_code_ = 1;
-        task->error_message_ = chi::string(
-            main_allocator_,
-            "Partial read for blob '" + blob_name + "': read " + std::to_string(read_data.size()) + " of " + std::to_string(actual_size) + " bytes");
-        return;
-      }
-      
-      // For now, return the read data size as success indicator
-      // TODO: Implement proper shared memory buffer allocation and data copying
-      task->blob_data_ = hipc::Pointer::GetNull(); // Placeholder
-      
-      // TODO: Handle multi-block reads if blob spans multiple blocks
-      // TODO: Add proper async operation completion handling
-      
-    } catch (const std::exception& e) {
-      task->result_code_ = 1;
-      task->error_message_ = chi::string(
-          main_allocator_,
-          "Failed to read blob '" + blob_name + "': " + e.what());
+    // Step 2: Read data from blob blocks using the same clamping and offset calculation logic as ModifyExistingData
+    chi::u32 read_result =
+        ReadData(blob_info_ptr->blocks_, blob_data_ptr, size, offset);
+    if (read_result != 0) {
+      task->result_code_ = read_result;
       return;
     }
-    std::cout << "GetBlob: blob_id=" << blob_info.blob_id_
-              << ", name=" << blob_info.blob_name_.str()
-              << ", target=" << target_name << ", offset=" << target_offset
-              << ", size=" << actual_size << " (requested=" << size
-              << ", blob_size=" << blob_info.size_ << ")" << std::endl;
 
-    task->result_code_ = 0; // Success
-
-    // Update task with actual read parameters
-    task->size_ =
-        actual_size; // Update size to reflect actual bytes that will be read
+    // Success - log operation details
+    task->result_code_ = 0;
+    HILOG(kInfo, "GetBlob successful: blob_id={},{}, name={}, offset={}, size={}, blocks={}", found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size, blob_info_ptr->blocks_.size());
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
-    task->error_message_ = chi::string(main_allocator_, e.what());
   }
 }
 
@@ -887,7 +656,7 @@ void Runtime::MonitorGetBlob(chi::MonitorModeId mode,
     // Route to blob operations queue (round-robin on lanes)
     auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -905,8 +674,6 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
                              chi::RunContext &ctx) {
   // Unimplemented for now
   task->result_code_ = 2; // Not implemented
-  task->error_message_ =
-      chi::string(main_allocator_, "ReorganizeBlob not implemented yet");
 }
 
 void Runtime::MonitorReorganizeBlob(chi::MonitorModeId mode,
@@ -917,7 +684,7 @@ void Runtime::MonitorReorganizeBlob(chi::MonitorModeId mode,
     // Route to blob operations queue (round-robin on lanes)
     auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -936,68 +703,21 @@ const Config &Runtime::GetConfig() const {
   return config_manager->GetConfig();
 }
 
-std::string
-Runtime::CreateBdevForTarget(const std::string &target_name,
-                             const StorageDeviceConfig &device_config) {
-  // TODO: Implement actual bdev creation using chimaera bdev
-  // For now, return a mock pool name based on the parsed config
-  std::string bdev_pool_name = "bdev_pool_" + target_name;
-
-  // In a real implementation, this would:
-  // 1. Use device_config.path_ as the storage directory
-  // 2. Use device_config.bdev_type_ to determine bdev backend ("file" or "ram")
-  // 3. Use device_config.capacity_limit_ as the size limit in bytes
-  // 4. Use chimaera bdev client to create/get a bdev with these parameters
-  // 5. Return the actual bdev pool name
-
-  std::cout << "CreateBdevForTarget: target=" << target_name
-            << ", path=" << device_config.path_
-            << ", type=" << device_config.bdev_type_
-            << ", capacity=" << device_config.capacity_limit_ << " bytes"
-            << std::endl;
-
-  return bdev_pool_name;
-}
-
-void Runtime::UpdateTargetStats(const std::string &target_name,
+void Runtime::UpdateTargetStats(const chi::PoolId &target_id,
                                 TargetInfo &target_info) {
-  // Get configuration for performance tuning
-  const Config &config = GetConfig();
-
-  // TODO: Implement actual stats polling from bdev using
-  // target_info.bdev_client_ For now, increment some mock stats using
-  // configured parameters
-  target_info.ops_read_ += 1;
-  target_info.ops_written_ += 1;
-
-  // Use configured cache size to simulate read/write amounts
-  chi::u64 read_amount = std::min(
-      static_cast<chi::u64>(4096),
-      static_cast<chi::u64>(config.performance_.blob_cache_size_mb_ * 1024));
-  chi::u64 write_amount = read_amount;
-
-  target_info.bytes_read_ += read_amount;
-  target_info.bytes_written_ += write_amount;
-
-  // Update performance metrics with current operation stats
-  // Note: We should refresh these from bdev periodically, but for now update latency
-  float mock_latency =
-      50.0f * (1.0f / config.performance_.max_concurrent_operations_);
-  target_info.perf_metrics_.read_latency_us_ =
-      (target_info.perf_metrics_.read_latency_us_ + mock_latency) / 2.0;
-  target_info.perf_metrics_.write_latency_us_ =
-      (target_info.perf_metrics_.write_latency_us_ + mock_latency) / 2.0;
-
-  // Calculate current bandwidth in MB/s based on actual bytes transferred
-  double time_elapsed_s = 1.0; // Assume 1 second elapsed for calculation
-  target_info.perf_metrics_.read_bandwidth_mbps_ =
-      (target_info.bytes_read_ / (1024.0 * 1024.0)) / time_elapsed_s;
-  target_info.perf_metrics_.write_bandwidth_mbps_ =
-      (target_info.bytes_written_ / (1024.0 * 1024.0)) / time_elapsed_s;
-
+  // Get actual statistics from bdev using the GetStats method
+  chi::u64 remaining_size;
+  chimaera::bdev::PerfMetrics perf_metrics = 
+      target_info.bdev_client_.GetStats(hipc::MemContext(), remaining_size);
+  
+  // Update target info with real performance metrics from bdev
+  target_info.perf_metrics_ = perf_metrics;
+  target_info.remaining_space_ = remaining_size;
+  
   // Auto-calculate target score using normalized log bandwidth
-  double max_bandwidth = std::max(target_info.perf_metrics_.read_bandwidth_mbps_,
-                                  target_info.perf_metrics_.write_bandwidth_mbps_);
+  double max_bandwidth =
+      std::max(target_info.perf_metrics_.read_bandwidth_mbps_,
+               target_info.perf_metrics_.write_bandwidth_mbps_);
   if (max_bandwidth > 0.0) {
     // Find the maximum bandwidth across all targets for normalization
     double global_max_bandwidth =
@@ -1014,13 +734,10 @@ void Runtime::UpdateTargetStats(const std::string &target_name,
   } else {
     target_info.target_score_ = 0.0f; // No bandwidth, lowest score
   }
-
-  // TODO: Update remaining_space_ based on actual bdev allocations
-  // For now, keep it as initialized or decremented during actual allocations
 }
 
-chi::u32 Runtime::GetOrAssignTagId(const std::string &tag_name,
-                                   chi::u32 preferred_id) {
+TagId Runtime::GetOrAssignTagId(const std::string &tag_name,
+                                const TagId& preferred_id) {
   size_t tag_lock_index = GetTagLockIndex(tag_name);
   chi::ScopedCoRwWriteLock write_lock(*tag_locks_[tag_lock_index]);
 
@@ -1031,62 +748,58 @@ chi::u32 Runtime::GetOrAssignTagId(const std::string &tag_name,
   }
 
   // Assign new tag ID
-  chi::u32 tag_id;
-  if (preferred_id != 0 &&
+  TagId tag_id;
+  if ((preferred_id.major_ != 0 || preferred_id.minor_ != 0) &&
       tag_id_to_info_.find(preferred_id) == tag_id_to_info_.end()) {
     tag_id = preferred_id;
   } else {
-    tag_id = next_tag_id_.fetch_add(1);
+    tag_id = GenerateNewTagId();
   }
 
   // Create tag info
   TagInfo tag_info(main_allocator_);
-  tag_info.tag_name_ = chi::string(main_allocator_, tag_name);
+  tag_info.tag_name_ = tag_name;
   tag_info.tag_id_ = tag_id;
 
   // Store mappings
   tag_name_to_id_[tag_name] = tag_id;
   tag_id_to_info_[tag_id] = tag_info;
-  tag_blob_name_to_id_[tag_id] = std::unordered_map<std::string, chi::u32>();
 
   return tag_id;
 }
 
-chi::u32 Runtime::GetOrAssignBlobId(chi::u32 tag_id,
-                                    const std::string &blob_name,
-                                    chi::u32 preferred_id) {
+BlobId Runtime::GetOrAssignBlobId(const TagId& tag_id, const std::string &blob_name,
+                                  const BlobId &preferred_id) {
   size_t tag_lock_index =
       GetTagLockIndex(blob_name); // Use blob_name for lock selection
   chi::ScopedCoRwWriteLock write_lock(*tag_locks_[tag_lock_index]);
 
-  // Check if blob already exists in this tag
-  auto tag_it = tag_blob_name_to_id_.find(tag_id);
-  if (tag_it != tag_blob_name_to_id_.end()) {
-    auto blob_it = tag_it->second.find(blob_name);
-    if (blob_it != tag_it->second.end()) {
-      return blob_it->second;
-    }
+  // Create compound key: "major.minor.blob_name"
+  std::string compound_key = std::to_string(tag_id.major_) + "." + std::to_string(tag_id.minor_) + "." + blob_name;
+
+  // Check if blob already exists with this compound key
+  auto blob_it = tag_blob_name_to_id_.find(compound_key);
+  if (blob_it != tag_blob_name_to_id_.end()) {
+    return blob_it->second;
   }
 
   // Assign new blob ID
-  chi::u32 blob_id;
-  if (preferred_id != 0 &&
+  BlobId blob_id;
+  if ((preferred_id.major_ != 0 || preferred_id.minor_ != 0) &&
       blob_id_to_info_.find(preferred_id) == blob_id_to_info_.end()) {
     blob_id = preferred_id;
   } else {
-    blob_id = next_blob_id_.fetch_add(1);
+    blob_id = GenerateNewBlobId();
   }
 
-  // Store mappings
-  if (tag_it == tag_blob_name_to_id_.end()) {
-    tag_blob_name_to_id_[tag_id] = std::unordered_map<std::string, chi::u32>();
-  }
-  tag_blob_name_to_id_[tag_id][blob_name] = blob_id;
+  // Store mapping with compound key
+  tag_blob_name_to_id_[compound_key] = blob_id;
 
   // Add blob to tag's blob set
   auto tag_info_it = tag_id_to_info_.find(tag_id);
   if (tag_info_it != tag_id_to_info_.end()) {
-    tag_info_it->second.blob_ids_[blob_id] = blob_id;
+    TagInfo &tag_info = tag_info_it->second;
+    tag_info.blob_ids_[blob_id] = 1; // using map as set, value doesn't matter
   }
 
   return blob_id;
@@ -1100,16 +813,46 @@ chi::u64 Runtime::GetWorkRemaining() const {
 }
 
 // Helper methods for lock index calculation
-size_t Runtime::GetTargetLockIndex(const std::string &target_name) const {
-  // Use hash of target name to distribute locks evenly
-  std::hash<std::string> hasher;
-  return hasher(target_name) % target_locks_.size();
+size_t Runtime::GetTargetLockIndex(const chi::PoolId &target_id) const {
+  // Use hash of target_id to distribute locks evenly
+  std::hash<chi::PoolId> hasher;
+  return hasher(target_id) % target_locks_.size();
 }
 
 size_t Runtime::GetTagLockIndex(const std::string &tag_name) const {
   // Use hash of tag name to distribute locks evenly
   std::hash<std::string> hasher;
   return hasher(tag_name) % tag_locks_.size();
+}
+
+TagId Runtime::GenerateNewTagId() {
+  // Get node_id from IPC manager as the major component
+  auto *ipc_manager = CHI_IPC;
+  chi::u32 node_id = ipc_manager->GetNodeId();
+
+  // Get next minor component from atomic counter
+  chi::u32 minor_id = next_tag_id_minor_.fetch_add(1);
+
+  return TagId{node_id, minor_id};
+}
+
+BlobId Runtime::GenerateNewBlobId() {
+  // Get node_id from IPC manager as the major component
+  auto *ipc_manager = CHI_IPC;
+  chi::u32 node_id = ipc_manager->GetNodeId();
+
+  // Get next minor component from atomic counter
+  chi::u32 minor_id = next_blob_id_minor_.fetch_add(1);
+
+  return BlobId{node_id, minor_id};
+}
+
+size_t Runtime::GetBlobLockIndex(const BlobId &blob_id) const {
+  // Use hash of blob ID to distribute locks evenly
+  // Hash both major and minor components for good distribution
+  std::hash<chi::u32> hasher;
+  size_t hash_value = hasher(blob_id.major_) ^ (hasher(blob_id.minor_) << 1);
+  return hash_value % tag_locks_.size();
 }
 
 // Explicit template instantiations for required template methods
@@ -1119,6 +862,356 @@ template void Runtime::GetOrCreateTag<CreateParams>(
 template void Runtime::MonitorGetOrCreateTag<CreateParams>(
     chi::MonitorModeId mode,
     hipc::FullPtr<GetOrCreateTagTask<CreateParams>> task, chi::RunContext &ctx);
+
+// Blob management helper functions
+BlobInfo *Runtime::CheckBlobExists(const BlobId &blob_id,
+                                   const std::string &blob_name,
+                                   const TagId& tag_id, BlobId &found_blob_id) {
+  // Check if blob id is provided and not null
+  bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
+  bool blob_name_provided = !blob_name.empty();
+
+  if (blob_name_provided) {
+    // Search by name first using compound key
+    std::string compound_key = std::to_string(tag_id.major_) + "." + std::to_string(tag_id.minor_) + "." + blob_name;
+    auto blob_name_it = tag_blob_name_to_id_.find(compound_key);
+    if (blob_name_it != tag_blob_name_to_id_.end()) {
+      const BlobId &blob_id_found = blob_name_it->second;
+      found_blob_id = blob_id_found;
+      auto blob_it = blob_id_to_info_.find(found_blob_id);
+      if (blob_it != blob_id_to_info_.end()) {
+        return &blob_id_to_info_[found_blob_id];
+      }
+    }
+  } else if (blob_id_provided) {
+    // Search by blob id if no blob name provided
+    auto blob_it = blob_id_to_info_.find(blob_id);
+    if (blob_it != blob_id_to_info_.end()) {
+      found_blob_id = blob_id;
+      return &blob_id_to_info_[blob_id];
+    }
+  }
+
+  // Blob not found
+  return nullptr;
+}
+
+BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name, const TagId& tag_id,
+                                 float blob_score, BlobId &created_blob_id) {
+  // Validate that blob name is provided
+  if (blob_name.empty()) {
+    return nullptr;
+  }
+
+  // Generate new blob ID
+  created_blob_id = GenerateNewBlobId();
+
+  // Create new blob info with empty block vector
+  BlobInfo new_blob_info(main_allocator_);
+  new_blob_info.blob_id_ = created_blob_id;
+  new_blob_info.blob_name_ = blob_name;
+  new_blob_info.score_ = blob_score;
+
+  // Store blob info in global blob tracking
+  blob_id_to_info_[created_blob_id] = new_blob_info;
+  BlobInfo *blob_info_ptr = &blob_id_to_info_[created_blob_id];
+
+  // Update tag mappings
+  auto tag_it = tag_id_to_info_.find(tag_id);
+  if (tag_it != tag_id_to_info_.end()) {
+    TagInfo &tag_info = tag_it->second;
+    size_t tag_lock_index = GetTagLockIndex(tag_info.tag_name_);
+    chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
+
+    // Add to tag's blob set
+    tag_info.blob_ids_[created_blob_id] = 1;
+
+    // Add name-to-id mapping using compound key
+    std::string compound_key = std::to_string(tag_id.major_) + "." + std::to_string(tag_id.minor_) + "." + blob_name;
+    tag_blob_name_to_id_[compound_key] = created_blob_id;
+  }
+
+  return blob_info_ptr;
+}
+
+chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
+                                  chi::u64 size, float blob_score) {
+  // Calculate required additional space
+  chi::u64 current_blob_size = blob_info.GetTotalSize();
+  chi::u64 required_size = offset + size;
+
+  if (required_size <= current_blob_size) {
+    // No additional allocation needed
+    return 0;
+  }
+
+  chi::u64 additional_size = required_size - current_blob_size;
+
+  // Get all available targets for data placement
+  size_t lock_index = GetBlobLockIndex(blob_info.blob_id_);
+  std::vector<TargetInfo> available_targets;
+  {
+    chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
+
+    available_targets.reserve(registered_targets_.size());
+    for (const auto &pair : registered_targets_) {
+      const TargetInfo &target_info = pair.second;
+      available_targets.push_back(target_info);
+    }
+  }
+
+  if (available_targets.empty()) {
+    return 1;
+  }
+
+  // Create Data Placement Engine based on configuration
+  const Config &config = GetConfig();
+  std::unique_ptr<DataPlacementEngine> dpe =
+      DpeFactory::CreateDpe(config.dpe_.dpe_type_);
+
+  // Select targets using DPE algorithm before allocation loop
+  std::vector<TargetInfo> ordered_targets =
+      dpe->SelectTargets(available_targets, blob_score, additional_size);
+
+  if (ordered_targets.empty()) {
+    return 1;
+  }
+
+  // Use for loop to iterate over pre-selected targets in order
+  chi::u64 remaining_to_allocate = additional_size;
+  for (const auto &selected_target_info : ordered_targets) {
+    // Termination condition: exit when no more space to allocate
+    if (remaining_to_allocate == 0) {
+      break;
+    }
+
+    chi::PoolId selected_target_id = selected_target_info.bdev_client_.pool_id_;
+
+    // Find the selected target info for allocation using TargetId
+    size_t target_lock_index = GetTargetLockIndex(selected_target_id);
+    TargetInfo *target_info = nullptr;
+    {
+      chi::ScopedCoRwWriteLock write_lock(*target_locks_[target_lock_index]);
+      auto target_it = registered_targets_.find(selected_target_id);
+      if (target_it == registered_targets_.end()) {
+        continue; // Try next target
+      }
+      target_info = &target_it->second;
+
+      // Calculate how much we can allocate from this target
+      chi::u64 allocate_size =
+          std::min(remaining_to_allocate, target_info->remaining_space_);
+
+      if (allocate_size == 0) {
+        // No space available, try next target
+        continue;
+      }
+
+      // Allocate space using bdev client
+      chi::u64 allocated_offset;
+      if (!AllocateFromTarget(*target_info, allocate_size, allocated_offset)) {
+        // Allocation failed, try next target
+        continue;
+      }
+
+      // Create new block for the allocated space
+      BlobBlock new_block(target_info->bdev_client_, allocated_offset,
+                          allocate_size);
+      blob_info.blocks_.emplace_back(new_block);
+
+      remaining_to_allocate -= allocate_size;
+    }
+  }
+
+  // Error condition: if we've exhausted all targets but still have remaining
+  // space
+  if (remaining_to_allocate > 0) {
+    return 1;
+  }
+
+  return 0; // Success
+}
+
+chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks, 
+                                     hipc::Pointer data, size_t data_size, 
+                                     size_t data_offset_in_blob) {
+  // Step 1: Initially store the remaining_size equal to data_size
+  size_t remaining_size = data_size;
+  
+  // Vector to store async write tasks for later waiting
+  std::vector<hipc::FullPtr<chimaera::bdev::WriteTask>> write_tasks;
+  std::vector<size_t> expected_write_sizes;
+  
+  // Step 2: Store the offset of the block in the blob. The first block is offset 0
+  size_t block_offset_in_blob = 0;
+  
+  // Iterate over every block in the blob
+  for (size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
+    const BlobBlock &block = blocks[block_idx];
+    // Step 7: If remaining size is 0, quit the for loop
+    if (remaining_size == 0) {
+      break;
+    }
+    
+    // Step 3: Check if the data we are writing is within the range [block_offset_in_blob, block_offset_in_blob + block.size)
+    size_t block_end_in_blob = block_offset_in_blob + block.size_;
+    size_t data_end_in_blob = data_offset_in_blob + data_size;
+    
+    if (data_offset_in_blob < block_end_in_blob && data_end_in_blob > block_offset_in_blob) {
+      // Step 4: Clamp the range [data_offset_in_blob, data_offset_in_blob + data_size) 
+      // to the range [block_offset_in_blob, block_offset_in_blob + block.size)
+      size_t write_start_in_blob = std::max(data_offset_in_blob, block_offset_in_blob);
+      size_t write_end_in_blob = std::min(data_end_in_blob, block_end_in_blob);
+      size_t write_size = write_end_in_blob - write_start_in_blob;
+      
+      // Calculate offset within the block
+      size_t write_start_in_block = write_start_in_blob - block_offset_in_blob;
+      
+      // Calculate offset into the data buffer
+      size_t data_buffer_offset = write_start_in_blob - data_offset_in_blob;
+      
+      // Step 5: Perform async write on the updated range
+      chimaera::bdev::Block bdev_block(block.target_offset_ + write_start_in_block, write_size, 0);
+      hipc::Pointer data_ptr = data + data_buffer_offset;
+      
+      chimaera::bdev::Client client_copy = block.bdev_client_;
+      auto write_task = client_copy.AsyncWrite(hipc::MemContext(), bdev_block, data_ptr, write_size);
+      
+      write_tasks.push_back(write_task);
+      expected_write_sizes.push_back(write_size);
+      
+      // Step 6: Subtract the amount of data we have written from the remaining_size
+      remaining_size -= write_size;
+    }
+    
+    // Update block offset for next iteration
+    block_offset_in_blob += block.size_;
+  }
+  
+  // Step 7: Wait for all Async write operations to complete
+  for (size_t task_idx = 0; task_idx < write_tasks.size(); ++task_idx) {
+    auto task = write_tasks[task_idx];
+    size_t expected_size = expected_write_sizes[task_idx];
+    
+    task->Wait();
+    
+    if (task->bytes_written_ != expected_size) {
+      CHI_IPC->DelTask(task);
+      return 1;
+    }
+    
+    CHI_IPC->DelTask(task);
+  }
+  
+  return 0; // Success
+}
+
+chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks, 
+                          hipc::Pointer data, size_t data_size, 
+                          size_t data_offset_in_blob) {
+  // Step 1: Initially store the remaining_size equal to data_size
+  size_t remaining_size = data_size;
+  
+  // Vector to store async read tasks for later waiting
+  std::vector<hipc::FullPtr<chimaera::bdev::ReadTask>> read_tasks;
+  std::vector<size_t> expected_read_sizes;
+  
+  // Step 2: Store the offset of the block in the blob. The first block is offset 0
+  size_t block_offset_in_blob = 0;
+  
+  // Iterate over every block in the blob
+  for (size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
+    const BlobBlock &block = blocks[block_idx];
+    // Step 7: If remaining size is 0, quit the for loop
+    if (remaining_size == 0) {
+      break;
+    }
+    
+    // Step 3: Check if the data we are reading is within the range [block_offset_in_blob, block_offset_in_blob + block.size)
+    size_t block_end_in_blob = block_offset_in_blob + block.size_;
+    size_t data_end_in_blob = data_offset_in_blob + data_size;
+    
+    if (data_offset_in_blob < block_end_in_blob && data_end_in_blob > block_offset_in_blob) {
+      // Step 4: Clamp the range [data_offset_in_blob, data_offset_in_blob + data_size) 
+      // to the range [block_offset_in_blob, block_offset_in_blob + block.size)
+      size_t read_start_in_blob = std::max(data_offset_in_blob, block_offset_in_blob);
+      size_t read_end_in_blob = std::min(data_end_in_blob, block_end_in_blob);
+      size_t read_size = read_end_in_blob - read_start_in_blob;
+      
+      // Calculate offset within the block
+      size_t read_start_in_block = read_start_in_blob - block_offset_in_blob;
+      
+      // Calculate offset into the data buffer
+      size_t data_buffer_offset = read_start_in_blob - data_offset_in_blob;
+      
+      // Step 5: Perform async read on the range
+      chimaera::bdev::Block bdev_block(block.target_offset_ + read_start_in_block, read_size, 0);
+      hipc::Pointer data_ptr = data + data_buffer_offset;
+      
+      chimaera::bdev::Client client_copy = block.bdev_client_;
+      auto read_task = client_copy.AsyncRead(hipc::MemContext(), bdev_block, data_ptr, read_size);
+      
+      read_tasks.push_back(read_task);
+      expected_read_sizes.push_back(read_size);
+      
+      // Step 6: Subtract the amount of data we have read from the remaining_size
+      remaining_size -= read_size;
+    }
+    
+    // Update block offset for next iteration
+    block_offset_in_blob += block.size_;
+  }
+  
+  // Step 7: Wait for all Async read operations to complete
+  for (size_t task_idx = 0; task_idx < read_tasks.size(); ++task_idx) {
+    auto task = read_tasks[task_idx];
+    size_t expected_size = expected_read_sizes[task_idx];
+    
+    task->Wait();
+    
+    if (task->bytes_read_ != expected_size) {
+      CHI_IPC->DelTask(task);
+      return 1;
+    }
+    
+    CHI_IPC->DelTask(task);
+  }
+  
+  return 0; // Success
+}
+
+// Block management helper functions
+
+bool Runtime::AllocateFromTarget(TargetInfo &target_info, chi::u64 size,
+                                 chi::u64 &allocated_offset) {
+  // Check if target has sufficient space
+  if (target_info.remaining_space_ < size) {
+    return false;
+  }
+
+  try {
+    // Use bdev client AllocateBlocks method to get actual offset
+    std::vector<chimaera::bdev::Block> allocated_blocks =
+        target_info.bdev_client_.AllocateBlocks(hipc::MemContext(), size);
+
+    // Check if we got any blocks
+    if (allocated_blocks.empty()) {
+      return false;
+    }
+
+    // Use the first block (for single allocation case)
+    chimaera::bdev::Block allocated_block = allocated_blocks[0];
+    allocated_offset = allocated_block.offset_;
+
+    // Update remaining space
+    target_info.remaining_space_ -= size;
+
+    return true;
+  } catch (const std::exception &e) {
+    // Allocation failed
+    return false;
+  }
+}
 
 } // namespace wrp_cte::core
 

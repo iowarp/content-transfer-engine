@@ -208,9 +208,9 @@ TEST_CASE_METHOD(CTECoreTestFixture, "Register Target", "[cte][core][target]") {
  */
 TEST_CASE_METHOD(CTECoreTestFixture, "PutBlob Operations", "[cte][core][putblob]") {
   SECTION("PutBlob parameter validation") {
-    // Test valid blob parameters
+    // Test valid blob parameters - Updated for new pattern
     const std::string valid_blob_name = "test_blob_001";
-    const chi::u32 valid_blob_id = 12345;
+    const chi::u32 valid_blob_id = 0;  // Use null ID for PutBlob
     const chi::u64 valid_offset = 0;
     const chi::u64 valid_size = 4096;  // 4KB
     const float valid_score = 0.75f;
@@ -221,14 +221,14 @@ TEST_CASE_METHOD(CTECoreTestFixture, "PutBlob Operations", "[cte][core][putblob]
     
     // Validate all parameters
     REQUIRE(!valid_blob_name.empty());
-    REQUIRE(valid_blob_id != 0);
+    REQUIRE(valid_blob_id == 0);  // Null ID is valid for PutBlob
     REQUIRE(valid_size > 0);
     REQUIRE(valid_score >= 0.0f);
     REQUIRE(valid_score <= 1.0f);
     
     INFO("PutBlob parameters validated:");
     INFO("  Name: " << valid_blob_name);
-    INFO("  ID: " << valid_blob_id); 
+    INFO("  ID: " << valid_blob_id << " (null for auto-allocation)"); 
     INFO("  Size: " << valid_size << " bytes");
     INFO("  Score: " << valid_score);
   }
@@ -261,20 +261,22 @@ TEST_CASE_METHOD(CTECoreTestFixture, "PutBlob Operations", "[cte][core][putblob]
   }
   
   SECTION("Blob ID validation requirements") {
-    // Test blob ID validation logic
+    // Test blob ID validation logic - Updated for new pattern
     
-    // Valid IDs (non-zero)
-    std::vector<chi::u32> valid_ids = {1, 42, 12345, 999999};
+    // Null/zero IDs are now VALID for PutBlob (auto-allocation)
+    chi::u32 null_id = 0;
+    REQUIRE(null_id == 0);  // Null ID is valid for auto-allocation
+    INFO("Null blob ID (valid for auto-allocation): " << null_id);
     
-    for (chi::u32 id : valid_ids) {
+    // Auto-generated IDs (non-zero) are valid for GetBlob
+    std::vector<chi::u32> generated_ids = {1, 42, 12345, 999999};
+    
+    for (chi::u32 id : generated_ids) {
       REQUIRE(id != 0);
-      INFO("Valid blob ID: " << id);
+      INFO("Auto-generated blob ID: " << id);
     }
     
-    // Invalid ID (zero)
-    chi::u32 invalid_id = 0;
-    REQUIRE(invalid_id == 0);  // This should trigger validation failure
-    INFO("Invalid blob ID detected: " << invalid_id);
+    INFO("Blob ID validation updated: null IDs valid for PutBlob, non-zero for GetBlob");
   }
   
   SECTION("Blob score validation") {
@@ -304,10 +306,10 @@ TEST_CASE_METHOD(CTECoreTestFixture, "PutBlob Operations", "[cte][core][putblob]
  */
 TEST_CASE_METHOD(CTECoreTestFixture, "GetBlob Operations", "[cte][core][getblob]") {
   SECTION("GetBlob parameter validation") {
-    // Test valid retrieval parameters
+    // Test valid retrieval parameters - Updated for new pattern
     const chi::u32 valid_tag_id = 100;
-    const std::string valid_blob_name = "retrieve_test_blob";
-    const chi::u32 valid_blob_id = 54321;
+    const std::string valid_blob_name = "";  // Empty name for GetBlob
+    const chi::u32 valid_blob_id = 54321;  // Auto-generated ID
     const chi::u64 valid_offset = 0;
     const chi::u64 valid_size = 2048;  // 2KB
     const chi::u32 valid_flags = 0;
@@ -316,14 +318,14 @@ TEST_CASE_METHOD(CTECoreTestFixture, "GetBlob Operations", "[cte][core][getblob]
     
     // Validate retrieval parameters
     REQUIRE(valid_tag_id > 0);
-    REQUIRE(!valid_blob_name.empty());
-    REQUIRE(valid_blob_id != 0);
+    REQUIRE(valid_blob_name.empty());  // Empty name for GetBlob
+    REQUIRE(valid_blob_id != 0);  // Must use allocated ID
     REQUIRE(valid_size > 0);
     
     INFO("GetBlob parameters validated:");
     INFO("  Tag ID: " << valid_tag_id);
-    INFO("  Blob name: " << valid_blob_name);
-    INFO("  Blob ID: " << valid_blob_id);
+    INFO("  Blob name: '" << valid_blob_name << "' (empty for GetBlob)");
+    INFO("  Blob ID: " << valid_blob_id << " (allocated ID)");
     INFO("  Offset: " << valid_offset);
     INFO("  Size: " << valid_size << " bytes");
   }
@@ -390,16 +392,16 @@ TEST_CASE_METHOD(CTECoreTestFixture, "GetBlob Operations", "[cte][core][getblob]
   }
   
   SECTION("Error case simulation") {
-    // Test error handling for non-existent blobs
-    const std::string nonexistent_name = "does_not_exist";
-    const chi::u32 nonexistent_id = 99999;
+    // Test error handling for non-existent blobs - Updated for new pattern
+    const std::string nonexistent_name = "";  // Empty name for GetBlob
+    const chi::u32 nonexistent_id = 99999;  // Non-existent allocated ID
     
-    REQUIRE(!nonexistent_name.empty());  // Name is valid format
-    REQUIRE(nonexistent_id != 0);        // ID is valid format
+    REQUIRE(nonexistent_name.empty());   // Empty name for GetBlob
+    REQUIRE(nonexistent_id != 0);         // ID should be allocated (non-zero)
     
     INFO("Error case simulation - non-existent blob:");
-    INFO("  Name: " << nonexistent_name);
-    INFO("  ID: " << nonexistent_id);
+    INFO("  Name: '" << nonexistent_name << "' (empty for GetBlob)");
+    INFO("  ID: " << nonexistent_id << " (non-existent allocated ID)");
     INFO("This would trigger appropriate error handling in actual implementation");
   }
 }
@@ -446,12 +448,12 @@ TEST_CASE_METHOD(CTECoreTestFixture, "CTE Core Integration Workflow", "[cte][cor
     
     for (size_t i = 0; i < blob_count; ++i) {
       blob_names.push_back("integration_blob_" + std::to_string(i));
-      blob_ids.push_back(static_cast<chi::u32>(300 + i));
+      blob_ids.push_back(0);  // Use null ID for PutBlob
       blob_data.push_back(CreateTestData(1024 * (i + 1), static_cast<char>('A' + i)));
       
-      // Validate each blob
+      // Validate each blob - Updated for new pattern
       REQUIRE(!blob_names[i].empty());
-      REQUIRE(blob_ids[i] != 0);
+      REQUIRE(blob_ids[i] == 0);  // Null ID for PutBlob
       REQUIRE(blob_data[i].size() == 1024 * (i + 1));
       REQUIRE(VerifyTestData(blob_data[i], static_cast<char>('A' + i)));
     }

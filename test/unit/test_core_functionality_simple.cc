@@ -413,7 +413,7 @@ TEST_CASE("Task Structure Validation", "[cte][core][tasks]") {
     INFO("  Result code: " << test_result_code);
     INFO("  Total size: " << test_total_size);
     INFO("  Tag ID: " << test_tag_id);
-    INFO("  Blob ID: " << test_blob_id);
+    INFO("  Blob ID: " << test_blob_id << " (null for PutBlob tasks)");
     INFO("  Score: " << test_score);
     INFO("Task structure compilation verified");
   }
