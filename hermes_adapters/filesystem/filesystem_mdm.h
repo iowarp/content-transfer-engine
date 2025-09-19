@@ -17,6 +17,8 @@
 #include <unordered_map>
 
 #include "filesystem_io_client.h"
+#include "hermes_shm/thread/lock.h"
+#include "hermes_adapters/cte_config.h"
 
 namespace hermes::adapter {
 
@@ -29,7 +31,7 @@ private:
       path_to_hermes_file_; /**< Map to determine if path is buffered. */
   std::unordered_map<File, std::shared_ptr<AdapterStat>>
       hermes_file_to_stat_; /**< Map for metadata */
-  RwLock lock_;             /**< Lock to synchronize MD updates*/
+  hshm::RwLock lock_;             /**< Lock to synchronize MD updates*/
 
 public:
   std::unordered_map<uint64_t, FsAsyncTask *>
@@ -41,19 +43,19 @@ public:
 
   /** Get the current adapter mode */
   AdapterMode GetBaseAdapterMode() {
-    ScopedRwReadLock md_lock(lock_, 1);
+    hshm::ScopedRwReadLock md_lock(lock_, 1);
     return HERMES_CLIENT_CONF.GetBaseAdapterMode();
   }
 
   /** Get the adapter mode for a particular file */
   AdapterMode GetAdapterMode(const std::string &path) {
-    ScopedRwReadLock md_lock(lock_, 2);
+    hshm::ScopedRwReadLock md_lock(lock_, 2);
     return HERMES_CLIENT_CONF.GetAdapterConfig(path).mode_;
   }
 
   /** Get the adapter page size for a particular file */
   size_t GetAdapterPageSize(const std::string &path) {
-    ScopedRwReadLock md_lock(lock_, 3);
+    hshm::ScopedRwReadLock md_lock(lock_, 3);
     return HERMES_CLIENT_CONF.GetAdapterConfig(path).page_size_;
   }
 
@@ -67,7 +69,7 @@ public:
    */
   bool Create(const File &f, std::shared_ptr<AdapterStat> &stat) {
     HILOG(kDebug, "Create metadata for file handler");
-    ScopedRwWriteLock md_lock(lock_, kMDM_Create);
+    hshm::ScopedRwWriteLock md_lock(lock_, kMDM_Create);
     if (path_to_hermes_file_.find(stat->path_) == path_to_hermes_file_.end()) {
       path_to_hermes_file_.emplace(stat->path_, std::list<File>());
     }
@@ -85,7 +87,7 @@ public:
    */
   bool Update(const File &f, const AdapterStat &stat) {
     HILOG(kDebug, "Update metadata for file handler");
-    ScopedRwWriteLock md_lock(lock_, kMDM_Update);
+    hshm::ScopedRwWriteLock md_lock(lock_, kMDM_Update);
     auto iter = hermes_file_to_stat_.find(f);
     if (iter != hermes_file_to_stat_.end()) {
       *(*iter).second = stat;
@@ -103,7 +105,7 @@ public:
    */
   bool Delete(const std::string &path, const File &f) {
     HILOG(kDebug, "Delete metadata for file handler");
-    ScopedRwWriteLock md_lock(lock_, kMDM_Delete);
+    hshm::ScopedRwWriteLock md_lock(lock_, kMDM_Delete);
     auto iter = hermes_file_to_stat_.find(f);
     if (iter != hermes_file_to_stat_.end()) {
       hermes_file_to_stat_.erase(iter);
@@ -126,7 +128,7 @@ public:
    * */
   std::list<File> *Find(const std::string &path) {
     std::string canon_path = stdfs::absolute(path).string();
-    ScopedRwReadLock md_lock(lock_, kMDM_Find);
+    hshm::ScopedRwReadLock md_lock(lock_, kMDM_Find);
     auto iter = path_to_hermes_file_.find(canon_path);
     if (iter == path_to_hermes_file_.end())
       return nullptr;
@@ -141,7 +143,7 @@ public:
    *            The bool in pair indicated whether metadata entry exists.
    */
   std::shared_ptr<AdapterStat> Find(const File &f) {
-    ScopedRwReadLock md_lock(lock_, kMDM_Find2);
+    hshm::ScopedRwReadLock md_lock(lock_, kMDM_Find2);
     auto iter = hermes_file_to_stat_.find(f);
     if (iter == hermes_file_to_stat_.end())
       return nullptr;
@@ -153,7 +155,7 @@ public:
    * Add a request to the request map.
    * */
   void EmplaceTask(uint64_t id, FsAsyncTask *task) {
-    ScopedRwWriteLock md_lock(lock_, 0);
+    hshm::ScopedRwWriteLock md_lock(lock_, 0);
     request_map_.emplace(id, task);
   }
 
@@ -161,7 +163,7 @@ public:
    * Find a request in the request map.
    * */
   FsAsyncTask *FindTask(uint64_t id) {
-    ScopedRwReadLock md_lock(lock_, 0);
+    hshm::ScopedRwReadLock md_lock(lock_, 0);
     auto iter = request_map_.find(id);
     if (iter == request_map_.end()) {
       return nullptr;
@@ -174,7 +176,7 @@ public:
    * Delete a request in the request map.
    * */
   void DeleteTask(uint64_t id) {
-    ScopedRwWriteLock md_lock(lock_, 0);
+    hshm::ScopedRwWriteLock md_lock(lock_, 0);
     auto iter = request_map_.find(id);
     if (iter != request_map_.end()) {
       request_map_.erase(iter);

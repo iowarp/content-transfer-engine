@@ -1,9 +1,10 @@
 include_directories(
         ${CMAKE_SOURCE_DIR}
-        ${HERMES_SRC_DIR}
-        ${HERMES_ADAPTER_DIR}
-        ${HERMES_IO_CLIENT_DIR}
         .)
+
+# Add include directories for hermes dependencies
+include_directories($ENV{HOME}/.scspkg/packages/cte-hermes-shm/include)
+include_directories($ENV{HOME}/.scspkg/packages/cte/include)
 
 # Create the metadata manager singleton + FS base class
 add_library(hermes_fs_base SHARED
@@ -11,11 +12,13 @@ add_library(hermes_fs_base SHARED
         filesystem.h
         filesystem_io_client.h
         filesystem_mdm.h)
-add_dependencies(hermes_fs_base
-        ${Hermes_CLIENT_DEPS})
+# Find the required libraries
+find_library(HERMES_SHM_HOST_LIB hermes_shm_host PATHS $ENV{HOME}/.scspkg/packages/cte-hermes-shm/lib)
+
 target_link_libraries(hermes_fs_base
         MPI::MPI_CXX
-        ${Hermes_CLIENT_DEPS})
+        wrp_cte_core_client
+        ${HERMES_SHM_HOST_LIB})
 
 # -----------------------------------------------------------------------------
 # Add Target(s) to CMake Install
@@ -23,15 +26,15 @@ target_link_libraries(hermes_fs_base
 install(
         TARGETS
         hermes_fs_base
-        LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
 )
 install(
         FILES
         filesystem_io_client.h
         DESTINATION
-        ${HERMES_INSTALL_INCLUDE_DIR}
+        include/hermes_adapters/filesystem
         COMPONENT
         headers
 )
@@ -52,6 +55,4 @@ install(
 # -----------------------------------------------------------------------------
 # Add Target(s) to Coverage
 # -----------------------------------------------------------------------------
-if(HERMES_ENABLE_COVERAGE)
-        set_coverage_flags(hermes_fs_base)
-endif()
+# Coverage flags removed for CTE build

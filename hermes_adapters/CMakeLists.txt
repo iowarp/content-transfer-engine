@@ -1,8 +1,18 @@
 #------------------------------------------------------------------------------
 # Build adapters
 #------------------------------------------------------------------------------
+
+# Core adapters that are always built
 add_subdirectory(filesystem)
 add_subdirectory(posix)
+
+# Optional adapters - only build if explicitly enabled
+# These are currently disabled for CTE as they may need additional updates
+option(HERMES_ENABLE_STDIO_ADAPTER "Enable STDIO adapter" OFF)
+option(HERMES_ENABLE_MPIIO_ADAPTER "Enable MPI-IO adapter" OFF)
+option(HERMES_ENABLE_VFD "Enable HDF5 VFD adapter" OFF)
+option(HERMES_ENABLE_NVIDIA_GDS_ADAPTER "Enable NVIDIA GDS adapter" OFF)
+
 if (HERMES_ENABLE_STDIO_ADAPTER)
     add_subdirectory(stdio)
 endif()

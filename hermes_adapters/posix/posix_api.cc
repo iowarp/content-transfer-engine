@@ -21,11 +21,20 @@ bool posix_intercepted = true;
 
 #include <filesystem>
 
-#include "hermes/hermes_types.h"
+#include "chimaera/chimaera.h"
 #include "hermes_adapters/filesystem/filesystem.h"
 #include "hermes_shm/util/logging.h"
 #include "hermes_shm/util/singleton.h"
 #include "posix_fs_api.h"
+
+// CTE placeholder macros for compatibility
+#define TRANSPARENT_HERMES() true
+
+#include "hermes_adapters/cte_config.h"
+
+// Define the global configuration objects
+MockConfig g_hermes_conf;
+MockConfig g_hermes_client_conf;
 
 using hermes::adapter::AdapterStat;
 using hermes::adapter::File;

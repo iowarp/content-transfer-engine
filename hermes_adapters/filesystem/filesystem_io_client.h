@@ -19,9 +19,12 @@
 #include <future>
 #include <limits>
 
-#include "hermes/bucket.h"
-#include "hermes/hermes.h"
+#include "chimaera/core/core_client.h"
+#include "chimaera/core/core_tasks.h"
+#include "hermes_adapters/adapter_types.h"
 #include "hermes_adapters/mapper/balanced_mapper.h"
+#include "hermes_shm/types/bitfield.h"
+#include "hermes_shm/thread/lock.h"
 
 namespace stdfs = std::filesystem;
 
@@ -78,7 +81,7 @@ struct IoStatus {
  * For now, nothing additional than the typical FsIoOptions.
  * */
 struct FsIoOptions {
-  bitfield32_t flags_;    /**< various I/O flags */
+  hshm::bitfield32_t flags_;    /**< various I/O flags */
   MPI_Datatype mpi_type_; /**< MPI data type */
   int mpi_count_;         /**< The number of types */
   int type_size_;         /**< The size of type */
@@ -120,14 +123,14 @@ struct FsIoOptions {
 
 /** The get task */
 struct GetBlobAsyncTask {
-  FullPtr<GetBlobTask> task_;
+  hipc::FullPtr<wrp_cte::core::GetBlobTask> task_;
   char *orig_data_;
   size_t orig_size_;
 };
 
 /** A structure to represent Hermes request */
 struct FsAsyncTask {
-  std::vector<FullPtr<PutBlobTask>> put_tasks_;
+  std::vector<hipc::FullPtr<wrp_cte::core::PutBlobTask>> put_tasks_;
   std::vector<GetBlobAsyncTask> get_tasks_;
   IoStatus io_status_;
   FsIoOptions opts_;
@@ -191,7 +194,7 @@ struct File {
 struct AdapterStat {
   std::string path_;         /**< The URL of this file */
   int flags_;                /**< open() flags for POSIX */
-  bitfield32_t hflags_;      /**< Flags used by FS adapter */
+  hshm::bitfield32_t hflags_;      /**< Flags used by FS adapter */
   mode_t st_mode_;           /**< protection */
   uid_t st_uid_;             /**< user ID of owner */
   gid_t st_gid_;             /**< group ID of owner */
@@ -212,7 +215,8 @@ struct AdapterStat {
   MPI_Comm comm_;  /**< Communicator for the file.*/
   bool atomicity_; /**< Consistency semantics for data-access */
 
-  hapi::Bucket bkt_id_; /**< bucket associated with the file */
+  wrp_cte::core::TagId tag_id_; /**< tag associated with the file */
+  wrp_cte::core::Client cte_client_; /**< CTE core client for this file */
   /** Page size used for file */
   size_t page_size_;
 
@@ -294,14 +298,14 @@ public:
   virtual ~FilesystemIoClient() = default;
 
   /** Get initial statistics from the backend */
-  virtual size_t GetBackendSize(const chi::string &bkt_name) = 0;
+  virtual size_t GetBackendSize(const std::string &bkt_name) = 0;
 
   /** Write blob to backend */
-  virtual void WriteBlob(const std::string &bkt_name, const Blob &full_blob,
+  virtual void WriteBlob(const std::string &bkt_name, const void* data, size_t size,
                          const FsIoOptions &opts, IoStatus &status) = 0;
 
   /** Read blob from the backend */
-  virtual void ReadBlob(const std::string &bkt_name, Blob &full_blob,
+  virtual void ReadBlob(const std::string &bkt_name, void* data, size_t size,
                         const FsIoOptions &opts, IoStatus &status) = 0;
 
   /** real open */

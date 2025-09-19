@@ -13,7 +13,7 @@
 #ifndef HERMES_ABSTRACT_MAPPER_H
 #define HERMES_ABSTRACT_MAPPER_H
 
-#include "hermes/hermes_types.h"
+#include "chimaera/chimaera.h"
 
 namespace hermes::adapter {
 

@@ -55,6 +55,9 @@ add_subdirectory(core)
 # Add the bdev ChiMod (when it exists)
 # add_subdirectory(chimods/bdev)
 
+# Add adapters
+add_subdirectory(hermes_adapters)
+
 # Add tests
 add_subdirectory(test)
 

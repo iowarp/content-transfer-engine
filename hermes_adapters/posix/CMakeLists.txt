@@ -1,17 +1,24 @@
 include_directories(
         ${CMAKE_SOURCE_DIR}
-        ${HERMES_SRC_DIR}
-        ${HERMES_ADAPTER_DIR}
-        ${HERMES_IO_CLIENT_DIR}
         .)
 
+# Add include directories for hermes dependencies
+include_directories($ENV{HOME}/.scspkg/packages/cte-hermes-shm/include)
+include_directories($ENV{HOME}/.scspkg/packages/cte/include)
+
 # Create the POSIX interceptor
-set(INTERCEPTOR_DEPS
-        ${Hermes_CLIENT_DEPS} hermes_fs_base)
 add_library(hermes_posix SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/posix_api.cc)
-add_dependencies(hermes_posix ${INTERCEPTOR_DEPS})
-target_link_libraries(hermes_posix MPI::MPI_CXX stdc++fs ${libelf_LIBRARIES} ${INTERCEPTOR_DEPS})
+add_dependencies(hermes_posix hermes_fs_base)
+# Find the required libraries
+find_library(HERMES_SHM_HOST_LIB hermes_shm_host PATHS $ENV{HOME}/.scspkg/packages/cte-hermes-shm/lib)
+
+target_link_libraries(hermes_posix
+        MPI::MPI_CXX
+        stdc++fs
+        hermes_fs_base
+        wrp_cte_core_client
+        ${HERMES_SHM_HOST_LIB})
 set_target_properties(hermes_posix PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 
@@ -21,9 +28,9 @@ set_target_properties(hermes_posix PROPERTIES POSITION_INDEPENDENT_CODE ON)
 install(
         TARGETS
         hermes_posix
-        LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
 )
 
 # -----------------------------------------------------------------------------
@@ -42,6 +49,4 @@ install(
 # -----------------------------------------------------------------------------
 # Add Target(s) to Coverage
 # -----------------------------------------------------------------------------
-if(HERMES_ENABLE_COVERAGE)
-        set_coverage_flags(hermes_posix)
-endif()
+# Coverage flags removed for CTE build
