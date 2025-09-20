@@ -558,7 +558,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL PutBlob with data integrity ===\n");
 
     const std::string blob_name = "functional_blob_basic";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 1024;           // 1KB test data
     const float score = 0.75f;
 
@@ -616,11 +616,11 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     const std::vector<
         std::tuple<std::string, wrp_cte::core::BlobId, chi::u64, char, float>>
         blob_configs = {
-            {"small_blob", wrp_cte::core::BlobId{0, 0}, 512, 'S',
+            {"small_blob", wrp_cte::core::BlobId::GetNull(), 512, 'S',
              0.3f}, // Small: 512 bytes - null ID
-            {"medium_blob", wrp_cte::core::BlobId{0, 0}, 2048, 'M',
+            {"medium_blob", wrp_cte::core::BlobId::GetNull(), 2048, 'M',
              0.6f}, // Medium: 2KB - null ID
-            {"large_blob", wrp_cte::core::BlobId{0, 0}, 8192, 'L',
+            {"large_blob", wrp_cte::core::BlobId::GetNull(), 8192, 'L',
              0.9f} // Large: 8KB - null ID
         };
 
@@ -671,7 +671,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL PutBlob with offset operations ===\n");
 
     const std::string blob_name = "offset_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 total_size = 4096;          // 4KB total
     const chi::u64 chunk_size = 1024;          // 1KB chunks
 
@@ -717,7 +717,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL AsyncPutBlob with task management ===\n");
 
     const std::string blob_name = "async_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 2048;
 
     auto test_data = CreateTestData(blob_size, 'A'); // 'A' for Async
@@ -771,7 +771,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     if (!data_fullptr.IsNull() && CopyToSharedMemory(data_fullptr, test_data)) {
       auto error_task = core_client_->AsyncPutBlob(mctx_, tag_id, "",
-                                                   wrp_cte::core::BlobId{0, 0},
+                                                   wrp_cte::core::BlobId::GetNull(),
                                                    0, 512, data_ptr, 0.5f, 0);
       if (!error_task.IsNull()) {
         bool completed = WaitForTaskCompletion(error_task, 5000);
@@ -787,7 +787,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Testing null blob ID (should be valid for auto-generation)...");
     if (!data_fullptr.IsNull()) {
       auto null_task = core_client_->AsyncPutBlob(mctx_, tag_id, "valid_name",
-                                                  wrp_cte::core::BlobId{0, 0},
+                                                  wrp_cte::core::BlobId::GetNull(),
                                                   0, 512, data_ptr, 0.5f, 0);
       if (!null_task.IsNull()) {
         bool completed = WaitForTaskCompletion(null_task, 5000);
@@ -809,7 +809,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     if (!data_fullptr.IsNull()) {
       auto invalid_tag_task = core_client_->AsyncPutBlob(
           mctx_, wrp_cte::core::TagId{99999, 0}, "valid_name",
-          wrp_cte::core::BlobId{0, 0}, 0, 512, data_ptr, 0.5f, 0);
+          wrp_cte::core::BlobId::GetNull(), 0, 512, data_ptr, 0.5f, 0);
       if (!invalid_tag_task.IsNull()) {
         bool completed = WaitForTaskCompletion(invalid_tag_task, 5000);
         bool success = completed && (invalid_tag_task->result_code_ == 0);
@@ -860,7 +860,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL GetBlob with data integrity ===\n");
 
     const std::string blob_name = "functional_blob_retrieve";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 2048;           // 2KB test data
 
     // Create distinctive test data
@@ -941,9 +941,9 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     const std::vector<
         std::tuple<std::string, wrp_cte::core::BlobId, chi::u64, char>>
         blob_configs = {
-            {"multi_blob_1", wrp_cte::core::BlobId{0, 0}, 1024, '1'}, // null ID
-            {"multi_blob_2", wrp_cte::core::BlobId{0, 0}, 1536, '2'}, // null ID
-            {"multi_blob_3", wrp_cte::core::BlobId{0, 0}, 2048, '3'}  // null ID
+            {"multi_blob_1", wrp_cte::core::BlobId::GetNull(), 1024, '1'}, // null ID
+            {"multi_blob_2", wrp_cte::core::BlobId::GetNull(), 1536, '2'}, // null ID
+            {"multi_blob_3", wrp_cte::core::BlobId::GetNull(), 2048, '3'}  // null ID
         };
 
     // Store all blobs first and collect allocated IDs
@@ -983,7 +983,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
         if (!put_task.IsNull())
           CHI_IPC->DelTask(put_task);
         allocated_blob_ids.push_back(
-            wrp_cte::core::BlobId{0, 0}); // Mark as failed
+            wrp_cte::core::BlobId::GetNull()); // Mark as failed
       }
     }
 
@@ -1039,7 +1039,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL GetBlob with partial retrieval ===\n");
 
     const std::string blob_name = "partial_retrieval_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 total_size = 8192;          // 8KB total
     const chi::u64 partial_offset = 2048;      // Start at 2KB
     const chi::u64 partial_size = 2048;        // Retrieve 2KB
@@ -1119,7 +1119,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL AsyncGetBlob with task management ===\n");
 
     const std::string blob_name = "async_retrieve_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 3072;           // 3KB
 
     // Store blob for async retrieval
@@ -1280,7 +1280,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL Put-Get cycle with data integrity ===\n");
 
     const std::string blob_name = "integration_basic_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 4096;           // 4KB
     const float score = 0.85f;
 
@@ -1367,13 +1367,13 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     const std::vector<
         std::tuple<std::string, wrp_cte::core::BlobId, chi::u64, char, float>>
         test_blobs = {
-            {"small_cycle", wrp_cte::core::BlobId{0, 0}, 256, 'S',
+            {"small_cycle", wrp_cte::core::BlobId::GetNull(), 256, 'S',
              0.2f}, // 256 bytes - null ID
-            {"medium_cycle", wrp_cte::core::BlobId{0, 0}, 2048, 'M',
+            {"medium_cycle", wrp_cte::core::BlobId::GetNull(), 2048, 'M',
              0.5f}, // 2KB - null ID
-            {"large_cycle", wrp_cte::core::BlobId{0, 0}, 8192, 'L',
+            {"large_cycle", wrp_cte::core::BlobId::GetNull(), 8192, 'L',
              0.8f}, // 8KB - null ID
-            {"xlarge_cycle", wrp_cte::core::BlobId{0, 0}, 16384, 'X',
+            {"xlarge_cycle", wrp_cte::core::BlobId::GetNull(), 16384, 'X',
              1.0f} // 16KB - null ID
         };
 
@@ -1417,7 +1417,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
         if (!put_task.IsNull())
           CHI_IPC->DelTask(put_task);
         allocated_blob_ids.push_back(
-            wrp_cte::core::BlobId{0, 0}); // Mark as failed
+            wrp_cte::core::BlobId::GetNull()); // Mark as failed
       }
     }
 
@@ -1489,7 +1489,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     wrp_cte::core::TagId tag2_id = tag2_info.tag_id_;
 
     const std::string blob_name = "isolation_test_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 1024;
 
     // Create different data for each tag
@@ -1504,7 +1504,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     hipc::FullPtr<void> put1_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
     hipc::Pointer put1_ptr =
         put1_fullptr.IsNull() ? hipc::Pointer::GetNull() : put1_fullptr.shm_;
-    wrp_cte::core::BlobId tag1_allocated_id{0, 0};
+    wrp_cte::core::BlobId tag1_allocated_id = wrp_cte::core::BlobId::GetNull();
     if (!put1_fullptr.IsNull() && CopyToSharedMemory(put1_fullptr, tag1_data)) {
       auto put1_task = core_client_->AsyncPutBlob(
           mctx_, tag1_id, blob_name, blob_id, 0, blob_size, put1_ptr, 0.5f, 0);
@@ -1524,7 +1524,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     hipc::FullPtr<void> put2_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
     hipc::Pointer put2_ptr =
         put2_fullptr.IsNull() ? hipc::Pointer::GetNull() : put2_fullptr.shm_;
-    wrp_cte::core::BlobId tag2_allocated_id{0, 0};
+    wrp_cte::core::BlobId tag2_allocated_id = wrp_cte::core::BlobId::GetNull();
     if (!put2_fullptr.IsNull() && CopyToSharedMemory(put2_fullptr, tag2_data)) {
       auto put2_task = core_client_->AsyncPutBlob(
           mctx_, tag2_id, blob_name, blob_id, 0, blob_size, put2_ptr, 0.5f, 0);
@@ -1596,7 +1596,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL Async Put -> Sync Get cycle ===\n");
 
     const std::string blob_name = "async_put_sync_get";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 blob_size = 3072;           // 3KB
 
     auto test_data = CreateTestData(blob_size, 'A'); // 'A' for Async
@@ -1662,7 +1662,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL partial Put-Get operations ===\n");
 
     const std::string blob_name = "partial_operations_blob";
-    const wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     const chi::u64 total_size = 8192;          // 8KB total
     const chi::u64 chunk_size = 2048;          // 2KB chunks
 
@@ -1679,7 +1679,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // PHASE 1: Store chunks using offsets - need to track allocated blob ID
     INFO("Phase 1: Storing chunks with offset operations...");
-    wrp_cte::core::BlobId allocated_blob_id{0, 0};
+    wrp_cte::core::BlobId allocated_blob_id = wrp_cte::core::BlobId::GetNull();
 
     for (size_t i = 0; i < chunk_data.size(); ++i) {
       chi::u64 offset = i * chunk_size;
@@ -1792,7 +1792,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
  * FUNCTIONAL Test Case: PutBlob-GetBlob Comprehensive Integration
  *
  * This test implements the EXACT workflow requirements:
- * 1. PutBlob with blob_name="test_blob" and blob_id=BlobId{0,0} (null/default)
+ * 1. PutBlob with blob_name="test_blob" and blob_id=BlobId::GetNull() (null/default)
  * 2. Extract the actual blob_id returned from PutBlob task
  * 3. GetBlob with extracted blob_id and empty blob_name=""
  * 4. Verify data integrity matches exactly
@@ -1851,7 +1851,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   REQUIRE(CHI_IPC->IsInitialized());
   INFO("✓ Chimaera runtime initialization verified");
 
-  // Step 4: PutBlob with blob_name="test_blob" and blob_id=BlobId{0,0}
+  // Step 4: PutBlob with blob_name="test_blob" and blob_id=BlobId::GetNull()
   // (null/default)
   INFO("Step 4: Executing PutBlob with specific requirements...");
 
@@ -2024,7 +2024,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow",
   for (size_t i = 0; i < tag_ids.size(); ++i) {
     wrp_cte::core::TagId tag_id = tag_ids[i];
     std::string blob_name = "blob_" + std::to_string(i);
-    wrp_cte::core::BlobId blob_id{0, 0}; // Use null ID for PutBlob
+    wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
     chi::u64 blob_size = 1024 * (i + 1); // Variable sizes
 
     auto blob_data = CreateTestData(blob_size, static_cast<char>('A' + i));

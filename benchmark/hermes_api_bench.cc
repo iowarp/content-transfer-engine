@@ -18,6 +18,7 @@
 #include "chimaera/work_orchestrator/affinity.h"
 #include "hermes/bucket.h"
 #include "hermes/hermes.h"
+#include "chimaera/core/core_client.h"
 
 namespace hapi = hermes;
 using hshm::MpiTimer;
@@ -240,7 +241,7 @@ int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-  TRANSPARENT_HERMES();
+  wrp_cte::core::WRP_CTE_INIT();
 
   // Get mode
   REQUIRE_ARGC_GE(2)

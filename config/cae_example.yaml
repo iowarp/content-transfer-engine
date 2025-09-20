@@ -1,0 +1,20 @@
+# WRP Content Adapter Engine (CAE) Configuration
+# 
+# This configuration file defines which paths should be tracked by the
+# CTE adapters and adapter-specific settings.
+
+# Paths to track for adapter interception
+# These can be:
+# - Absolute paths (e.g., /tmp, /scratch)
+# - Directory prefixes (e.g., /data/datasets)
+# - Any string that will be matched as a prefix
+paths:
+  - "/tmp"           # Temporary directory
+  - "/scratch"       # Scratch space
+  - "/data"          # Data directory
+  - "/mnt/shared"    # Shared mount point
+
+# Adapter page size in bytes
+# This controls the granularity of I/O operations in the adapters
+# Common values: 4096, 8192, 16384, 65536
+adapter_page_size: 4096

@@ -8,3 +8,5 @@ Bucket apis (e.g., hermes::Bucket) are analagous to tag apis. If the bucket API 
 
 hermes::Blob is similar to CHI_IPC->AllocateBuffer.
 
+## Config
+@CLAUDE.md Make a new configuration called the WRP_CAE_CONFIG. This configuration stores the set of paths that should be tracked for the adapters. It should be a YAML file with one entry called paths, where each path is a string representing something to scan. It should also have the adapter page size variable

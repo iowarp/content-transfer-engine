@@ -36,8 +36,8 @@ cmake-build-*
 .idea
 .clang-format
 __pycache__/
-/chimaera/src/hermes_adapters/posix/cmake-build-debug-system/CMakeFiles/clion-log.txt
-/hermes_adapters/test/posix/Testing/Temporary/LastTest.log
+/chimaera/src/adapter/posix/cmake-build-debug-system/CMakeFiles/clion-log.txt
+/adapter/test/posix/Testing/Temporary/LastTest.log
 .cache
 
 wrapper/java/out

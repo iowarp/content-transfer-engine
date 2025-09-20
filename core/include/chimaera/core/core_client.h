@@ -3,6 +3,7 @@
 
 #include <chimaera/chimaera.h>
 #include <chimaera/core/core_tasks.h>
+#include <hermes_shm/util/singleton.h>
 
 namespace wrp_cte::core {
 
@@ -191,7 +192,7 @@ class Client : public chi::ContainerClient {
    */
   TagInfo GetOrCreateTag(const hipc::MemContext& mctx,
                         const std::string& tag_name,
-                        const TagId& tag_id = TagId{0, 0}) {
+                        const TagId& tag_id = TagId::GetNull()) {
     auto task = AsyncGetOrCreateTag(mctx, tag_name, tag_id);
     task->Wait();
     
@@ -206,7 +207,7 @@ class Client : public chi::ContainerClient {
   hipc::FullPtr<GetOrCreateTagTask<CreateParams>> AsyncGetOrCreateTag(
       const hipc::MemContext& mctx,
       const std::string& tag_name,
-      const TagId& tag_id = TagId{0, 0}) {
+      const TagId& tag_id = TagId::GetNull()) {
     (void)mctx;  // Suppress unused parameter warning
     auto* ipc_manager = CHI_IPC;
     
@@ -357,8 +358,125 @@ class Client : public chi::ContainerClient {
     ipc_manager->Enqueue(task);
     return task;
   }
+
+  /**
+   * Synchronous delete blob - waits for completion
+   */
+  bool DelBlob(const hipc::MemContext& mctx,
+              const TagId& tag_id,
+              const std::string& blob_name,
+              const BlobId& blob_id) {
+    auto task = AsyncDelBlob(mctx, tag_id, blob_name, blob_id);
+    task->Wait();
+    bool result = (task->result_code_ == 0);
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous delete blob - returns immediately
+   */
+  hipc::FullPtr<DelBlobTask> AsyncDelBlob(
+      const hipc::MemContext& mctx,
+      const TagId& tag_id,
+      const std::string& blob_name,
+      const BlobId& blob_id) {
+    (void)mctx;  // Suppress unused parameter warning
+    auto* ipc_manager = CHI_IPC;
+    
+    auto task = ipc_manager->NewTask<DelBlobTask>(
+        chi::CreateTaskNode(),
+        pool_id_,
+        chi::PoolQuery::Local(),
+        tag_id,
+        blob_name,
+        blob_id);
+    
+    ipc_manager->Enqueue(task);
+    return task;
+  }
+
+  /**
+   * Synchronous delete tag - waits for completion
+   */
+  bool DelTag(const hipc::MemContext& mctx,
+             const TagId& tag_id) {
+    auto task = AsyncDelTag(mctx, tag_id);
+    task->Wait();
+    bool result = (task->result_code_ == 0);
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous delete tag - returns immediately
+   */
+  hipc::FullPtr<DelTagTask> AsyncDelTag(
+      const hipc::MemContext& mctx,
+      const TagId& tag_id) {
+    (void)mctx;  // Suppress unused parameter warning
+    auto* ipc_manager = CHI_IPC;
+    
+    auto task = ipc_manager->NewTask<DelTagTask>(
+        chi::CreateTaskNode(),
+        pool_id_,
+        chi::PoolQuery::Local(),
+        tag_id);
+    
+    ipc_manager->Enqueue(task);
+    return task;
+  }
+
+  /**
+   * Synchronous get tag size - waits for completion
+   */
+  size_t GetTagSize(const hipc::MemContext& mctx,
+                   const TagId& tag_id) {
+    auto task = AsyncGetTagSize(mctx, tag_id);
+    task->Wait();
+    size_t result = (task->result_code_ == 0) ? task->tag_size_ : 0;
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous get tag size - returns immediately
+   */
+  hipc::FullPtr<GetTagSizeTask> AsyncGetTagSize(
+      const hipc::MemContext& mctx,
+      const TagId& tag_id) {
+    (void)mctx;  // Suppress unused parameter warning
+    auto* ipc_manager = CHI_IPC;
+    
+    auto task = ipc_manager->NewTask<GetTagSizeTask>(
+        chi::CreateTaskNode(),
+        pool_id_,
+        chi::PoolQuery::Local(),
+        tag_id);
+    
+    ipc_manager->Enqueue(task);
+    return task;
+  }
 };
 
+// Forward declaration for Config
+class Config;
+
+// Global pointer-based singletons with lazy initialization
+HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::Client, g_cte_client);
+HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::Config, g_cte_config);
+
+/**
+ * Initialize CTE client and configuration subsystem
+ * @param config_path Optional path to configuration file
+ * @return true if initialization succeeded, false otherwise
+ */
+bool WRP_CTE_INIT(const std::string& config_path = "");
+
 }  // namespace wrp_cte::core
+
+// Global singleton macros for easy access
+#define WRP_CTE_CLIENT (*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Client, wrp_cte::core::g_cte_client))
+#define WRP_CTE_CONFIG (*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Config, wrp_cte::core::g_cte_config))
 
 #endif  // WRPCTE_CORE_CLIENT_H_

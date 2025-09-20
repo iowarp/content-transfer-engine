@@ -16,6 +16,7 @@
 
 #include "hermes/bucket.h"
 #include "hermes/hermes.h"
+#include "chimaera/core/core_client.h"
 
 namespace py = pybind11;
 
@@ -31,7 +32,7 @@ using hermes::TagInfo;
 using hermes::TargetId;
 using hermes::TargetStats;
 
-void HERMES_INIT_FUN() { HERMES_INIT(); }
+void HERMES_INIT_FUN() { wrp_cte::core::WRP_CTE_INIT(); }
 
 template <typename UniqueT>
 void BindUniqueId(py::module &m, const std::string &name) {

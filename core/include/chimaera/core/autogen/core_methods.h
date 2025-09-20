@@ -23,6 +23,9 @@ GLOBAL_CONST chi::u32 kGetOrCreateTag = 14;
 GLOBAL_CONST chi::u32 kPutBlob = 15;
 GLOBAL_CONST chi::u32 kGetBlob = 16;
 GLOBAL_CONST chi::u32 kReorganizeBlob = 17;
+GLOBAL_CONST chi::u32 kDelBlob = 18;
+GLOBAL_CONST chi::u32 kDelTag = 19;
+GLOBAL_CONST chi::u32 kGetTagSize = 20;
 }  // namespace Method
 
 }  // namespace wrp_cte::core

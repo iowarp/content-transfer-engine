@@ -79,7 +79,7 @@ set_tests_properties(
 # ------------------------------------------------------------------------------
 # Coverage Support
 # ------------------------------------------------------------------------------
-if(HERMES_ENABLE_COVERAGE)
+if(WRP_CTE_ENABLE_COVERAGE)
     set_coverage_flags(cte_core_unit_tests)
 endif()
 
@@ -91,3 +91,8 @@ install(TARGETS cte_core_unit_tests
     ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
     RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}
 )
+
+# ------------------------------------------------------------------------------
+# Add Adapter Unit Tests
+# ------------------------------------------------------------------------------
+add_subdirectory(adapters)

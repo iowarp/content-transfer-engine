@@ -53,7 +53,7 @@ jobs:
         with:
           path: |
             ~/build
-          key: ${{ runner.os }}-${{ hashFiles('wrapper', 'test', 'tasks', 'src', 'include', 'hrun', 'hermes_adapters', 'benchmark') }}
+          key: ${{ runner.os }}-${{ hashFiles('wrapper', 'test', 'tasks', 'src', 'include', 'hrun', 'adapter', 'benchmark') }}
 
       - name: Install APT Dependencies
         run: |

@@ -157,6 +157,42 @@ class Runtime : public chi::Container {
                            hipc::FullPtr<ReorganizeBlobTask> task,
                            chi::RunContext& ctx);
 
+  /**
+   * Delete blob operation - removes blob and decrements tag size
+   */
+  void DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor delete blob operation
+   */
+  void MonitorDelBlob(chi::MonitorModeId mode, 
+                      hipc::FullPtr<DelBlobTask> task,
+                      chi::RunContext& ctx);
+
+  /**
+   * Delete tag operation - removes all blobs from tag and removes tag
+   */
+  void DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor delete tag operation
+   */
+  void MonitorDelTag(chi::MonitorModeId mode, 
+                     hipc::FullPtr<DelTagTask> task,
+                     chi::RunContext& ctx);
+
+  /**
+   * Get tag size operation - returns total size of all blobs in tag
+   */
+  void GetTagSize(hipc::FullPtr<GetTagSizeTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor get tag size operation
+   */
+  void MonitorGetTagSize(chi::MonitorModeId mode, 
+                         hipc::FullPtr<GetTagSizeTask> task,
+                         chi::RunContext& ctx);
+
   // Pure virtual methods - implementations are in autogen/core_lib_exec.cc
   void Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx) override;
   void Monitor(chi::MonitorModeId mode, chi::u32 method, 
@@ -227,7 +263,7 @@ class Runtime : public chi::Container {
   /**
    * Helper function to get or assign a tag ID
    */
-  TagId GetOrAssignTagId(const std::string& tag_name, const TagId& preferred_id = TagId{0, 0});
+  TagId GetOrAssignTagId(const std::string& tag_name, const TagId& preferred_id = TagId::GetNull());
 
   /**
    * Helper function to generate a new TagId using node_id as major and atomic counter as minor
@@ -243,7 +279,7 @@ class Runtime : public chi::Container {
    * Helper function to get or assign a blob ID
    */
   BlobId GetOrAssignBlobId(const TagId& tag_id, const std::string& blob_name, 
-                          const BlobId& preferred_id = BlobId{0, 0});
+                          const BlobId& preferred_id = BlobId::GetNull());
   
   /**
    * Get target lock index based on TargetId hash

@@ -535,6 +535,9 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       }
       task->blob_id_ = found_blob_id;
     }
+    
+    // Step 2.5: Track blob size before modification for tag total_size_ accounting
+    chi::u64 old_blob_size = blob_info_ptr->GetTotalSize();
 
     // Step 3: Allocate additional space if needed for blob extension
     chi::u32 allocation_result =
@@ -551,10 +554,32 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       task->result_code_ = write_result;
       return;
     }
+    
+    // Step 5: Update tag total_size_ with blob size change
+    chi::u64 new_blob_size = blob_info_ptr->GetTotalSize();
+    chi::i64 size_change = static_cast<chi::i64>(new_blob_size) - static_cast<chi::i64>(old_blob_size);
+    
+    // Update tag's total_size_
+    auto tag_info_it = tag_id_to_info_.find(tag_id);
+    if (tag_info_it != tag_id_to_info_.end()) {
+      TagInfo &tag_info = tag_info_it->second;
+      // Use signed arithmetic to handle size decreases
+      if (size_change >= 0) {
+        tag_info.total_size_ += static_cast<size_t>(size_change);
+      } else {
+        // Prevent underflow for size decreases
+        size_t decrease = static_cast<size_t>(-size_change);
+        if (decrease <= tag_info.total_size_) {
+          tag_info.total_size_ -= decrease;
+        } else {
+          tag_info.total_size_ = 0; // Clamp to 0 if we would underflow
+        }
+      }
+    }
 
     // Success - log operation details
     task->result_code_ = 0;
-    HILOG(kInfo, "PutBlob successful: blob_id={},{}, name={}, offset={}, size={}, score={}, blocks={}", found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size, blob_score, blob_info_ptr->blocks_.size());
+    HILOG(kInfo, "PutBlob successful: blob_id={},{}, name={}, offset={}, size={}, score={}, blocks={}, tag_total_size={}", found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size, blob_score, blob_info_ptr->blocks_.size(), tag_info_it != tag_id_to_info_.end() ? tag_info_it->second.total_size_ : 0);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
@@ -693,6 +718,202 @@ void Runtime::MonitorReorganizeBlob(chi::MonitorModeId mode,
   case chi::MonitorModeId::kEstLoad:
     // Estimate for score update
     ctx.estimated_completion_time_us = 100.0; // 0.1ms for score update
+    break;
+  }
+}
+
+void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
+  try {
+    // Extract input parameters
+    TagId tag_id = task->tag_id_;
+    std::string blob_name = task->blob_name_.str();
+    BlobId blob_id = task->blob_id_;
+    
+    // Validate that either blob_id or blob_name is provided
+    bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
+    bool blob_name_provided = !blob_name.empty();
+    
+    if (!blob_id_provided && !blob_name_provided) {
+      task->result_code_ = 1;
+      return;
+    }
+    
+    // Step 1: Check if blob exists
+    BlobId found_blob_id;
+    BlobInfo *blob_info_ptr = CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
+    
+    if (blob_info_ptr == nullptr) {
+      task->result_code_ = 1; // Blob not found
+      return;
+    }
+    
+    // Step 2: Get blob size before deletion for tag size accounting
+    chi::u64 blob_size = blob_info_ptr->GetTotalSize();
+    
+    // Step 3: Remove blob from tag's blob set
+    auto tag_info_it = tag_id_to_info_.find(tag_id);
+    if (tag_info_it != tag_id_to_info_.end()) {
+      TagInfo &tag_info = tag_info_it->second;
+      tag_info.blob_ids_.erase(found_blob_id);
+      
+      // Step 4: Decrement tag's total_size_
+      if (blob_size <= tag_info.total_size_) {
+        tag_info.total_size_ -= blob_size;
+      } else {
+        tag_info.total_size_ = 0; // Clamp to 0 if we would underflow
+      }
+    }
+    
+    // Step 5: Remove blob from blob_id_to_info_ map
+    blob_id_to_info_.erase(found_blob_id);
+    
+    // Step 6: Remove blob name mapping if it exists
+    if (blob_name_provided) {
+      std::string compound_key = std::to_string(tag_id.major_) + "." + std::to_string(tag_id.minor_) + "." + blob_name;
+      tag_blob_name_to_id_.erase(compound_key);
+    }
+    
+    // Success
+    task->result_code_ = 0;
+    HILOG(kInfo, "DelBlob successful: blob_id={},{}, name={}, blob_size={}", 
+          found_blob_id.major_, found_blob_id.minor_, blob_name, blob_size);
+    
+  } catch (const std::exception &e) {
+    task->result_code_ = 1;
+  }
+}
+
+void Runtime::MonitorDelBlob(chi::MonitorModeId mode,
+                             hipc::FullPtr<DelBlobTask> task,
+                             chi::RunContext &ctx) {
+  switch (mode) {
+  case chi::MonitorModeId::kLocalSchedule: {
+    // Route to blob operations queue (round-robin on lanes)
+    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
+    if (!lane_ptr.IsNull()) {
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
+    }
+    break;
+  }
+  case chi::MonitorModeId::kGlobalSchedule:
+    break;
+  case chi::MonitorModeId::kEstLoad:
+    // Estimate for blob deletion
+    ctx.estimated_completion_time_us = 50.0; // 0.05ms for deletion
+    break;
+  }
+}
+
+void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
+  try {
+    TagId tag_id = task->tag_id_;
+    
+    // Step 1: Find the tag
+    auto tag_info_it = tag_id_to_info_.find(tag_id);
+    if (tag_info_it == tag_id_to_info_.end()) {
+      task->result_code_ = 1; // Tag not found
+      return;
+    }
+    
+    TagInfo &tag_info = tag_info_it->second;
+    
+    // Step 2: Remove all blobs in the tag
+    for (const auto &blob_pair : tag_info.blob_ids_) {
+      BlobId blob_id = blob_pair.first;
+      
+      // Remove blob from blob_id_to_info_ map
+      blob_id_to_info_.erase(blob_id);
+    }
+    
+    // Step 3: Remove all blob name mappings for this tag
+    std::string tag_prefix = std::to_string(tag_id.major_) + "." + std::to_string(tag_id.minor_) + ".";
+    auto name_it = tag_blob_name_to_id_.begin();
+    while (name_it != tag_blob_name_to_id_.end()) {
+      if (name_it->first.compare(0, tag_prefix.length(), tag_prefix) == 0) {
+        name_it = tag_blob_name_to_id_.erase(name_it);
+      } else {
+        ++name_it;
+      }
+    }
+    
+    // Step 4: Remove tag from tag_id_to_info_ map
+    size_t blob_count = tag_info.blob_ids_.size();
+    size_t total_size = tag_info.total_size_;
+    tag_id_to_info_.erase(tag_info_it);
+    
+    // Success
+    task->result_code_ = 0;
+    HILOG(kInfo, "DelTag successful: tag_id={},{}, removed {} blobs, total_size={}", 
+          tag_id.major_, tag_id.minor_, blob_count, total_size);
+    
+  } catch (const std::exception &e) {
+    task->result_code_ = 1;
+  }
+}
+
+void Runtime::MonitorDelTag(chi::MonitorModeId mode,
+                            hipc::FullPtr<DelTagTask> task,
+                            chi::RunContext &ctx) {
+  switch (mode) {
+  case chi::MonitorModeId::kLocalSchedule: {
+    // Route to blob operations queue (round-robin on lanes)
+    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
+    if (!lane_ptr.IsNull()) {
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
+    }
+    break;
+  }
+  case chi::MonitorModeId::kGlobalSchedule:
+    break;
+  case chi::MonitorModeId::kEstLoad:
+    // Estimate for tag deletion (depends on number of blobs)
+    ctx.estimated_completion_time_us = 100.0; // 0.1ms base cost
+    break;
+  }
+}
+
+void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task, chi::RunContext &ctx) {
+  try {
+    TagId tag_id = task->tag_id_;
+    
+    // Find the tag
+    auto tag_info_it = tag_id_to_info_.find(tag_id);
+    if (tag_info_it == tag_id_to_info_.end()) {
+      task->result_code_ = 1; // Tag not found
+      task->tag_size_ = 0;
+      return;
+    }
+    
+    // Return the total size
+    task->tag_size_ = tag_info_it->second.total_size_;
+    task->result_code_ = 0;
+    
+    HILOG(kInfo, "GetTagSize successful: tag_id={},{}, total_size={}", 
+          tag_id.major_, tag_id.minor_, task->tag_size_);
+    
+  } catch (const std::exception &e) {
+    task->result_code_ = 1;
+    task->tag_size_ = 0;
+  }
+}
+
+void Runtime::MonitorGetTagSize(chi::MonitorModeId mode,
+                                hipc::FullPtr<GetTagSizeTask> task,
+                                chi::RunContext &ctx) {
+  switch (mode) {
+  case chi::MonitorModeId::kLocalSchedule: {
+    // Route to blob operations queue (round-robin on lanes)
+    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
+    if (!lane_ptr.IsNull()) {
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
+    }
+    break;
+  }
+  case chi::MonitorModeId::kGlobalSchedule:
+    break;
+  case chi::MonitorModeId::kEstLoad:
+    // Estimate for tag size lookup
+    ctx.estimated_completion_time_us = 10.0; // 0.01ms for lookup
     break;
   }
 }

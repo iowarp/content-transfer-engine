@@ -2,51 +2,101 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "runtime-dbg",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "echo",
-            "miDebuggerServerAddress": "localhost:4000",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "cwd": "${workspaceFolder}",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "externalConsole": true,
-            "logging": {
-                "engineLogging": false
-            }
-        },
-        {
-            "name": "app-dbg",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "echo",
-            "miDebuggerServerAddress": "localhost:4001",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "cwd": "${workspaceFolder}",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "externalConsole": true,
-            "logging": {
-                "engineLogging": false
-            }
-        },
-        {
             "name": "cte-core-unit-tests",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/bin/cte_core_unit_tests",
             "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "environment": [
+                {
+                    "name": "CHI_REPO_PATH",
+                    "value": "${workspaceFolder}/build/bin"
+                },
+                {
+                    "name": "CHIMAERA_TEST_MODE",
+                    "value": "1"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "posix-adapter-unit-tests",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/wrp_cte_posix_unit_tests",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "environment": [
+                {
+                    "name": "CHI_REPO_PATH",
+                    "value": "${workspaceFolder}/build/bin"
+                },
+                {
+                    "name": "CHIMAERA_TEST_MODE",
+                    "value": "1"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "posix-adapter-unit-tests-verbose",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/wrp_cte_posix_unit_tests",
+            "args": ["-s"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "environment": [
+                {
+                    "name": "CHI_REPO_PATH",
+                    "value": "${workspaceFolder}/build/bin"
+                },
+                {
+                    "name": "CHIMAERA_TEST_MODE",
+                    "value": "1"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "posix-adapter-specific-test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/wrp_cte_posix_unit_tests",
+            "args": ["[posix][adapter]"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "envFile": "${workspaceFolder}/.env",
