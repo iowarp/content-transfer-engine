@@ -917,38 +917,52 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     // properly clean up blocks
     auto *cte_client = WRP_CTE_CLIENT;
 
-    // Store async tasks to wait for completion
+    // Process blobs in batches to limit concurrent async tasks
+    constexpr size_t kMaxConcurrentDelBlobTasks = 32;
     std::vector<hipc::FullPtr<DelBlobTask>> async_tasks;
-    async_tasks.reserve(tag_info.blob_ids_.size());
+    async_tasks.reserve(std::min(tag_info.blob_ids_.size(), kMaxConcurrentDelBlobTasks));
 
-    // Iterate directly over tag's blob IDs
-    for (const auto &[blob_id, _] : tag_info.blob_ids_) {
-      // Find blob info to get blob name
-      auto blob_info_it = blob_id_to_info_.find(blob_id);
-      if (blob_info_it != blob_id_to_info_.end()) {
-        // Call AsyncDelBlob from client
-        auto async_task =
-            cte_client->AsyncDelBlob(hipc::MemContext(), tag_id,
-                                     blob_info_it->second.blob_name_, blob_id);
-        async_tasks.push_back(async_task);
-      }
-    }
-
-    // Wait for all async DelBlob operations to complete
-    for (auto task : async_tasks) {
-      task->Wait();
-
-      // Check if DelBlob succeeded
-      if (task->result_code_ != 0) {
-        HILOG(
-            kWarning,
-            "DelBlob failed for blob_id={},{} during tag deletion, continuing",
-            task->blob_id_.major_, task->blob_id_.minor_);
-        // Continue with other blobs even if one fails
+    size_t processed_blobs = 0;
+    auto blob_iter = tag_info.blob_ids_.begin();
+    
+    while (blob_iter != tag_info.blob_ids_.end()) {
+      // Create a batch of async tasks (up to kMaxConcurrentDelBlobTasks)
+      async_tasks.clear();
+      
+      for (size_t batch_count = 0; 
+           batch_count < kMaxConcurrentDelBlobTasks && blob_iter != tag_info.blob_ids_.end(); 
+           ++blob_iter) {
+        const auto &[blob_id, _] = *blob_iter;
+        
+        // Find blob info to get blob name
+        auto blob_info_it = blob_id_to_info_.find(blob_id);
+        if (blob_info_it != blob_id_to_info_.end()) {
+          // Call AsyncDelBlob from client
+          auto async_task =
+              cte_client->AsyncDelBlob(hipc::MemContext(), tag_id,
+                                       blob_info_it->second.blob_name_, blob_id);
+          async_tasks.push_back(async_task);
+          ++batch_count;
+        }
       }
 
-      // Clean up the task
-      CHI_IPC->DelTask(task);
+      // Wait for all async DelBlob operations in this batch to complete
+      for (auto task : async_tasks) {
+        task->Wait();
+
+        // Check if DelBlob succeeded
+        if (task->result_code_ != 0) {
+          HILOG(
+              kWarning,
+              "DelBlob failed for blob_id={},{} during tag deletion, continuing",
+              task->blob_id_.major_, task->blob_id_.minor_);
+          // Continue with other blobs even if one fails
+        }
+
+        // Clean up the task
+        CHI_IPC->DelTask(task);
+        ++processed_blobs;
+      }
     }
 
     // Step 4: Remove all blob name mappings for this tag (DelBlob should have
@@ -970,7 +984,7 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     }
 
     // Step 6: Log telemetry and remove tag from tag_id_to_info_ map
-    size_t blob_count = async_tasks.size();
+    size_t blob_count = processed_blobs;
     size_t total_size = tag_info.total_size_;
 
     // Log telemetry for DelTag operation

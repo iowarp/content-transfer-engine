@@ -131,6 +131,24 @@ public:
     }
   }
 
+private:
+  /** Helper function to calculate page index from offset */
+  static size_t CalculatePageIndex(size_t offset, size_t page_size) {
+    return offset / page_size;
+  }
+
+  /** Helper function to calculate offset within a page */
+  static size_t CalculatePageOffset(size_t offset, size_t page_size) {
+    return offset % page_size;
+  }
+
+  /** Helper function to calculate remaining space in current page */
+  static size_t CalculateRemainingPageSpace(size_t offset, size_t page_size) {
+    size_t page_offset = CalculatePageOffset(offset, page_size);
+    return page_size - page_offset;
+  }
+
+public:
   /** write */
   size_t Write(File &f, AdapterStat &stat, const void *ptr, size_t off,
                size_t total_size, IoStatus &io_status,
@@ -172,42 +190,58 @@ public:
       off = stat.file_size_;
     }
     
-    // Use CTE PutBlob for all write operations
+    // Use page-based CTE PutBlob operations
     {
-      // Allocate buffer in shared memory for CTE
-      hipc::FullPtr<void> blob_data = CHI_IPC->AllocateBuffer<void>(total_size);
-      if (blob_data.IsNull()) {
-        HILOG(kError, "Failed to allocate buffer for write operation");
-        io_status.success_ = false;
-        return 0;
-      }
-      
-      // Copy data to shared memory buffer
-      memcpy(blob_data.ptr_, ptr, total_size);
-      
-      // Generate a blob name for this write operation
-      std::string blob_name = "blob_" + std::to_string(off) + "_" + std::to_string(total_size);
-      
-      // Use CTE PutBlob
+      size_t bytes_written = 0;
+      size_t current_offset = off;
+      const char *data_ptr = static_cast<const char *>(ptr);
       auto *cte_client = WRP_CTE_CLIENT;
-      bool success = cte_client->PutBlob(
-          hipc::MemContext(),
-          stat.tag_id_,
-          blob_name,
-          wrp_cte::core::BlobId::GetNull(),  // Let CTE assign blob ID
-          off,                          // offset in blob
-          total_size,                   // size
-          blob_data.shm_,     // Convert FullPtr to Pointer using .shm_
-          0.5f,                         // default score
-          0                             // flags
-      );
       
-      // CTE manages buffer lifecycle - no explicit free needed
-      
-      if (!success) {
-        HILOG(kError, "CTE PutBlob failed");
-        io_status.success_ = false;
-        return 0;
+      while (bytes_written < total_size) {
+        // Calculate current page index and offset within page
+        size_t page_index = CalculatePageIndex(current_offset, stat.page_size_);
+        size_t page_offset = CalculatePageOffset(current_offset, stat.page_size_);
+        size_t remaining_page_space = CalculateRemainingPageSpace(current_offset, stat.page_size_);
+        
+        // Calculate how much to write in this page
+        size_t bytes_to_write = std::min(remaining_page_space, total_size - bytes_written);
+        
+        // Allocate buffer for this page write
+        hipc::FullPtr<void> page_blob_data = CHI_IPC->AllocateBuffer<void>(bytes_to_write);
+        if (page_blob_data.IsNull()) {
+          HILOG(kError, "Failed to allocate buffer for page write operation");
+          io_status.success_ = false;
+          return bytes_written;
+        }
+        
+        // Copy data for this page to shared memory buffer
+        memcpy(page_blob_data.ptr_, data_ptr + bytes_written, bytes_to_write);
+        
+        // Generate blob name using stringified page index
+        std::string blob_name = std::to_string(page_index);
+        
+        // Use CTE PutBlob for this page
+        bool success = cte_client->PutBlob(
+            hipc::MemContext(),
+            stat.tag_id_,
+            blob_name,
+            wrp_cte::core::BlobId::GetNull(),  // Let CTE assign blob ID
+            page_offset,                       // offset within the page
+            bytes_to_write,                    // size of this write
+            page_blob_data.shm_,               // Convert FullPtr to Pointer using .shm_
+            0.5f,                              // default score
+            0                                  // flags
+        );
+        
+        if (!success) {
+          HILOG(kError, "CTE PutBlob failed for page {}", page_index);
+          io_status.success_ = false;
+          return bytes_written;
+        }
+        
+        // Update counters for next iteration
+        bytes_written += bytes_to_write;
+        current_offset += bytes_to_write;
       }
       
       if (opts.DoSeek()) {
@@ -277,46 +311,65 @@ public:
       }
     }
 
-    // CTE read operation - simplified without page fragmentation for now
-    // TODO: Implement proper blob name resolution based on offset
-    std::string blob_name = "blob_" + std::to_string(off) + "_" + std::to_string(total_size);
-    
+    // CTE read operation - use page-based blob naming to match PutBlob
     if constexpr (ASYNC) {
       // TODO: Async read operations not yet fully supported in CTE adapter
       HILOG(kWarning, "Async read operations not yet fully supported, using sync read");
     }
     
-    // Allocate buffer for reading
-    hipc::FullPtr<void> read_buffer = CHI_IPC->AllocateBuffer<void>(total_size);
-    if (read_buffer.IsNull()) {
-      HILOG(kError, "Failed to allocate buffer for read operation");
-      io_status.success_ = false;
-      return 0;
-    }
-    
-    // Use CTE GetBlob
+    // Use page-based CTE GetBlob operations
+    size_t bytes_read = 0;
+    size_t current_offset = off;
+    char *data_ptr = static_cast<char *>(ptr);
     auto *cte_client = WRP_CTE_CLIENT;
-    bool success = cte_client->GetBlob(
-        hipc::MemContext(),
-        stat.tag_id_,
-        blob_name,
-        wrp_cte::core::BlobId::GetNull(),  // Let CTE find by name
-        off,                          // offset in blob
-        total_size,                   // size
-        0,                            // flags
-        read_buffer.shm_ // Convert FullPtr to Pointer using .shm_
-    );
     
-    if (success) {
+    while (bytes_read < total_size) {
+      // Calculate current page index and offset within page
+      size_t page_index = CalculatePageIndex(current_offset, stat.page_size_);
+      size_t page_offset = CalculatePageOffset(current_offset, stat.page_size_);
+      size_t remaining_page_space = CalculateRemainingPageSpace(current_offset, stat.page_size_);
+      
+      // Calculate how much to read from this page
+      size_t bytes_to_read = std::min(remaining_page_space, total_size - bytes_read);
+      
+      // Allocate buffer for this page read
+      hipc::FullPtr<void> page_read_buffer = CHI_IPC->AllocateBuffer<void>(bytes_to_read);
+      if (page_read_buffer.IsNull()) {
+        HILOG(kError, "Failed to allocate buffer for page read operation");
+        io_status.success_ = false;
+        return bytes_read;
+      }
+      
+      // Generate blob name using stringified page index
+      std::string blob_name = std::to_string(page_index);
+      
+      // Use CTE GetBlob for this page
+      bool success = cte_client->GetBlob(
+          hipc::MemContext(),
+          stat.tag_id_,
+          blob_name,
+          wrp_cte::core::BlobId::GetNull(),  // Let CTE find by name
+          page_offset,                       // offset within the page
+          bytes_to_read,                     // size of this read
+          0,                                 // flags
+          page_read_buffer.shm_              // Convert FullPtr to Pointer using .shm_
+      );
+      
+      if (!success) {
+        HILOG(kError, "CTE GetBlob failed for page {}", page_index);
+        io_status.success_ = false;
+        return bytes_read;
+      }
+      
       // Copy data from shared memory buffer to user buffer
-      memcpy(ptr, read_buffer.ptr_, total_size);
-    } else {
-      HILOG(kError, "CTE GetBlob failed");
-      io_status.success_ = false;
-      return 0;
+      memcpy(data_ptr + bytes_read, page_read_buffer.ptr_, bytes_to_read);
+      
+      // Update counters for next iteration
+      bytes_read += bytes_to_read;
+      current_offset += bytes_to_read;
     }
     
-    size_t data_offset = total_size;  // Full read completed
+    size_t data_offset = bytes_read;  // Total bytes read
     if (opts.DoSeek()) {
       stat.st_ptr_ = off + data_offset;
     }
