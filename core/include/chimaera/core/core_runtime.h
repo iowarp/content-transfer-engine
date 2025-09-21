@@ -8,8 +8,8 @@
 #include <chimaera/comutex.h>
 #include <chimaera/corwlock.h>
 #include <unordered_map>
-#include <unordered_set>
 #include <atomic>
+#include <hermes_shm/data_structures/ipc/ring_queue.h>
 
 // Forward declarations to avoid circular dependency
 namespace wrp_cte::core {
@@ -32,7 +32,7 @@ class Runtime : public chi::Container {
   /**
    * Initialize client for this container (REQUIRED)
    */
-  void InitClient(const chi::PoolId& pool_id) {
+  void InitClient(const chi::PoolId& pool_id) override {
     client_ = Client(pool_id);
   }
 
@@ -249,6 +249,10 @@ class Runtime : public chi::Container {
   // Storage configuration (parsed from config file)
   std::vector<StorageDeviceConfig> storage_devices_;
 
+  // Telemetry ring buffer for performance monitoring
+  static const size_t kTelemetryRingSize = 1024;  // Ring buffer size
+  hipc::circular_mpsc_queue<CteTelemetry> telemetry_log_;
+
   /**
    * Get access to configuration manager
    */
@@ -275,11 +279,6 @@ class Runtime : public chi::Container {
    */
   BlobId GenerateNewBlobId();
 
-  /**
-   * Helper function to get or assign a blob ID
-   */
-  BlobId GetOrAssignBlobId(const TagId& tag_id, const std::string& blob_name, 
-                          const BlobId& preferred_id = BlobId::GetNull());
   
   /**
    * Get target lock index based on TargetId hash
@@ -305,6 +304,13 @@ class Runtime : public chi::Container {
    */
   bool AllocateFromTarget(TargetInfo& target_info, chi::u64 size, 
                          chi::u64& allocated_offset);
+
+  /**
+   * Free all blocks from a blob back to their respective targets
+   * @param blob_info BlobInfo containing blocks to free
+   * @return 0 on success, non-zero on error
+   */
+  chi::u32 FreeAllBlobBlocks(BlobInfo& blob_info);
 
   /**
    * Check if blob exists and return pointer to BlobInfo if found
@@ -362,6 +368,34 @@ class Runtime : public chi::Container {
   chi::u32 ReadData(const std::vector<BlobBlock> &blocks, 
                    hipc::Pointer data, size_t data_size, 
                    size_t data_offset_in_blob);
+  
+  /**
+   * Log telemetry data for CTE operations
+   * @param op Operation type
+   * @param off Offset within blob
+   * @param size Size of operation
+   * @param blob_id Blob ID involved
+   * @param tag_id Tag ID involved
+   * @param mod_time Last modification time
+   * @param read_time Last read time
+   */
+  void LogTelemetry(CteOp op, size_t off, size_t size, 
+                   const BlobId& blob_id, const TagId& tag_id,
+                   const Timestamp& mod_time, const Timestamp& read_time);
+  
+  /**
+   * Get telemetry queue size for monitoring
+   * @return Current number of entries in telemetry queue
+   */
+  size_t GetTelemetryQueueSize();
+  
+  /**
+   * Retrieve telemetry entries for analysis (non-destructive peek)
+   * @param entries Vector to store retrieved entries
+   * @param max_entries Maximum number of entries to retrieve
+   * @return Number of entries actually retrieved
+   */
+  size_t GetTelemetryEntries(std::vector<CteTelemetry>& entries, size_t max_entries = 100);
 };
 
 }  // namespace wrp_cte::core

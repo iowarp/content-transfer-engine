@@ -9,8 +9,12 @@
 #include <chimaera/bdev/bdev_tasks.h>
 // Include bdev client for TargetInfo
 #include <chimaera/bdev/bdev_client.h>
+#include <chrono>
 
 namespace wrp_cte::core {
+
+// Timestamp type definition
+using Timestamp = std::chrono::time_point<std::chrono::steady_clock>;
 
 /**
  * CreateParams for CTE Core chimod
@@ -257,17 +261,25 @@ struct TagInfo {
   TagId tag_id_;
   std::unordered_map<BlobId, chi::u32> blob_ids_;  // Map of blob IDs in this tag (using as set)
   size_t total_size_;  // Total size of all blobs in this tag
+  Timestamp last_modified_;  // Last modification time
+  Timestamp last_read_;      // Last read time
 
-  TagInfo() : tag_name_(), tag_id_(TagId::GetNull()), blob_ids_(), total_size_(0) {}
+  TagInfo() : tag_name_(), tag_id_(TagId::GetNull()), blob_ids_(), total_size_(0),
+              last_modified_(std::chrono::steady_clock::now()),
+              last_read_(std::chrono::steady_clock::now()) {}
   
   explicit TagInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : tag_name_(), tag_id_(TagId::GetNull()), blob_ids_(), total_size_(0) {
+      : tag_name_(), tag_id_(TagId::GetNull()), blob_ids_(), total_size_(0),
+        last_modified_(std::chrono::steady_clock::now()),
+        last_read_(std::chrono::steady_clock::now()) {
     (void)alloc; // Suppress unused parameter warning
   }
       
   TagInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
           const std::string &tag_name, const TagId& tag_id)
-      : tag_name_(tag_name), tag_id_(tag_id), blob_ids_(), total_size_(0) {
+      : tag_name_(tag_name), tag_id_(tag_id), blob_ids_(), total_size_(0),
+        last_modified_(std::chrono::steady_clock::now()),
+        last_read_(std::chrono::steady_clock::now()) {
     (void)alloc; // Suppress unused parameter warning
   }
 };
@@ -295,11 +307,17 @@ struct BlobInfo {
   std::string blob_name_;
   std::vector<BlobBlock> blocks_;     // Vector of blocks that make up this blob (ordered)
   float score_;                       // 0-1 score for reorganization
+  Timestamp last_modified_;           // Last modification time
+  Timestamp last_read_;               // Last read time
 
-  BlobInfo() = default;
+  BlobInfo() : blob_id_(BlobId::GetNull()), blob_name_(), blocks_(), score_(0.0f),
+               last_modified_(std::chrono::steady_clock::now()),
+               last_read_(std::chrono::steady_clock::now()) {}
   
   explicit BlobInfo(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : blob_id_(BlobId::GetNull()), blob_name_(), blocks_(), score_(0.0f) {
+      : blob_id_(BlobId::GetNull()), blob_name_(), blocks_(), score_(0.0f),
+        last_modified_(std::chrono::steady_clock::now()),
+        last_read_(std::chrono::steady_clock::now()) {
     (void)alloc; // Suppress unused parameter warning
   }
         
@@ -307,7 +325,9 @@ struct BlobInfo {
            const BlobId& blob_id, const std::string &blob_name,
            float score)
       : blob_id_(blob_id), blob_name_(blob_name), 
-        blocks_(), score_(score) {
+        blocks_(), score_(score),
+        last_modified_(std::chrono::steady_clock::now()),
+        last_read_(std::chrono::steady_clock::now()) {
     (void)alloc; // Suppress unused parameter warning
   }
         
@@ -321,6 +341,42 @@ struct BlobInfo {
     }
     return total;
   }
+};
+
+/**
+ * CTE Operation types for telemetry
+ */
+enum class CteOp : chi::u32 {
+  kPutBlob = 0,
+  kGetBlob = 1,
+  kDelBlob = 2,
+  kGetOrCreateTag = 3,
+  kDelTag = 4,
+  kGetTagSize = 5
+};
+
+/**
+ * CTE Telemetry data structure for performance monitoring
+ */
+struct CteTelemetry {
+  CteOp op_;                    // Operation type
+  size_t off_;                  // Offset within blob (for Put/Get operations)
+  size_t size_;                 // Size of operation (for Put/Get operations)
+  BlobId blob_id_;              // Blob ID involved
+  TagId tag_id_;                // Tag ID involved
+  Timestamp mod_time_;          // Last modification time
+  Timestamp read_time_;         // Last read time
+  
+  CteTelemetry() : op_(CteOp::kPutBlob), off_(0), size_(0),
+                   blob_id_(BlobId::GetNull()), tag_id_(TagId::GetNull()),
+                   mod_time_(std::chrono::steady_clock::now()),
+                   read_time_(std::chrono::steady_clock::now()) {}
+                   
+  CteTelemetry(CteOp op, size_t off, size_t size, 
+               const BlobId& blob_id, const TagId& tag_id,
+               const Timestamp& mod_time, const Timestamp& read_time)
+      : op_(op), off_(off), size_(size), blob_id_(blob_id), tag_id_(tag_id),
+        mod_time_(mod_time), read_time_(read_time) {}
 };
 
 /**
@@ -553,18 +609,21 @@ struct DelBlobTask : public chi::Task {
 
 /**
  * DelTag task - Remove all blobs from tag and remove tag
+ * Supports lookup by either tag ID or tag name
  */
 struct DelTagTask : public chi::Task {
-  IN TagId tag_id_;                  // Tag ID to delete
+  INOUT TagId tag_id_;               // Tag ID to delete (input or lookup result)
+  IN chi::string tag_name_;          // Tag name for lookup (optional)
   OUT chi::u32 result_code_;         // Output result (0 = success)
 
   // SHM constructor
   explicit DelTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), 
         tag_id_(TagId::GetNull()),
+        tag_name_(alloc),
         result_code_(0) {}
 
-  // Emplace constructor
+  // Emplace constructor with tag ID
   explicit DelTagTask(
       const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
       const chi::TaskNode &task_node,
@@ -573,6 +632,25 @@ struct DelTagTask : public chi::Task {
       const TagId& tag_id)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kDelTag),
         tag_id_(tag_id),
+        tag_name_(alloc),
+        result_code_(0) {
+    task_node_ = task_node;
+    pool_id_ = pool_id;
+    method_ = Method::kDelTag;
+    task_flags_.Clear();
+    pool_query_ = pool_query;
+  }
+
+  // Emplace constructor with tag name
+  explicit DelTagTask(
+      const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+      const chi::TaskNode &task_node,
+      const chi::PoolId &pool_id,
+      const chi::PoolQuery &pool_query,
+      const std::string& tag_name)
+      : chi::Task(alloc, task_node, pool_id, pool_query, Method::kDelTag),
+        tag_id_(TagId::GetNull()),
+        tag_name_(alloc, tag_name),
         result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;

@@ -15,6 +15,7 @@ target_link_libraries(wrp_cte_posix_unit_tests
     wrp_cte_posix
     wrp_cte_fs_base
     wrp_cte_core_client
+    wrp_cte_cae_config
     hshm::cxx
     Catch2::Catch2WithMain
 )

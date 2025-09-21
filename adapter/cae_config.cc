@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <filesystem>
 #include "hermes_shm/util/logging.h"
+#include "chimaera/core/content_transfer_engine.h"
 
 namespace wrp::cae {
 
@@ -86,8 +87,13 @@ bool CaeConfig::LoadFromYaml(const YAML::Node& config) {
       }
     }
     
-    HILOG(kInfo, "CAE config loaded: {} tracked paths, page size {} bytes", 
-          paths_.size(), adapter_page_size_);
+    // Load interception enabled setting
+    if (config["interception_enabled"]) {
+      interception_enabled_ = config["interception_enabled"].as<bool>();
+    }
+    
+    HILOG(kInfo, "CAE config loaded: {} tracked paths, page size {} bytes, interception {}", 
+          paths_.size(), adapter_page_size_, interception_enabled_ ? "enabled" : "disabled");
     return true;
     
   } catch (const YAML::Exception& e) {
@@ -136,6 +142,9 @@ std::string CaeConfig::ToYamlString() const {
   // Add adapter page size
   config["adapter_page_size"] = adapter_page_size_;
   
+  // Add interception enabled setting
+  config["interception_enabled"] = interception_enabled_;
+  
   YAML::Emitter emitter;
   emitter << config;
   
@@ -143,6 +152,12 @@ std::string CaeConfig::ToYamlString() const {
 }
 
 bool CaeConfig::IsPathTracked(const std::string& path) const {
+  // Check if CTE is not initialized yet
+  auto *cte_manager = CTE_MANAGER;
+  if (cte_manager != nullptr && !cte_manager->IsInitialized()) {
+    return false;
+  }
+  
   if (paths_.empty()) {
     // If no paths are configured, track everything
     return true;
@@ -187,17 +202,17 @@ void CaeConfig::ClearTrackedPaths() {
 
 bool WRP_CAE_CONFIG_INIT(const std::string& config_path) {
   // Get the global configuration instance (creates it if needed)
-  auto& config = WRP_CAE_CONFIG;
+  auto *config = WRP_CAE_CONFIG;
   
   // Load configuration from file if provided
   if (!config_path.empty()) {
-    if (!config.LoadFromFile(config_path)) {
+    if (!config->LoadFromFile(config_path)) {
       HILOG(kWarning, "Failed to load CAE config from {}, using defaults", config_path);
     }
   } else {
     // Set some reasonable defaults if no config file is provided
-    config.SetAdapterPageSize(4096);
-    config.AddTrackedPath("/tmp");  // Default to tracking /tmp directory
+    config->SetAdapterPageSize(4096);
+    config->AddTrackedPath("/tmp");  // Default to tracking /tmp directory
     HILOG(kInfo, "CAE config initialized with defaults");
   }
   

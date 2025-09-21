@@ -25,11 +25,13 @@ namespace wrp::cae {
  * Contains paths to track and adapter-specific settings
  */
 struct CaeConfig {
+public:
   std::vector<std::string> paths_;        // Paths to track for adapter interception
   size_t adapter_page_size_;              // Page size for adapter operations (bytes)
+  bool interception_enabled_;             // Enable/disable interception
   
   // Default constructor
-  CaeConfig() : adapter_page_size_(4096) {}
+  CaeConfig() : adapter_page_size_(4096), interception_enabled_(true) {}
   
   /**
    * Load configuration from YAML file
@@ -99,6 +101,22 @@ struct CaeConfig {
    * @return Vector of tracked path patterns
    */
   const std::vector<std::string>& GetTrackedPaths() const { return paths_; }
+  
+  /**
+   * Check if interception is enabled
+   * @return true if interception is enabled, false otherwise
+   */
+  bool IsInterceptionEnabled() const { return interception_enabled_; }
+  
+  /**
+   * Enable interception
+   */
+  void EnableInterception() { interception_enabled_ = true; }
+  
+  /**
+   * Disable interception
+   */
+  void DisableInterception() { interception_enabled_ = false; }
 
 private:
   /**
@@ -122,6 +140,6 @@ bool WRP_CAE_CONFIG_INIT(const std::string& config_path = "");
 }  // namespace wrp::cae
 
 // Global singleton macro for easy access
-#define WRP_CAE_CONFIG (*HSHM_GET_GLOBAL_PTR_VAR(wrp::cae::CaeConfig, wrp::cae::g_cae_config))
+#define WRP_CAE_CONFIG (HSHM_GET_GLOBAL_PTR_VAR(wrp::cae::CaeConfig, wrp::cae::g_cae_config))
 
 #endif  // WRP_CAE_CONFIG_H_

@@ -30,6 +30,7 @@
 #include "chimaera/core/core_client.h"
 #include "chimaera/core/core_tasks.h"
 #include "chimaera/chimaera.h"
+#include "chimaera/core/content_transfer_engine.h"
 #include "adapter/adapter_types.h"
 #include "adapter/mapper/mapper_factory.h"
 #include "adapter/cae_config.h"
@@ -95,7 +96,8 @@ public:
       // Use singleton client that should be configured globally
       
       // Get or create the tag for this file
-      wrp_cte::core::TagInfo tag_info = WRP_CTE_CLIENT.GetOrCreateTag(
+      auto *cte_client = WRP_CTE_CLIENT;
+      wrp_cte::core::TagInfo tag_info = cte_client->GetOrCreateTag(
           hipc::MemContext(),
           stat.path_,
           wrp_cte::core::TagId::GetNull()  // Let CTE assign the ID
@@ -187,7 +189,8 @@ public:
       std::string blob_name = "blob_" + std::to_string(off) + "_" + std::to_string(total_size);
       
       // Use CTE PutBlob
-      bool success = WRP_CTE_CLIENT.PutBlob(
+      auto *cte_client = WRP_CTE_CLIENT;
+      bool success = cte_client->PutBlob(
           hipc::MemContext(),
           stat.tag_id_,
           blob_name,
@@ -292,7 +295,8 @@ public:
     }
     
     // Use CTE GetBlob
-    bool success = WRP_CTE_CLIENT.GetBlob(
+    auto *cte_client = WRP_CTE_CLIENT;
+    bool success = cte_client->GetBlob(
         hipc::MemContext(),
         stat.tag_id_,
         blob_name,
@@ -429,9 +433,19 @@ public:
   size_t GetSize(File &f, AdapterStat &stat) {
     (void)f;
     if (stat.adapter_mode_ != AdapterMode::kBypass) {
-      // For CTE, use the cached file size
-      // TODO: Could query CTE for actual tag size if needed
-      return stat.file_size_;
+      // For CTE, query the actual tag size from CTE runtime
+      auto *cte_client = WRP_CTE_CLIENT;
+      size_t cte_tag_size = cte_client->GetTagSize(
+          hipc::MemContext(),
+          stat.tag_id_
+      );
+      
+      HILOG(kDebug, "GetSize: queried CTE for tag_id={},{}, got size={}, cached_size={}",
+            stat.tag_id_.major_, stat.tag_id_.minor_, cte_tag_size, stat.file_size_);
+      
+      // Update cached file size with actual CTE tag size
+      stat.file_size_ = cte_tag_size;
+      return cte_tag_size;
     } else {
       return stdfs::file_size(stat.path_);
     }
@@ -483,11 +497,18 @@ public:
   int Remove(const std::string &pathname) {
     auto mdm = WRP_CTE_FS_METADATA_MANAGER;
     int ret = RealRemove(pathname);
-    // CTE tag cleanup - tags are managed by the runtime
+    
+    // CTE tag cleanup - delete the tag associated with this file using canonical path as tag name
     std::string canon_path = stdfs::absolute(pathname).string();
-    // TODO: Add explicit tag cleanup if needed by CTE
-    (void)canon_path;  // Suppress unused variable warning
-    // Destroy all file descriptors
+    auto *cte_client = WRP_CTE_CLIENT;
+    bool tag_deleted = cte_client->DelTag(hipc::MemContext(), canon_path);
+    if (tag_deleted) {
+      HILOG(kDebug, "Deleted CTE tag for file: {}", pathname);
+    } else {
+      HILOG(kDebug, "No CTE tag found for file: {}", pathname);
+    }
+    
+    // Destroy all file descriptors  
     std::list<File> *filesp = mdm->Find(pathname);
     if (filesp == nullptr) {
       return ret;
@@ -741,16 +762,29 @@ public:
   /** Whether or not \a path PATH is tracked by Hermes */
   static bool IsPathTracked(const std::string &path) {
     // Check if the CAE config singleton is available
-    auto* cae_config_ptr = HSHM_GET_GLOBAL_PTR_VAR(wrp::cae::CaeConfig, wrp::cae::g_cae_config);
-    if (cae_config_ptr == nullptr) {
+    auto *cae_config = WRP_CAE_CONFIG;
+    if (cae_config == nullptr) {
       return false;
     }
+    
+    // Check if interception is enabled
+    if (!cae_config->IsInterceptionEnabled()) {
+      return false;
+    }
+    
     if (path.empty()) {
       return false;
     }
+    
+    // Check if CTE is not initialized yet
+    auto *cte_manager = CTE_MANAGER;
+    if (cte_manager != nullptr && !cte_manager->IsInitialized()) {
+      return false;
+    }
+    
     std::string abs_path = stdfs::absolute(path).string();
     // Use the CAE config's IsPathTracked method
-    return WRP_CAE_CONFIG.IsPathTracked(abs_path);
+    return cae_config->IsPathTracked(abs_path);
   }
 };
 

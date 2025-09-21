@@ -23,7 +23,6 @@
 #include "hermes_shm/util/logging.h"
 #include "hermes_shm/util/real_api.h"
 #include "adapter/adapter_constants.h"
-#include "adapter/cte_adapter.h"
 
 #ifndef O_TMPFILE
 #define O_TMPFILE 0

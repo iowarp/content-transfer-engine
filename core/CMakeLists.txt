@@ -20,6 +20,7 @@ add_chimod_both(
     src/autogen/core_lib_exec.cc
   CLIENT_SOURCES 
     src/core_client.cc
+    src/content_transfer_engine.cc
 )
 
 # Link yaml-cpp to the runtime library

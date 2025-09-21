@@ -397,7 +397,7 @@ class Client : public chi::ContainerClient {
   }
 
   /**
-   * Synchronous delete tag - waits for completion
+   * Synchronous delete tag by tag ID - waits for completion
    */
   bool DelTag(const hipc::MemContext& mctx,
              const TagId& tag_id) {
@@ -409,7 +409,19 @@ class Client : public chi::ContainerClient {
   }
 
   /**
-   * Asynchronous delete tag - returns immediately
+   * Synchronous delete tag by tag name - waits for completion
+   */
+  bool DelTag(const hipc::MemContext& mctx,
+             const std::string& tag_name) {
+    auto task = AsyncDelTag(mctx, tag_name);
+    task->Wait();
+    bool result = (task->result_code_ == 0);
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous delete tag by tag ID - returns immediately
    */
   hipc::FullPtr<DelTagTask> AsyncDelTag(
       const hipc::MemContext& mctx,
@@ -422,6 +434,25 @@ class Client : public chi::ContainerClient {
         pool_id_,
         chi::PoolQuery::Local(),
         tag_id);
+    
+    ipc_manager->Enqueue(task);
+    return task;
+  }
+
+  /**
+   * Asynchronous delete tag by tag name - returns immediately
+   */
+  hipc::FullPtr<DelTagTask> AsyncDelTag(
+      const hipc::MemContext& mctx,
+      const std::string& tag_name) {
+    (void)mctx;  // Suppress unused parameter warning
+    auto* ipc_manager = CHI_IPC;
+    
+    auto task = ipc_manager->NewTask<DelTagTask>(
+        chi::CreateTaskNode(),
+        pool_id_,
+        chi::PoolQuery::Local(),
+        tag_name);
     
     ipc_manager->Enqueue(task);
     return task;
@@ -475,8 +506,8 @@ bool WRP_CTE_INIT(const std::string& config_path = "");
 
 }  // namespace wrp_cte::core
 
-// Global singleton macros for easy access
-#define WRP_CTE_CLIENT (*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Client, wrp_cte::core::g_cte_client))
-#define WRP_CTE_CONFIG (*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Config, wrp_cte::core::g_cte_config))
+// Global singleton macros for easy access (return pointers, not references)
+#define WRP_CTE_CLIENT (&(*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Client, wrp_cte::core::g_cte_client)))
+#define WRP_CTE_CONFIG (&(*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Config, wrp_cte::core::g_cte_config)))
 
 #endif  // WRPCTE_CORE_CLIENT_H_

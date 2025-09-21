@@ -10,11 +10,13 @@ add_library(wrp_cte_cae_config SHARED
 
 target_include_directories(wrp_cte_cae_config PRIVATE
     ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/core/include
 )
 
 target_link_libraries(wrp_cte_cae_config
     yaml-cpp
     hshm::cxx
+    wrp_cte_core_client
 )
 
 # CTE adapter singleton implementation - moved to filesystem directory

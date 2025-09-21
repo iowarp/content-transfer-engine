@@ -58,6 +58,18 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
       ReorganizeBlob(task_ptr.Cast<ReorganizeBlobTask>(), rctx);
       break;
     }
+    case Method::kDelBlob: {
+      DelBlob(task_ptr.Cast<DelBlobTask>(), rctx);
+      break;
+    }
+    case Method::kDelTag: {
+      DelTag(task_ptr.Cast<DelTagTask>(), rctx);
+      break;
+    }
+    case Method::kGetTagSize: {
+      GetTagSize(task_ptr.Cast<GetTagSizeTask>(), rctx);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -106,6 +118,18 @@ void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
     }
     case Method::kReorganizeBlob: {
       MonitorReorganizeBlob(mode, task_ptr.Cast<ReorganizeBlobTask>(), rctx);
+      break;
+    }
+    case Method::kDelBlob: {
+      MonitorDelBlob(mode, task_ptr.Cast<DelBlobTask>(), rctx);
+      break;
+    }
+    case Method::kDelTag: {
+      MonitorDelTag(mode, task_ptr.Cast<DelTagTask>(), rctx);
+      break;
+    }
+    case Method::kGetTagSize: {
+      MonitorGetTagSize(mode, task_ptr.Cast<GetTagSizeTask>(), rctx);
       break;
     }
     default: {
@@ -158,6 +182,18 @@ void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
     }
     case Method::kReorganizeBlob: {
       ipc_manager->DelTask(task_ptr.Cast<ReorganizeBlobTask>());
+      break;
+    }
+    case Method::kDelBlob: {
+      ipc_manager->DelTask(task_ptr.Cast<DelBlobTask>());
+      break;
+    }
+    case Method::kDelTag: {
+      ipc_manager->DelTask(task_ptr.Cast<DelTagTask>());
+      break;
+    }
+    case Method::kGetTagSize: {
+      ipc_manager->DelTask(task_ptr.Cast<GetTagSizeTask>());
       break;
     }
     default: {
@@ -221,6 +257,21 @@ void Runtime::SaveIn(chi::u32 method, chi::TaskSaveInArchive& archive,
       typed_task->SerializeIn(archive);
       break;
     }
+    case Method::kDelBlob: {
+      auto typed_task = task_ptr.Cast<DelBlobTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kDelTag: {
+      auto typed_task = task_ptr.Cast<DelTagTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetTagSize: {
+      auto typed_task = task_ptr.Cast<GetTagSizeTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -278,6 +329,21 @@ void Runtime::LoadIn(chi::u32 method, chi::TaskLoadInArchive& archive,
     }
     case Method::kReorganizeBlob: {
       auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kDelBlob: {
+      auto typed_task = task_ptr.Cast<DelBlobTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kDelTag: {
+      auto typed_task = task_ptr.Cast<DelTagTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetTagSize: {
+      auto typed_task = task_ptr.Cast<GetTagSizeTask>();
       typed_task->SerializeIn(archive);
       break;
     }
@@ -341,6 +407,21 @@ void Runtime::SaveOut(chi::u32 method, chi::TaskSaveOutArchive& archive,
       typed_task->SerializeOut(archive);
       break;
     }
+    case Method::kDelBlob: {
+      auto typed_task = task_ptr.Cast<DelBlobTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kDelTag: {
+      auto typed_task = task_ptr.Cast<DelTagTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetTagSize: {
+      auto typed_task = task_ptr.Cast<GetTagSizeTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -398,6 +479,21 @@ void Runtime::LoadOut(chi::u32 method, chi::TaskLoadOutArchive& archive,
     }
     case Method::kReorganizeBlob: {
       auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kDelBlob: {
+      auto typed_task = task_ptr.Cast<DelBlobTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kDelTag: {
+      auto typed_task = task_ptr.Cast<DelTagTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetTagSize: {
+      auto typed_task = task_ptr.Cast<GetTagSizeTask>();
       typed_task->SerializeOut(archive);
       break;
     }
@@ -521,6 +617,39 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       if (!typed_task.IsNull()) {
         // Use HSHM strong copy method for actual copying
         typed_task->shm_strong_copy_main(*orig_task.Cast<ReorganizeBlobTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kDelBlob: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<DelBlobTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<DelBlobTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kDelTag: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<DelTagTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<DelTagTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kGetTagSize: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<GetTagSizeTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<GetTagSizeTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
       }

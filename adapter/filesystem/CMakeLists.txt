@@ -9,8 +9,7 @@ add_library(wrp_cte_fs_base SHARED
         filesystem.cc
         filesystem.h
         filesystem_io_client.h
-        filesystem_mdm.h
-        ../cte_adapter.cc)
+        filesystem_mdm.h)
 target_link_libraries(wrp_cte_fs_base
         MPI::MPI_CXX
         wrp_cte_core_client

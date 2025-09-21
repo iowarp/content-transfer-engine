@@ -18,6 +18,7 @@
 #include "adapter/filesystem/filesystem.h"
 #include "adapter/filesystem/filesystem_mdm.h"
 #include "posix_api.h"
+#include "chimaera/core/content_transfer_engine.h"
 
 namespace wrp::cae {
 
@@ -79,6 +80,19 @@ public:
     if (!WRP_CTE_CONF->is_initialized_ || fd < 8192) {
       return false;
     }
+    
+    // Check if interception is enabled
+    auto *cae_config = WRP_CAE_CONFIG;
+    if (cae_config == nullptr || !cae_config->IsInterceptionEnabled()) {
+      return false;
+    }
+    
+    // Check if CTE is not initialized yet
+    auto *cte_manager = CTE_MANAGER;
+    if (cte_manager != nullptr && !cte_manager->IsInitialized()) {
+      return false;
+    }
+    
     wrp::cae::File f;
     f.hermes_fd_ = fd;
     stat = WRP_CTE_FS_METADATA_MANAGER->Find(f);
