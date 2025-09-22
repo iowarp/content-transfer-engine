@@ -1,0 +1,74 @@
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+ * Distributed under BSD 3-Clause license.                                   *
+ * Copyright by The HDF Group.                                               *
+ * Copyright by the Illinois Institute of Technology.                        *
+ * All rights reserved.                                                      *
+ *                                                                           *
+ * This file is part of Hermes. The full Hermes copyright notice, including  *
+ * terms governing use, modification, and redistribution, is contained in    *
+ * the COPYING file, which can be found at the top directory. If you do not  *
+ * have access to the file, you may request a copy from help@hdfgroup.org.   *
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+#ifndef WRP_CTE_CORE_CONTENT_TRANSFER_ENGINE_H_
+#define WRP_CTE_CORE_CONTENT_TRANSFER_ENGINE_H_
+
+#include "hermes_shm/util/singleton.h"
+
+namespace wrp_cte::core {
+
+/**
+ * Main Content Transfer Engine manager class
+ * 
+ * Central coordinator for the CTE system initialization and state management.
+ * Manages initialization state to prevent race conditions during startup.
+ * Uses HSHM global pointer variable singleton pattern.
+ */
+class ContentTransferEngine {
+public:
+  /**
+   * Constructor
+   */
+  ContentTransferEngine() : is_initializing_(false), is_initialized_(false) {}
+
+  /**
+   * Destructor - handles automatic finalization
+   */
+  ~ContentTransferEngine() = default;
+
+  /**
+   * Initialize client components
+   * @return true if initialization successful, false otherwise
+   */
+  bool ClientInit();
+
+  /**
+   * Check if CTE is initialized
+   * @return true if initialized, false otherwise
+   */
+  bool IsInitialized() const {
+    return is_initialized_ && !is_initializing_;
+  }
+
+  /**
+   * Check if CTE is currently in the process of initializing
+   * @return true if initialization is in progress, false otherwise
+   */
+  bool IsInitializing() const {
+    return is_initializing_;
+  }
+
+private:
+  bool is_initializing_;  /**< True during initialization process */
+  bool is_initialized_;   /**< True when fully initialized */
+};
+
+}  // namespace wrp_cte::core
+
+// Global pointer variable declaration for ContentTransferEngine singleton (outside namespace)
+HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::ContentTransferEngine, g_cte_manager);
+
+// Macro for accessing the ContentTransferEngine singleton using global pointer variable
+#define CTE_MANAGER (HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::ContentTransferEngine, g_cte_manager))
+
+#endif  // WRP_CTE_CORE_CONTENT_TRANSFER_ENGINE_H_
