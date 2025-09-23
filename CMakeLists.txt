@@ -47,6 +47,9 @@ endif()
 find_package(chimaera-core REQUIRED)
 find_package(chimaera-admin REQUIRED)
 
+# Add nanobind for Python bindings
+add_subdirectory(external/nanobind)
+
 message(STATUS "Found Chimaera framework - building full ChiMod implementation")
 
 # Add the core ChiMod
@@ -58,7 +61,13 @@ add_subdirectory(core)
 # Add adapters
 add_subdirectory(adapter)
 
+# Enable testing
+include(CTest)
+
 # Add tests
 add_subdirectory(test)
+
+# Add wrapper components (includes Python bindings if enabled)
+add_subdirectory(wrapper)
 
 message(STATUS "CTE Core and Bdev ChiMods configured for compilation")

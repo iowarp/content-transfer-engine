@@ -23,3 +23,4 @@ kReorganizeBlob: 17     # Change blob score (unimplemented for now)
 kDelBlob: 18            # Delete a blob (unimplemented for now)
 kDelTag: 19            # Delete a tag (unimplemented for now)
 kGetTagSize: 20        # Get the size of a tag (unimplemented for now)
+kPollTelemetryLog: 21  # Poll telemetry log with minimum logical time filter

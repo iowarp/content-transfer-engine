@@ -366,17 +366,19 @@ struct CteTelemetry {
   TagId tag_id_;                // Tag ID involved
   Timestamp mod_time_;          // Last modification time
   Timestamp read_time_;         // Last read time
+  std::uint64_t logical_time_;  // Logical time for ordering telemetry entries
   
   CteTelemetry() : op_(CteOp::kPutBlob), off_(0), size_(0),
                    blob_id_(BlobId::GetNull()), tag_id_(TagId::GetNull()),
                    mod_time_(std::chrono::steady_clock::now()),
-                   read_time_(std::chrono::steady_clock::now()) {}
+                   read_time_(std::chrono::steady_clock::now()), logical_time_(0) {}
                    
   CteTelemetry(CteOp op, size_t off, size_t size, 
                const BlobId& blob_id, const TagId& tag_id,
-               const Timestamp& mod_time, const Timestamp& read_time)
+               const Timestamp& mod_time, const Timestamp& read_time,
+               std::uint64_t logical_time = 0)
       : op_(op), off_(off), size_(size), blob_id_(blob_id), tag_id_(tag_id),
-        mod_time_(mod_time), read_time_(read_time) {}
+        mod_time_(mod_time), read_time_(read_time), logical_time_(logical_time) {}
 };
 
 /**
@@ -689,6 +691,43 @@ struct GetTagSizeTask : public chi::Task {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kGetTagSize;
+    task_flags_.Clear();
+    pool_query_ = pool_query;
+  }
+};
+
+/**
+ * PollTelemetryLog task - Poll telemetry log with minimum logical time filter
+ */
+struct PollTelemetryLogTask : public chi::Task {
+  IN std::uint64_t minimum_logical_time_;    // Minimum logical time filter
+  OUT std::uint64_t last_logical_time_;      // Last logical time scanned
+  OUT hipc::vector<CteTelemetry> entries_;   // Retrieved telemetry entries
+  OUT chi::u32 result_code_;                 // Output result (0 = success)
+
+  // SHM constructor
+  explicit PollTelemetryLogTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
+      : chi::Task(alloc), 
+        minimum_logical_time_(0),
+        last_logical_time_(0),
+        entries_(alloc),
+        result_code_(0) {}
+
+  // Emplace constructor
+  explicit PollTelemetryLogTask(
+      const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+      const chi::TaskNode &task_node,
+      const chi::PoolId &pool_id,
+      const chi::PoolQuery &pool_query,
+      std::uint64_t minimum_logical_time)
+      : chi::Task(alloc, task_node, pool_id, pool_query, Method::kPollTelemetryLog),
+        minimum_logical_time_(minimum_logical_time),
+        last_logical_time_(0),
+        entries_(alloc),
+        result_code_(0) {
+    task_node_ = task_node;
+    pool_id_ = pool_id;
+    method_ = Method::kPollTelemetryLog;
     task_flags_.Clear();
     pool_query_ = pool_query;
   }

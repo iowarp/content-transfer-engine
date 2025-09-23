@@ -34,6 +34,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   // Initialize atomic counters
   next_tag_id_minor_ = 1;
   next_blob_id_minor_ = 1;
+  telemetry_counter_ = 0;
 
   // Initialize configuration manager with allocator
   auto *config_manager = &ConfigManager::GetInstance();
@@ -1613,9 +1614,12 @@ void Runtime::LogTelemetry(CteOp op, size_t off, size_t size,
                            const BlobId &blob_id, const TagId &tag_id,
                            const Timestamp &mod_time,
                            const Timestamp &read_time) {
-  // Create telemetry entry and enqueue it
+  // Increment atomic counter and get current logical time
+  std::uint64_t logical_time = telemetry_counter_.fetch_add(1) + 1;
+  
+  // Create telemetry entry with logical time and enqueue it
   CteTelemetry telemetry_entry(op, off, size, blob_id, tag_id, mod_time,
-                               read_time);
+                               read_time, logical_time);
 
   // Circular queue automatically overwrites oldest entries when full
   telemetry_log_.push(telemetry_entry);
@@ -1655,6 +1659,56 @@ size_t Runtime::GetTelemetryEntries(std::vector<CteTelemetry> &entries,
   // Copy to output vector
   entries = temp_entries;
   return entries.size();
+}
+
+void Runtime::PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task,
+                               chi::RunContext& ctx) {
+  try {
+    std::uint64_t minimum_logical_time = task->minimum_logical_time_;
+    
+    // Get telemetry entries with logical time filtering
+    std::vector<CteTelemetry> all_entries;
+    size_t retrieved_count = GetTelemetryEntries(all_entries, 1000);
+    
+    // Filter entries by minimum logical time
+    task->entries_.clear();
+    std::uint64_t max_logical_time = minimum_logical_time;
+    
+    for (const auto& entry : all_entries) {
+      if (entry.logical_time_ >= minimum_logical_time) {
+        task->entries_.emplace_back(entry);
+        max_logical_time = std::max(max_logical_time, entry.logical_time_);
+      }
+    }
+    
+    task->last_logical_time_ = max_logical_time;
+    task->result_code_ = 0;
+    
+  } catch (const std::exception& e) {
+    task->result_code_ = 1;
+    task->last_logical_time_ = 0;
+  }
+  (void)ctx;
+}
+
+void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
+                                      hipc::FullPtr<PollTelemetryLogTask> task,
+                                      chi::RunContext& ctx) {
+  switch (mode) {
+  case chi::MonitorModeId::kLocalSchedule: {
+    auto lane_ptr = GetLaneFullPtr(kStatsQueue, 0);
+    if (!lane_ptr.IsNull()) {
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+    }
+    break;
+  }
+  case chi::MonitorModeId::kGlobalSchedule:
+    break;
+  case chi::MonitorModeId::kEstLoad:
+    ctx.estimated_completion_time_us = 100.0;
+    break;
+  }
+  (void)task;
 }
 
 } // namespace wrp_cte::core

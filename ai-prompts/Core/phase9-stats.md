@@ -19,5 +19,11 @@ struct CteTelemetry {
   TagId tag_id_;
   Timestamp mod_time_;
   Timestamp read_time_;
+  u64 logical_time_;
 }
 ```
+
+Add logical_time_ as a member to CteTelemetry. Store an atomic counter in the runtime code representing the total number of telemetry entries generated. Every time we log a new entry the counter is incremented. 
+
+Create a new chimod function called kPollTelemetryLog. Edit chimod.yaml and then call ``module load iowarp-runtime && chi_refresh_repo .`` It takes as input a minimum_logical_time_ and outputs the last logical_time_ scanned. The minimum time is used to filter the telemetry log to
+prevent applications from collecting duplicate values.

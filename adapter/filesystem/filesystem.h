@@ -25,15 +25,15 @@
 #include <set>
 #include <string>
 
-#include "filesystem_io_client.h"
-#include "filesystem_mdm.h"
-#include "chimaera/core/core_client.h"
-#include "chimaera/core/core_tasks.h"
+#include "adapter/adapter_types.h"
+#include "adapter/cae_config.h"
+#include "adapter/mapper/mapper_factory.h"
 #include "chimaera/chimaera.h"
 #include "chimaera/core/content_transfer_engine.h"
-#include "adapter/adapter_types.h"
-#include "adapter/mapper/mapper_factory.h"
-#include "adapter/cae_config.h"
+#include "chimaera/core/core_client.h"
+#include "chimaera/core/core_tasks.h"
+#include "filesystem_io_client.h"
+#include "filesystem_mdm.h"
 
 namespace wrp::cae {
 
@@ -56,7 +56,7 @@ public:
 public:
   /** Constructor */
   explicit Filesystem(AdapterType type) : type_(type) {
-    wrp_cte::core::WRP_CTE_INIT();
+    wrp_cte::core::WRP_CTE_CLIENT_INIT();
     wrp::cae::WRP_CAE_CONFIG_INIT();
   }
 
@@ -94,16 +94,15 @@ public:
       // Page size is managed internally by the CTE runtime
       // Initialize CTE core client and get or create tag
       // Use singleton client that should be configured globally
-      
+
       // Get or create the tag for this file
       auto *cte_client = WRP_CTE_CLIENT;
       wrp_cte::core::TagInfo tag_info = cte_client->GetOrCreateTag(
-          hipc::MemContext(),
-          stat.path_,
-          wrp_cte::core::TagId::GetNull()  // Let CTE assign the ID
+          hipc::MemContext(), stat.path_,
+          wrp_cte::core::TagId::GetNull() // Let CTE assign the ID
       );
       stat.tag_id_ = tag_info.tag_id_;
-      
+
       if (stat.hflags_.Any(WRP_CTE_FS_TRUNC)) {
         // The file was opened with TRUNCATION
         // In CTE, we handle truncation differently - no explicit clear needed
@@ -185,65 +184,68 @@ public:
     if (is_append) {
       // TODO: Append operations not yet supported in CTE
       // Perform append
-      HILOG(kWarning, "Append operations not yet supported in CTE, treating as regular write");
+      HILOG(kWarning, "Append operations not yet supported in CTE, treating as "
+                      "regular write");
       // Fallback to regular write at end of file
       off = stat.file_size_;
     }
-    
+
     // Use page-based CTE PutBlob operations
     {
       size_t bytes_written = 0;
       size_t current_offset = off;
       const char *data_ptr = static_cast<const char *>(ptr);
       auto *cte_client = WRP_CTE_CLIENT;
-      
+
       while (bytes_written < total_size) {
         // Calculate current page index and offset within page
         size_t page_index = CalculatePageIndex(current_offset, stat.page_size_);
-        size_t page_offset = CalculatePageOffset(current_offset, stat.page_size_);
-        size_t remaining_page_space = CalculateRemainingPageSpace(current_offset, stat.page_size_);
-        
+        size_t page_offset =
+            CalculatePageOffset(current_offset, stat.page_size_);
+        size_t remaining_page_space =
+            CalculateRemainingPageSpace(current_offset, stat.page_size_);
+
         // Calculate how much to write in this page
-        size_t bytes_to_write = std::min(remaining_page_space, total_size - bytes_written);
-        
+        size_t bytes_to_write =
+            std::min(remaining_page_space, total_size - bytes_written);
+
         // Allocate buffer for this page write
-        hipc::FullPtr<void> page_blob_data = CHI_IPC->AllocateBuffer<void>(bytes_to_write);
+        hipc::FullPtr<void> page_blob_data =
+            CHI_IPC->AllocateBuffer<void>(bytes_to_write);
         if (page_blob_data.IsNull()) {
           HILOG(kError, "Failed to allocate buffer for page write operation");
           io_status.success_ = false;
           return bytes_written;
         }
-        
+
         // Copy data for this page to shared memory buffer
         memcpy(page_blob_data.ptr_, data_ptr + bytes_written, bytes_to_write);
-        
+
         // Generate blob name using stringified page index
         std::string blob_name = std::to_string(page_index);
-        
+
         // Use CTE PutBlob for this page
         bool success = cte_client->PutBlob(
-            hipc::MemContext(),
-            stat.tag_id_,
-            blob_name,
-            wrp_cte::core::BlobId::GetNull(),  // Let CTE assign blob ID
-            page_offset,                       // offset within the page
-            bytes_to_write,                    // size of this write
-            page_blob_data.shm_,               // Convert FullPtr to Pointer using .shm_
-            0.5f,                              // default score
-            0                                  // flags
+            hipc::MemContext(), stat.tag_id_, blob_name,
+            wrp_cte::core::BlobId::GetNull(), // Let CTE assign blob ID
+            page_offset,                      // offset within the page
+            bytes_to_write,                   // size of this write
+            page_blob_data.shm_, // Convert FullPtr to Pointer using .shm_
+            0.5f,                // default score
+            0                    // flags
         );
-        
+
         if (!success) {
           HILOG(kError, "CTE PutBlob failed for page {}", page_index);
           io_status.success_ = false;
           return bytes_written;
         }
-        
+
         // Update counters for next iteration
         bytes_written += bytes_to_write;
         current_offset += bytes_to_write;
       }
-      
+
       if (opts.DoSeek()) {
         stat.st_ptr_ = off + total_size;
       }
@@ -314,62 +316,64 @@ public:
     // CTE read operation - use page-based blob naming to match PutBlob
     if constexpr (ASYNC) {
       // TODO: Async read operations not yet fully supported in CTE adapter
-      HILOG(kWarning, "Async read operations not yet fully supported, using sync read");
+      HILOG(kWarning,
+            "Async read operations not yet fully supported, using sync read");
     }
-    
+
     // Use page-based CTE GetBlob operations
     size_t bytes_read = 0;
     size_t current_offset = off;
     char *data_ptr = static_cast<char *>(ptr);
     auto *cte_client = WRP_CTE_CLIENT;
-    
+
     while (bytes_read < total_size) {
       // Calculate current page index and offset within page
       size_t page_index = CalculatePageIndex(current_offset, stat.page_size_);
       size_t page_offset = CalculatePageOffset(current_offset, stat.page_size_);
-      size_t remaining_page_space = CalculateRemainingPageSpace(current_offset, stat.page_size_);
-      
+      size_t remaining_page_space =
+          CalculateRemainingPageSpace(current_offset, stat.page_size_);
+
       // Calculate how much to read from this page
-      size_t bytes_to_read = std::min(remaining_page_space, total_size - bytes_read);
-      
+      size_t bytes_to_read =
+          std::min(remaining_page_space, total_size - bytes_read);
+
       // Allocate buffer for this page read
-      hipc::FullPtr<void> page_read_buffer = CHI_IPC->AllocateBuffer<void>(bytes_to_read);
+      hipc::FullPtr<void> page_read_buffer =
+          CHI_IPC->AllocateBuffer<void>(bytes_to_read);
       if (page_read_buffer.IsNull()) {
         HILOG(kError, "Failed to allocate buffer for page read operation");
         io_status.success_ = false;
         return bytes_read;
       }
-      
+
       // Generate blob name using stringified page index
       std::string blob_name = std::to_string(page_index);
-      
+
       // Use CTE GetBlob for this page
       bool success = cte_client->GetBlob(
-          hipc::MemContext(),
-          stat.tag_id_,
-          blob_name,
-          wrp_cte::core::BlobId::GetNull(),  // Let CTE find by name
-          page_offset,                       // offset within the page
-          bytes_to_read,                     // size of this read
-          0,                                 // flags
-          page_read_buffer.shm_              // Convert FullPtr to Pointer using .shm_
+          hipc::MemContext(), stat.tag_id_, blob_name,
+          wrp_cte::core::BlobId::GetNull(), // Let CTE find by name
+          page_offset,                      // offset within the page
+          bytes_to_read,                    // size of this read
+          0,                                // flags
+          page_read_buffer.shm_ // Convert FullPtr to Pointer using .shm_
       );
-      
+
       if (!success) {
         HILOG(kError, "CTE GetBlob failed for page {}", page_index);
         io_status.success_ = false;
         return bytes_read;
       }
-      
+
       // Copy data from shared memory buffer to user buffer
       memcpy(data_ptr + bytes_read, page_read_buffer.ptr_, bytes_to_read);
-      
+
       // Update counters for next iteration
       bytes_read += bytes_to_read;
       current_offset += bytes_to_read;
     }
-    
-    size_t data_offset = bytes_read;  // Total bytes read
+
+    size_t data_offset = bytes_read; // Total bytes read
     if (opts.DoSeek()) {
       stat.st_ptr_ = off + data_offset;
     }
@@ -488,14 +492,15 @@ public:
     if (stat.adapter_mode_ != AdapterMode::kBypass) {
       // For CTE, query the actual tag size from CTE runtime
       auto *cte_client = WRP_CTE_CLIENT;
-      size_t cte_tag_size = cte_client->GetTagSize(
-          hipc::MemContext(),
-          stat.tag_id_
-      );
-      
-      HILOG(kDebug, "GetSize: queried CTE for tag_id={},{}, got size={}, cached_size={}",
-            stat.tag_id_.major_, stat.tag_id_.minor_, cte_tag_size, stat.file_size_);
-      
+      size_t cte_tag_size =
+          cte_client->GetTagSize(hipc::MemContext(), stat.tag_id_);
+
+      HILOG(
+          kDebug,
+          "GetSize: queried CTE for tag_id={},{}, got size={}, cached_size={}",
+          stat.tag_id_.major_, stat.tag_id_.minor_, cte_tag_size,
+          stat.file_size_);
+
       // Update cached file size with actual CTE tag size
       stat.file_size_ = cte_tag_size;
       return cte_tag_size;
@@ -550,8 +555,9 @@ public:
   int Remove(const std::string &pathname) {
     auto mdm = WRP_CTE_FS_METADATA_MANAGER;
     int ret = RealRemove(pathname);
-    
-    // CTE tag cleanup - delete the tag associated with this file using canonical path as tag name
+
+    // CTE tag cleanup - delete the tag associated with this file using
+    // canonical path as tag name
     std::string canon_path = stdfs::absolute(pathname).string();
     auto *cte_client = WRP_CTE_CLIENT;
     bool tag_deleted = cte_client->DelTag(hipc::MemContext(), canon_path);
@@ -560,8 +566,8 @@ public:
     } else {
       HILOG(kDebug, "No CTE tag found for file: {}", pathname);
     }
-    
-    // Destroy all file descriptors  
+
+    // Destroy all file descriptors
     std::list<File> *filesp = mdm->Find(pathname);
     if (filesp == nullptr) {
       return ret;
@@ -682,10 +688,11 @@ public:
   }
 
   /** write asynchronously */
-  FsAsyncTask *AWrite(File &f, bool &stat_exists, const void *ptr,
-                      size_t total_size, size_t req_id,
-                      std::vector<hipc::FullPtr<wrp_cte::core::PutBlobTask>> &tasks, IoStatus &io_status,
-                      FsIoOptions opts) {
+  FsAsyncTask *
+  AWrite(File &f, bool &stat_exists, const void *ptr, size_t total_size,
+         size_t req_id,
+         std::vector<hipc::FullPtr<wrp_cte::core::PutBlobTask>> &tasks,
+         IoStatus &io_status, FsIoOptions opts) {
     auto mdm = WRP_CTE_FS_METADATA_MANAGER;
     auto stat = mdm->Find(f);
     if (!stat) {
@@ -819,22 +826,22 @@ public:
     if (cae_config == nullptr) {
       return false;
     }
-    
+
     // Check if interception is enabled
     if (!cae_config->IsInterceptionEnabled()) {
       return false;
     }
-    
+
     if (path.empty()) {
       return false;
     }
-    
+
     // Check if CTE is not initialized yet
     auto *cte_manager = CTE_MANAGER;
     if (cte_manager != nullptr && !cte_manager->IsInitialized()) {
       return false;
     }
-    
+
     std::string abs_path = stdfs::absolute(path).string();
     // Use the CAE config's IsPathTracked method
     return cae_config->IsPathTracked(abs_path);

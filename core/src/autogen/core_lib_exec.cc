@@ -70,6 +70,10 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
       GetTagSize(task_ptr.Cast<GetTagSizeTask>(), rctx);
       break;
     }
+    case Method::kPollTelemetryLog: {
+      PollTelemetryLog(task_ptr.Cast<PollTelemetryLogTask>(), rctx);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -130,6 +134,10 @@ void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
     }
     case Method::kGetTagSize: {
       MonitorGetTagSize(mode, task_ptr.Cast<GetTagSizeTask>(), rctx);
+      break;
+    }
+    case Method::kPollTelemetryLog: {
+      MonitorPollTelemetryLog(mode, task_ptr.Cast<PollTelemetryLogTask>(), rctx);
       break;
     }
     default: {
@@ -194,6 +202,10 @@ void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
     }
     case Method::kGetTagSize: {
       ipc_manager->DelTask(task_ptr.Cast<GetTagSizeTask>());
+      break;
+    }
+    case Method::kPollTelemetryLog: {
+      ipc_manager->DelTask(task_ptr.Cast<PollTelemetryLogTask>());
       break;
     }
     default: {
@@ -272,6 +284,11 @@ void Runtime::SaveIn(chi::u32 method, chi::TaskSaveInArchive& archive,
       typed_task->SerializeIn(archive);
       break;
     }
+    case Method::kPollTelemetryLog: {
+      auto typed_task = task_ptr.Cast<PollTelemetryLogTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -344,6 +361,11 @@ void Runtime::LoadIn(chi::u32 method, chi::TaskLoadInArchive& archive,
     }
     case Method::kGetTagSize: {
       auto typed_task = task_ptr.Cast<GetTagSizeTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kPollTelemetryLog: {
+      auto typed_task = task_ptr.Cast<PollTelemetryLogTask>();
       typed_task->SerializeIn(archive);
       break;
     }
@@ -422,6 +444,11 @@ void Runtime::SaveOut(chi::u32 method, chi::TaskSaveOutArchive& archive,
       typed_task->SerializeOut(archive);
       break;
     }
+    case Method::kPollTelemetryLog: {
+      auto typed_task = task_ptr.Cast<PollTelemetryLogTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -494,6 +521,11 @@ void Runtime::LoadOut(chi::u32 method, chi::TaskLoadOutArchive& archive,
     }
     case Method::kGetTagSize: {
       auto typed_task = task_ptr.Cast<GetTagSizeTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kPollTelemetryLog: {
+      auto typed_task = task_ptr.Cast<PollTelemetryLogTask>();
       typed_task->SerializeOut(archive);
       break;
     }
@@ -650,6 +682,17 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       if (!typed_task.IsNull()) {
         // Use HSHM strong copy method for actual copying
         typed_task->shm_strong_copy_main(*orig_task.Cast<GetTagSizeTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kPollTelemetryLog: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<PollTelemetryLogTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<PollTelemetryLogTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
       }

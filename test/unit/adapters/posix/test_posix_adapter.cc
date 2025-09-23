@@ -77,7 +77,7 @@ bool initializeRuntime() {
   INFO("Initializing CTE runtime...");
 
   // Initialize CTE (which prevents re-initialization automatically)
-  if (!wrp_cte::core::WRP_CTE_INIT()) {
+  if (!wrp_cte::core::WRP_CTE_CLIENT_INIT()) {
     INFO("CTE initialization failed - continuing without CTE tracking");
     initialized = true;
     return true; // Continue test without CTE, POSIX still works

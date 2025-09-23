@@ -17,8 +17,8 @@ bool stdio_intercepted = true;
 #include <limits.h>
 #include <sys/file.h>
 
-#include <cstdio>
 #include "chimaera/core/core_client.h"
+#include <cstdio>
 
 #include "stdio_fs_api.h"
 
@@ -38,7 +38,7 @@ extern "C" {
  */
 
 FILE *WRP_CTE_DECL(fopen)(const char *path, const char *mode) {
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
   auto real_api = WRP_CTE_STDIO_API;
   auto fs_api = WRP_CTE_STDIO_FS;
   if (fs_api->IsPathTracked(path)) {
@@ -52,7 +52,7 @@ FILE *WRP_CTE_DECL(fopen)(const char *path, const char *mode) {
 }
 
 FILE *WRP_CTE_DECL(fopen64)(const char *path, const char *mode) {
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
   auto real_api = WRP_CTE_STDIO_API;
   auto fs_api = WRP_CTE_STDIO_FS;
   if (fs_api->IsPathTracked(path)) {
@@ -66,7 +66,7 @@ FILE *WRP_CTE_DECL(fopen64)(const char *path, const char *mode) {
 }
 
 FILE *WRP_CTE_DECL(fdopen)(int fd, const char *mode) {
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
   auto real_api = WRP_CTE_STDIO_API;
   auto fs_api = WRP_CTE_STDIO_FS;
   std::shared_ptr<AdapterStat> stat;
@@ -79,7 +79,7 @@ FILE *WRP_CTE_DECL(fdopen)(int fd, const char *mode) {
 }
 
 FILE *WRP_CTE_DECL(freopen)(const char *path, const char *mode, FILE *stream) {
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
   auto real_api = WRP_CTE_STDIO_API;
   auto fs_api = WRP_CTE_STDIO_FS;
   if (fs_api->IsFpTracked(stream)) {
@@ -89,8 +89,9 @@ FILE *WRP_CTE_DECL(freopen)(const char *path, const char *mode, FILE *stream) {
   return real_api->freopen(path, mode, stream);
 }
 
-FILE *WRP_CTE_DECL(freopen64)(const char *path, const char *mode, FILE *stream) {
-  wrp_cte::core::WRP_CTE_INIT();
+FILE *WRP_CTE_DECL(freopen64)(const char *path, const char *mode,
+                              FILE *stream) {
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
   auto real_api = WRP_CTE_STDIO_API;
   auto fs_api = WRP_CTE_STDIO_FS;
   if (fs_api->IsFpTracked(stream)) {
@@ -127,7 +128,7 @@ int WRP_CTE_DECL(fclose)(FILE *fp) {
 }
 
 size_t WRP_CTE_DECL(fwrite)(const void *ptr, size_t size, size_t nmemb,
-                           FILE *fp) {
+                            FILE *fp) {
   bool stat_exists;
   auto real_api = WRP_CTE_STDIO_API;
   auto fs_api = WRP_CTE_STDIO_FS;
@@ -455,4 +456,4 @@ long int WRP_CTE_DECL(ftell)(FILE *fp) {
   return real_api->ftell(fp);
 }
 
-}  // extern C
+} // extern C

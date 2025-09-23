@@ -15,10 +15,10 @@
 
 #include <iostream>
 
+#include "chimaera/core/core_client.h"
 #include "chimaera/work_orchestrator/affinity.h"
 #include "hermes/bucket.h"
 #include "hermes/hermes.h"
-#include "chimaera/core/core_client.h"
 
 namespace hapi = hermes;
 using hshm::MpiTimer;
@@ -208,25 +208,24 @@ void DeleteBucketTest(int nprocs, int rank, size_t bkt_per_rank,
 /** Each process deletes blobs from a single bucket */
 void DeleteBlobOneBucket(int nprocs, int rank, size_t blobs_per_rank) {}
 
-#define REQUIRE_ARGC_GE(N)                         \
-  if (argc < (N)) {                                \
-    HIPRINT("Requires fewer than {} params\n", N); \
-    help();                                        \
+#define REQUIRE_ARGC_GE(N)                                                     \
+  if (argc < (N)) {                                                            \
+    HIPRINT("Requires fewer than {} params\n", N);                             \
+    help();                                                                    \
   }
 
-#define REQUIRE_ARGC(N)                         \
-  if (argc != (N)) {                            \
-    HIPRINT("Requires exactly {} params\n", N); \
-    help();                                     \
+#define REQUIRE_ARGC(N)                                                        \
+  if (argc != (N)) {                                                           \
+    HIPRINT("Requires exactly {} params\n", N);                                \
+    help();                                                                    \
   }
 
 void help() {
   printf("USAGE: ./api_bench [mode] ...\n");
   printf("USAGE: ./api_bench put [blob_size (K/M/G)] [blobs_per_rank]\n");
   printf("USAGE: ./api_bench putget [blob_size (K/M/G)] [blobs_per_rank]\n");
-  printf(
-      "USAGE: ./api_bench pputget [blob_size (K/M/G)] [part_size (K/M/G)] "
-      "[blobs_per_rank]\n");
+  printf("USAGE: ./api_bench pputget [blob_size (K/M/G)] [part_size (K/M/G)] "
+         "[blobs_per_rank]\n");
   printf("USAGE: ./api_bench create_bkt [bkts_per_rank]\n");
   printf("USAGE: ./api_bench get_bkt [bkts_per_rank]\n");
   printf("USAGE: ./api_bench create_blob_1bkt [blobs_per_rank]\n");
@@ -241,7 +240,7 @@ int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
 
   // Get mode
   REQUIRE_ARGC_GE(2)

@@ -252,6 +252,7 @@ class Runtime : public chi::Container {
   // Telemetry ring buffer for performance monitoring
   static const size_t kTelemetryRingSize = 1024;  // Ring buffer size
   hipc::circular_mpsc_queue<CteTelemetry> telemetry_log_;
+  std::atomic<std::uint64_t> telemetry_counter_;  // Atomic counter for logical time
 
   /**
    * Get access to configuration manager
@@ -396,6 +397,23 @@ class Runtime : public chi::Container {
    * @return Number of entries actually retrieved
    */
   size_t GetTelemetryEntries(std::vector<CteTelemetry>& entries, size_t max_entries = 100);
+
+  /**
+   * Poll telemetry log (Method::kPollTelemetryLog)
+   * @param task PollTelemetryLog task containing parameters and results
+   * @param ctx Runtime context for task execution
+   */
+  void PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor poll telemetry log operation
+   * @param mode Monitor mode ID
+   * @param task PollTelemetryLog task to monitor
+   * @param ctx Runtime context for monitoring
+   */
+  void MonitorPollTelemetryLog(chi::MonitorModeId mode, 
+                              hipc::FullPtr<PollTelemetryLogTask> task,
+                              chi::RunContext& ctx);
 };
 
 }  // namespace wrp_cte::core

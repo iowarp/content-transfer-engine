@@ -26,6 +26,7 @@ GLOBAL_CONST chi::u32 kReorganizeBlob = 17;
 GLOBAL_CONST chi::u32 kDelBlob = 18;
 GLOBAL_CONST chi::u32 kDelTag = 19;
 GLOBAL_CONST chi::u32 kGetTagSize = 20;
+GLOBAL_CONST chi::u32 kPollTelemetryLog = 21;
 }  // namespace Method
 
 }  // namespace wrp_cte::core

@@ -1,23 +1,53 @@
-# ------------------------------------------------------------------------------
-# Find Packages
-# ------------------------------------------------------------------------------
-# find_package(pybind11 CONFIG REQUIRED)
-# message(STATUS "Found pybind11 v${pybind11_VERSION}: ${pybind11_INCLUDE_DIRS}")
+cmake_minimum_required(VERSION 3.20)
 
-# ------------------------------------------------------------------------------
-# Compile Python Hermes
-# ------------------------------------------------------------------------------
-pybind11_add_module(py_hermes MODULE py_hermes.cpp)
-add_dependencies(py_hermes ${Hermes_CLIENT_DEPS})
-target_link_libraries(py_hermes PUBLIC
-        ${Hermes_CLIENT_DEPS} pybind11::module)
+# Find Python for nanobind
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 
-# ------------------------------------------------------------------------------
-# Install Targets
-# ------------------------------------------------------------------------------
-install(TARGETS
-        py_hermes
-        LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR})
+# Create the Python module
+nanobind_add_module(
+    _wrp_cte_core_ext
+    core_bindings.cpp
+)
 
-message(STATUS "Python executable: ${PYTHON_EXECUTABLE}")
+# Link against the core client library
+target_link_libraries(_wrp_cte_core_ext PRIVATE wrp_cte_core_client)
+
+# Include directories for headers
+target_include_directories(_wrp_cte_core_ext PRIVATE 
+    ${CMAKE_SOURCE_DIR}/core/include
+    ${CMAKE_SOURCE_DIR}/external/nanobind/include
+)
+
+# Ensure C++17 standard
+target_compile_features(_wrp_cte_core_ext PRIVATE cxx_std_17)
+
+# Install the module
+nanobind_add_stub(
+    _wrp_cte_core_ext_stub
+    MODULE _wrp_cte_core_ext
+    OUTPUT core_stub.pyi
+    PYTHON_PATH $<TARGET_FILE_DIR:_wrp_cte_core_ext>
+    DEPENDS _wrp_cte_core_ext
+)
+
+# Add Python bindings test
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    include(CTest)
+    if(BUILD_TESTING)
+        add_test(
+            NAME python_bindings_test
+            COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
+            WORKING_DIRECTORY $<TARGET_FILE_DIR:_wrp_cte_core_ext>
+        )
+        
+        # Set environment for the test to find the module
+        set_tests_properties(python_bindings_test PROPERTIES
+            ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:_wrp_cte_core_ext>"
+        )
+        
+        # Ensure the test depends on the built module
+        set_tests_properties(python_bindings_test PROPERTIES
+            DEPENDS _wrp_cte_core_ext
+        )
+    endif()
+endif()

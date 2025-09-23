@@ -113,8 +113,8 @@ static herr_t H5FD__hermes_write(H5FD_t *_file, H5FD_mem_t type, hid_t fapl_id,
 
 static const H5FD_class_t H5FD_hermes_g = {
     H5FD_CLASS_VERSION,   /* struct version       */
-    H5FD_WRP_CTE_VALUE,    /* value                */
-    H5FD_WRP_CTE_NAME,     /* name                 */
+    H5FD_WRP_CTE_VALUE,   /* value                */
+    H5FD_WRP_CTE_NAME,    /* name                 */
     MAXADDR,              /* maxaddr              */
     H5F_CLOSE_STRONG,     /* fc_degree            */
     H5FD__hermes_term,    /* terminate            */
@@ -224,7 +224,7 @@ static herr_t H5FD__hermes_term(void) {
  */
 static H5FD_t *H5FD__hermes_open(const char *name, unsigned flags,
                                  hid_t fapl_id, haddr_t maxaddr) {
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
   H5FD_hermes_t *file = NULL; /* hermes VFD info          */
   int fd = -1;
   int o_flags = 0;
@@ -518,7 +518,7 @@ const void *H5PLget_plugin_info(void) { return &H5FD_hermes_g; }
 /** Initialize Hermes */
 /*static __attribute__((constructor(101))) void init_hermes_in_vfd(void) {
   std::cout << "IN VFD" << std::endl;
-  wrp_cte::core::WRP_CTE_INIT();
+  wrp_cte::core::WRP_CTE_CLIENT_INIT();
 }*/
 
-}  // extern C
+} // extern C

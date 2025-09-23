@@ -1,0 +1,15 @@
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies for external projects
+find_dependency(HermesShm CONFIG REQUIRED)
+find_dependency(cereal REQUIRED)
+find_dependency(Boost REQUIRED COMPONENTS fiber context)
+
+# Include the exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/wrp_cte-core.cmake")
+
+# Provide components
+check_required_components(wrp_cte_core)

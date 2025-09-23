@@ -120,6 +120,49 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "python-bindings-test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/wrapper/python/test_python_bindings.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/build/bin",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/build/bin",
+                "CHI_REPO_PATH": "${workspaceFolder}/build/bin",
+                "CHIMAERA_TEST_MODE": "1"
+            },
+            "preLaunchTask": "build-python-bindings"
+        },
+        {
+            "name": "python-bindings-ctest",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build",
+                "-R",
+                "python_bindings_test",
+                "-V"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "environment": [
+                {
+                    "name": "CHI_REPO_PATH",
+                    "value": "${workspaceFolder}/build/bin"
+                },
+                {
+                    "name": "CHIMAERA_TEST_MODE",
+                    "value": "1"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb"
         }
     ]
 }
