@@ -62,3 +62,47 @@ NEVER DO MOCK CODE OR STUB CODE UNLESS SPECIFICALLY STATED OTHERWISE. ALWAYS IMP
 - Use appropriate variable types to avoid sign comparison warnings (e.g., `size_t` for container sizes)
 - Mark unused variables with `(void)variable_name;` to suppress warnings when the variable is intentionally unused
 - Follow strict type safety to prevent implicit conversions that generate warnings
+
+## Cleanup Commands
+
+### Remove Temporary CMake Files
+To clean all temporary CMake files produced during build:
+```bash
+# Remove CMake cache and configuration files
+find . -name "CMakeCache.txt" -delete
+find . -name "cmake_install.cmake" -delete
+find . -name "CTestTestfile.cmake" -delete
+
+# Remove generated makefiles
+find . -name "Makefile" -delete
+find . -name "*.make" -delete
+
+# Remove CMake build directories and files
+find . -name "CMakeFiles" -type d -exec rm -rf {} + 2>/dev/null || true
+find . -name "_deps" -type d -exec rm -rf {} + 2>/dev/null || true
+
+# Remove CTest and CPack files
+find . -name "DartConfiguration.tcl" -delete
+find . -name "CPackConfig.cmake" -delete
+find . -name "CPackSourceConfig.cmake" -delete
+
+# Remove build directories
+rm -rf build/
+rm -rf out/
+rm -rf cmake-build-*/
+
+# Remove CMake temporary files
+find . -name "*.cmake.in" -not -path "./CMakePresets.json" -delete 2>/dev/null || true
+find . -name "CMakeDoxyfile.in" -delete 2>/dev/null || true
+find . -name "CMakeDoxygenDefaults.cmake" -delete 2>/dev/null || true
+
+# Remove any .ninja_* files if using Ninja generator
+find . -name ".ninja_*" -delete 2>/dev/null || true
+find . -name "build.ninja" -delete 2>/dev/null || true
+find . -name "rules.ninja" -delete 2>/dev/null || true
+
+# Remove Testing directory created by CTest
+find . -name "Testing" -type d -exec rm -rf {} + 2>/dev/null || true
+
+echo "CMake cleanup completed!"
+```
