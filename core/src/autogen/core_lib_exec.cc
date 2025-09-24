@@ -74,6 +74,14 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
       PollTelemetryLog(task_ptr.Cast<PollTelemetryLogTask>(), rctx);
       break;
     }
+    case Method::kGetBlobScore: {
+      GetBlobScore(task_ptr.Cast<GetBlobScoreTask>(), rctx);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      GetBlobSize(task_ptr.Cast<GetBlobSizeTask>(), rctx);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -138,6 +146,14 @@ void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
     }
     case Method::kPollTelemetryLog: {
       MonitorPollTelemetryLog(mode, task_ptr.Cast<PollTelemetryLogTask>(), rctx);
+      break;
+    }
+    case Method::kGetBlobScore: {
+      MonitorGetBlobScore(mode, task_ptr.Cast<GetBlobScoreTask>(), rctx);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      MonitorGetBlobSize(mode, task_ptr.Cast<GetBlobSizeTask>(), rctx);
       break;
     }
     default: {
@@ -206,6 +222,14 @@ void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
     }
     case Method::kPollTelemetryLog: {
       ipc_manager->DelTask(task_ptr.Cast<PollTelemetryLogTask>());
+      break;
+    }
+    case Method::kGetBlobScore: {
+      ipc_manager->DelTask(task_ptr.Cast<GetBlobScoreTask>());
+      break;
+    }
+    case Method::kGetBlobSize: {
+      ipc_manager->DelTask(task_ptr.Cast<GetBlobSizeTask>());
       break;
     }
     default: {
@@ -289,6 +313,16 @@ void Runtime::SaveIn(chi::u32 method, chi::TaskSaveInArchive& archive,
       typed_task->SerializeIn(archive);
       break;
     }
+    case Method::kGetBlobScore: {
+      auto typed_task = task_ptr.Cast<GetBlobScoreTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      auto typed_task = task_ptr.Cast<GetBlobSizeTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -366,6 +400,16 @@ void Runtime::LoadIn(chi::u32 method, chi::TaskLoadInArchive& archive,
     }
     case Method::kPollTelemetryLog: {
       auto typed_task = task_ptr.Cast<PollTelemetryLogTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetBlobScore: {
+      auto typed_task = task_ptr.Cast<GetBlobScoreTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      auto typed_task = task_ptr.Cast<GetBlobSizeTask>();
       typed_task->SerializeIn(archive);
       break;
     }
@@ -449,6 +493,16 @@ void Runtime::SaveOut(chi::u32 method, chi::TaskSaveOutArchive& archive,
       typed_task->SerializeOut(archive);
       break;
     }
+    case Method::kGetBlobScore: {
+      auto typed_task = task_ptr.Cast<GetBlobScoreTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      auto typed_task = task_ptr.Cast<GetBlobSizeTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
     default: {
       // Unknown method - do nothing
       break;
@@ -526,6 +580,16 @@ void Runtime::LoadOut(chi::u32 method, chi::TaskLoadOutArchive& archive,
     }
     case Method::kPollTelemetryLog: {
       auto typed_task = task_ptr.Cast<PollTelemetryLogTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetBlobScore: {
+      auto typed_task = task_ptr.Cast<GetBlobScoreTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      auto typed_task = task_ptr.Cast<GetBlobSizeTask>();
       typed_task->SerializeOut(archive);
       break;
     }
@@ -693,6 +757,28 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       if (!typed_task.IsNull()) {
         // Use HSHM strong copy method for actual copying
         typed_task->shm_strong_copy_main(*orig_task.Cast<PollTelemetryLogTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kGetBlobScore: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<GetBlobScoreTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<GetBlobScoreTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kGetBlobSize: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<GetBlobSizeTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<GetBlobSizeTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
       }

@@ -136,6 +136,16 @@ public:
                           const BlobId &blob_id,
                           float new_score);
   
+  // Blob score operations
+  float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
+                     const std::string &blob_name, 
+                     const BlobId &blob_id = BlobId::GetNull());
+  
+  // Blob size operations
+  chi::u64 GetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
+                       const std::string &blob_name, 
+                       const BlobId &blob_id = BlobId::GetNull());
+  
   // Telemetry
   std::vector<CteTelemetry> PollTelemetryLog(const hipc::MemContext &mctx,
                                              std::uint64_t minimum_logical_time);
@@ -143,11 +153,74 @@ public:
   // Async variants (all methods have Async versions)
   hipc::FullPtr<CreateTask> AsyncCreate(...);
   hipc::FullPtr<RegisterTargetTask> AsyncRegisterTarget(...);
+  hipc::FullPtr<GetBlobScoreTask> AsyncGetBlobScore(...);
+  hipc::FullPtr<GetBlobSizeTask> AsyncGetBlobSize(...);
   // ... etc
 };
 
 }  // namespace wrp_cte::core
 ```
+
+### Tag Wrapper Class
+
+The `wrp_cte::core::Tag` class provides a simplified, object-oriented interface for blob operations within a specific tag. This wrapper class eliminates the need to pass `TagId` and memory context parameters for each operation, making the API more convenient and less error-prone.
+
+#### Class Definition
+
+```cpp
+namespace wrp_cte::core {
+
+class Tag {
+private:
+  TagId tag_id_;
+  std::string tag_name_;
+
+public:
+  // Constructors
+  explicit Tag(const std::string &tag_name);  // Creates or gets existing tag
+  explicit Tag(const TagId &tag_id);          // Uses existing TagId directly
+  
+  // Blob storage operations
+  void PutBlob(const std::string &blob_name, const char *data, size_t data_size, size_t off = 0);
+  void PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_t data_size, 
+               size_t off = 0, float score = 1.0f);
+  
+  // Asynchronous blob storage
+  hipc::FullPtr<PutBlobTask> AsyncPutBlob(const std::string &blob_name, const hipc::Pointer &data, 
+                                          size_t data_size, size_t off = 0, float score = 1.0f);
+  
+  // Blob retrieval operations
+  void GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_size, size_t off = 0);
+  
+  // Blob metadata operations
+  float GetBlobScore(const std::string &blob_name);
+  chi::u64 GetBlobSize(const std::string &blob_name);
+  
+  // Tag accessor
+  const TagId& GetTagId() const { return tag_id_; }
+};
+
+}  // namespace wrp_cte::core
+```
+
+#### Key Features
+
+- **Automatic Tag Management**: Constructor with tag name automatically creates or retrieves existing tags
+- **Simplified API**: No need to pass TagId or MemContext for each operation
+- **Memory Management**: Raw data variant automatically handles shared memory allocation and cleanup
+- **Exception Safety**: Operations throw exceptions on failure for clear error handling
+- **Score Support**: Blob scoring for intelligent data placement across storage targets
+
+#### Memory Management Guidelines
+
+**For Synchronous Operations:**
+- Raw data variant (`const char*`) automatically manages shared memory lifecycle
+- Shared memory variant requires caller to manage `hipc::Pointer` lifecycle
+
+**For Asynchronous Operations:**
+- Only shared memory variant available to avoid memory lifecycle issues
+- Caller must keep `hipc::FullPtr<void>` alive until async task completes
+- See usage examples below for proper async memory management patterns
 
 ### Data Structures
 
@@ -218,6 +291,8 @@ struct BlobInfo {
 };
 ```
 
+**Note**: Individual blob sizes can be queried efficiently using `Client::GetBlobSize()` or `Tag::GetBlobSize()` without needing to retrieve full BlobInfo.
+
 #### BlobBlock
 
 Individual block within a blob:
@@ -252,7 +327,9 @@ enum class CteOp : chi::u32 {
   kDelBlob = 2,
   kGetOrCreateTag = 3,
   kDelTag = 4,
-  kGetTagSize = 5
+  kGetTagSize = 5,
+  kGetBlobScore = 6,
+  kGetBlobSize = 7
 };
 ```
 
@@ -342,6 +419,8 @@ for (const auto& target : targets) {
 
 ### Working with Tags and Blobs
 
+#### Using the Core Client Directly
+
 ```cpp
 // Create or get a tag for grouping related blobs
 auto tag_info = cte_client.GetOrCreateTag(mctx, "dataset_v1");
@@ -351,30 +430,36 @@ TagId tag_id = tag_info.tag_id_;
 std::vector<char> data(1024 * 1024);  // 1MB of data
 std::fill(data.begin(), data.end(), 'A');
 
-// Store blob with automatic ID generation
-hipc::Pointer data_ptr = hipc::Pointer::GetNull();  // Convert data to shared memory
-BlobId blob_id = BlobId::GetNull();  // Will be auto-generated
+// Allocate shared memory for the data
+hipc::FullPtr<void> shm_buffer = CHI_IPC->AllocateBuffer<void>(data.size());
+memcpy(shm_buffer.ptr_, data.data(), data.size());
 
 bool success = cte_client.PutBlob(
     mctx,
     tag_id,
     "blob_001",           // Blob name
-    blob_id,              // Auto-generate ID
+    BlobId::GetNull(),    // Auto-generate ID
     0,                    // Offset
     data.size(),          // Size
-    data_ptr,             // Data pointer
+    shm_buffer.shm_,      // Shared memory pointer
     0.8f,                 // Score (0-1, higher = hotter data)
     0                     // Flags
 );
 
 if (success) {
     std::cout << "Blob stored successfully\n";
+    
+    // Get blob size
+    chi::u64 blob_size = cte_client.GetBlobSize(mctx, tag_id, "blob_001");
+    std::cout << "Stored blob size: " << blob_size << " bytes\n";
+    
+    // Get blob score
+    float blob_score = cte_client.GetBlobScore(mctx, tag_id, "blob_001");
+    std::cout << "Blob score: " << blob_score << "\n";
 }
 
 // Retrieve the blob
-std::vector<char> retrieved_data(1024 * 1024);
-hipc::Pointer retrieve_ptr = hipc::Pointer::GetNull();
-
+auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(data.size());
 success = cte_client.GetBlob(
     mctx,
     tag_id,
@@ -383,7 +468,7 @@ success = cte_client.GetBlob(
     0,                    // Offset
     data.size(),          // Size to read
     0,                    // Flags
-    retrieve_ptr          // Buffer for data
+    retrieve_buffer.shm_  // Buffer for data
 );
 
 // Get total size of all blobs in tag
@@ -391,10 +476,225 @@ size_t tag_size = cte_client.GetTagSize(mctx, tag_id);
 std::cout << "Tag total size: " << tag_size << " bytes\n";
 
 // Delete a specific blob
-success = cte_client.DelBlob(mctx, tag_id, "blob_001", blob_id);
+success = cte_client.DelBlob(mctx, tag_id, "blob_001", BlobId::GetNull());
 
 // Delete entire tag (removes all blobs)
 success = cte_client.DelTag(mctx, tag_id);
+```
+
+#### Using the Tag Wrapper (Recommended for Convenience)
+
+```cpp
+// Create tag wrapper - automatically creates or gets existing tag
+wrp_cte::core::Tag dataset_tag("dataset_v1");
+
+// Prepare data for storage
+std::vector<char> data(1024 * 1024);  // 1MB of data
+std::fill(data.begin(), data.end(), 'A');
+
+try {
+    // Store blob - automatically handles shared memory management
+    dataset_tag.PutBlob("blob_001", data.data(), data.size());
+    std::cout << "Blob stored successfully\n";
+    
+    // Get blob size
+    chi::u64 blob_size = dataset_tag.GetBlobSize("blob_001");
+    std::cout << "Stored blob size: " << blob_size << " bytes\n";
+    
+    // Get blob score  
+    float blob_score = dataset_tag.GetBlobScore("blob_001");
+    std::cout << "Blob score: " << blob_score << "\n";
+    
+    // Retrieve the blob
+    auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    dataset_tag.GetBlob("blob_001", retrieve_buffer.shm_, blob_size);
+    
+    std::cout << "Blob retrieved successfully\n";
+    
+} catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << "\n";
+}
+
+// For tag-level operations, you still need the core client:
+// Get total size of all blobs in tag
+size_t tag_size = cte_client.GetTagSize(mctx, dataset_tag.GetTagId());
+std::cout << "Tag total size: " << tag_size << " bytes\n";
+
+// Delete entire tag (removes all blobs)
+bool success = cte_client.DelTag(mctx, dataset_tag.GetTagId());
+```
+
+### Tag Wrapper Usage Examples
+
+The Tag wrapper class provides a more convenient interface for blob operations within a specific tag. Here are comprehensive examples showing different usage patterns:
+
+#### Basic Tag Wrapper Operations
+
+```cpp
+#include <chimaera/core/core_client.h>
+#include <iostream>
+#include <vector>
+
+// Initialize CTE system (same as before)
+// ... initialization code ...
+
+// Create a tag wrapper - automatically creates or gets existing tag
+wrp_cte::core::Tag dataset_tag("dataset_v1");
+
+// Store data using the simple raw data interface
+std::vector<char> data(1024 * 1024);  // 1MB of data
+std::fill(data.begin(), data.end(), 'X');
+
+try {
+    // Simple PutBlob - automatically manages shared memory
+    dataset_tag.PutBlob("sample_blob", data.data(), data.size());
+    std::cout << "Blob stored successfully\n";
+    
+    // Get blob size without retrieving data
+    chi::u64 blob_size = dataset_tag.GetBlobSize("sample_blob");
+    std::cout << "Blob size: " << blob_size << " bytes\n";
+    
+    // Get blob score (data temperature)
+    float blob_score = dataset_tag.GetBlobScore("sample_blob");
+    std::cout << "Blob score: " << blob_score << "\n";
+    
+} catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << "\n";
+}
+```
+
+#### Advanced Tag Wrapper with Scoring
+
+```cpp
+// Create tag wrapper for time-series data
+wrp_cte::core::Tag timeseries_tag("timeseries_2024");
+
+// Store multiple data chunks with different scores (data temperatures)
+std::vector<std::vector<char>> chunks;
+std::vector<float> scores = {0.9f, 0.7f, 0.5f, 0.2f};  // Hot to cold data
+std::vector<std::string> chunk_names = {"latest", "recent", "old", "archived"};
+
+for (size_t i = 0; i < 4; ++i) {
+    chunks.emplace_back(1024 * 512);  // 512KB chunks
+    std::fill(chunks[i].begin(), chunks[i].end(), 'A' + i);
+    
+    try {
+        // For custom scoring, use shared memory version:
+        auto shm_ptr = CHI_IPC->AllocateBuffer<void>(chunks[i].size());
+        memcpy(shm_ptr.ptr_, chunks[i].data(), chunks[i].size());
+        timeseries_tag.PutBlob(chunk_names[i], shm_ptr.shm_, chunks[i].size(), 0, scores[i]);
+        
+        std::cout << "Stored chunk '" << chunk_names[i] << "' with score " << scores[i] << "\n";
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to store chunk " << chunk_names[i] << ": " << e.what() << "\n";
+    }
+}
+```
+
+#### Blob Retrieval with Tag Wrapper
+
+```cpp
+// Create tag wrapper from existing TagId
+TagId existing_tag_id = /* ... get from somewhere ... */;
+wrp_cte::core::Tag existing_tag(existing_tag_id);
+
+try {
+    // First, check if blob exists and get its size
+    chi::u64 blob_size = existing_tag.GetBlobSize("target_blob");
+    if (blob_size == 0) {
+        std::cout << "Blob 'target_blob' not found or empty\n";
+        return;
+    }
+    
+    std::cout << "Blob size: " << blob_size << " bytes\n";
+    
+    // Allocate shared memory buffer for retrieval
+    auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    if (retrieve_buffer.IsNull()) {
+        throw std::runtime_error("Failed to allocate retrieval buffer");
+    }
+    
+    // Retrieve the blob
+    existing_tag.GetBlob("target_blob", retrieve_buffer.shm_, blob_size);
+    
+    // Process the retrieved data
+    ProcessBlobData(retrieve_buffer.ptr_, blob_size);
+    
+    std::cout << "Successfully retrieved and processed blob\n";
+    
+} catch (const std::exception& e) {
+    std::cerr << "Blob retrieval error: " << e.what() << "\n";
+}
+```
+
+#### Asynchronous Operations with Tag Wrapper
+
+```cpp
+wrp_cte::core::Tag async_tag("async_operations");
+
+// Prepare data for async operations
+std::vector<std::vector<char>> async_data;
+std::vector<hipc::FullPtr<void>> shm_buffers;
+std::vector<hipc::FullPtr<PutBlobTask>> async_tasks;
+
+for (int i = 0; i < 5; ++i) {
+    // Prepare data
+    async_data.emplace_back(1024 * 256);  // 256KB each
+    std::fill(async_data[i].begin(), async_data[i].end(), 'Z' - i);
+    
+    // Allocate shared memory (must keep alive until async operation completes)
+    auto shm_buffer = CHI_IPC->AllocateBuffer<void>(async_data[i].size());
+    if (shm_buffer.IsNull()) {
+        std::cerr << "Failed to allocate shared memory for async operation " << i << "\n";
+        continue;
+    }
+    
+    // Copy data to shared memory
+    memcpy(shm_buffer.ptr_, async_data[i].data(), async_data[i].size());
+    
+    try {
+        // Start async operation (returns immediately)
+        auto task = async_tag.AsyncPutBlob(
+            "async_blob_" + std::to_string(i),
+            shm_buffer.shm_,
+            async_data[i].size(),
+            0,    // offset
+            0.6f  // score
+        );
+        
+        // Store references to keep alive
+        shm_buffers.push_back(std::move(shm_buffer));
+        async_tasks.push_back(task);
+        
+        std::cout << "Started async put for blob " << i << "\n";
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to start async put " << i << ": " << e.what() << "\n";
+    }
+}
+
+// Wait for all async operations to complete
+std::cout << "Waiting for async operations to complete...\n";
+for (size_t i = 0; i < async_tasks.size(); ++i) {
+    try {
+        async_tasks[i]->Wait();
+        if (async_tasks[i]->result_code_ == 0) {
+            std::cout << "Async operation " << i << " completed successfully\n";
+        } else {
+            std::cout << "Async operation " << i << " failed with code " 
+                      << async_tasks[i]->result_code_ << "\n";
+        }
+        
+        // Clean up task
+        CHI_IPC->DelTask(async_tasks[i]);
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error waiting for async operation " << i << ": " << e.what() << "\n";
+    }
+}
+
+// Note: shm_buffers will be automatically cleaned up when they go out of scope
 ```
 
 ### Asynchronous Operations
@@ -451,6 +751,11 @@ for (const auto& entry : telemetry) {
         case CteOp::kPutBlob: std::cout << "PUT"; break;
         case CteOp::kGetBlob: std::cout << "GET"; break;
         case CteOp::kDelBlob: std::cout << "DEL"; break;
+        case CteOp::kGetBlobScore: std::cout << "GET_SCORE"; break;
+        case CteOp::kGetBlobSize: std::cout << "GET_SIZE"; break;
+        case CteOp::kGetOrCreateTag: std::cout << "GET_TAG"; break;
+        case CteOp::kDelTag: std::cout << "DEL_TAG"; break;
+        case CteOp::kGetTagSize: std::cout << "TAG_SIZE"; break;
         default: std::cout << "OTHER"; break;
     }
     std::cout << " Size: " << entry.size_ 
@@ -664,6 +969,146 @@ print(cte.CteOp.kDelBlob)    # Delete blob operation
 ```
 
 ## Advanced Topics
+
+### Best Practices
+
+#### Choosing Between Tag Wrapper and Direct Client API
+
+**Use the Tag Wrapper (`wrp_cte::core::Tag`) when:**
+- Working primarily with blobs within a single tag
+- You want simplified memory management for synchronous operations
+- Exception-based error handling fits your application design
+- Code readability and convenience are prioritized
+
+**Use the Direct Client API (`wrp_cte::core::Client`) when:**
+- Working with multiple tags simultaneously
+- You need precise control over memory allocation and lifecycle
+- Return code-based error handling is preferred
+- Maximum performance is critical (avoids wrapper overhead)
+- Using tag-level operations (GetTagSize, DelTag)
+
+#### Memory Management Best Practices
+
+**For Raw Data Operations:**
+```cpp
+// Tag wrapper automatically manages shared memory for sync operations
+wrp_cte::core::Tag tag("my_data");
+std::vector<char> data = LoadData();
+tag.PutBlob("item", data.data(), data.size());  // Safe - automatic cleanup
+```
+
+**For Shared Memory Operations:**
+```cpp
+// Manual shared memory management - more control
+auto shm_buffer = CHI_IPC->AllocateBuffer<void>(data_size);
+memcpy(shm_buffer.ptr_, raw_data, data_size);
+tag.PutBlob("item", shm_buffer.shm_, data_size, 0, score);
+// shm_buffer automatically cleaned up when it goes out of scope
+```
+
+**For Asynchronous Operations:**
+```cpp
+// Always keep shared memory alive until async task completes
+std::vector<hipc::FullPtr<void>> buffers;  // Keep alive
+std::vector<hipc::FullPtr<PutBlobTask>> tasks;
+
+for (auto& data_chunk : data_chunks) {
+    auto buffer = CHI_IPC->AllocateBuffer<void>(data_chunk.size());
+    memcpy(buffer.ptr_, data_chunk.data(), data_chunk.size());
+    
+    auto task = tag.AsyncPutBlob("chunk", buffer.shm_, data_chunk.size());
+    
+    buffers.push_back(std::move(buffer));  // Keep alive!
+    tasks.push_back(task);
+}
+
+// Wait for completion and cleanup
+for (auto& task : tasks) {
+    task->Wait();
+    CHI_IPC->DelTask(task);
+}
+// buffers automatically cleaned up here
+```
+
+#### Performance Optimization
+
+**Blob Scoring Guidelines:**
+- Use scores 0.8-1.0 for frequently accessed "hot" data
+- Use scores 0.4-0.7 for occasionally accessed "warm" data  
+- Use scores 0.0-0.3 for archival "cold" data
+- CTE uses scores for intelligent placement across storage tiers
+
+**Batch Operations:**
+```cpp
+// Efficient: Group related operations
+wrp_cte::core::Tag batch_tag("batch_job");
+for (const auto& item : batch_items) {
+    batch_tag.PutBlob(item.name, item.data, item.size);
+}
+
+// Less efficient: Multiple tags with few operations each
+// Creates overhead for tag lookup and context switching
+```
+
+**Size Queries:**
+```cpp
+// Efficient: Check size before allocating retrieval buffer
+chi::u64 blob_size = tag.GetBlobSize("large_blob");
+if (blob_size > 0) {
+    auto buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    tag.GetBlob("large_blob", buffer.shm_, blob_size);
+}
+
+// Less efficient: Allocate maximum possible size
+// auto buffer = CHI_IPC->AllocateBuffer<void>(MAX_SIZE);  // Wasteful
+```
+
+#### Error Handling Patterns
+
+**Tag Wrapper (Exception-based):**
+```cpp
+try {
+    wrp_cte::core::Tag tag("dataset");
+    tag.PutBlob("data", buffer, size);
+    
+    chi::u64 stored_size = tag.GetBlobSize("data");
+    if (stored_size != size) {
+        throw std::runtime_error("Size mismatch after storage");
+    }
+    
+} catch (const std::exception& e) {
+    std::cerr << "Storage operation failed: " << e.what() << "\n";
+    // Automatic cleanup via RAII
+}
+```
+
+**Direct Client (Return Code-based):**
+```cpp
+wrp_cte::core::Client client;
+hipc::MemContext mctx;
+
+auto tag_info = client.GetOrCreateTag(mctx, "dataset");
+bool success = client.PutBlob(mctx, tag_info.tag_id_, "data", 
+                              BlobId::GetNull(), 0, size, buffer, 0.5f, 0);
+
+if (!success) {
+    std::cerr << "PutBlob failed\n";
+    return false;
+}
+
+chi::u64 stored_size = client.GetBlobSize(mctx, tag_info.tag_id_, "data");
+if (stored_size != size) {
+    std::cerr << "Size mismatch: expected " << size << ", got " << stored_size << "\n";
+    return false;
+}
+```
+
+#### Thread Safety Considerations
+
+- Both Tag wrapper and Client are thread-safe
+- Multiple threads can safely share the same Tag or Client instance
+- Shared memory buffers (`hipc::FullPtr`) should not be shared between threads
+- Each thread should use its own `hipc::MemContext` for optimal performance
 
 ### Multi-Node Deployment
 

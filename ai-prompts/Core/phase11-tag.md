@@ -36,4 +36,4 @@ public:
 };
 ```
 
-
+We need to implement a new GetBlobSCore api in the runtime. It needs to be added to the chimaera_mod.yaml file. It also needs to be added to all other implemention files. Check @docs/chimaera/MODULE_DEVELOPMENT_GUIDE.md to see how to add new methods. Use /home/llogan/.scspkg/packages/iowarp-runtime/bin/chi_refresh_repo for chi_refresh_repo.

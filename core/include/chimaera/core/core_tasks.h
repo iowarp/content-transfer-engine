@@ -733,6 +733,90 @@ struct PollTelemetryLogTask : public chi::Task {
   }
 };
 
+/**
+ * GetBlobScore task - Get the score of a blob
+ */
+struct GetBlobScoreTask : public chi::Task {
+  IN TagId tag_id_;                  // Tag ID for blob lookup
+  IN chi::string blob_name_;         // Blob name (required)
+  IN BlobId blob_id_;                // Blob ID (optional)
+  OUT float score_;                  // Blob score (0-1)
+  OUT chi::u32 result_code_;         // Output result (0 = success)
+
+  // SHM constructor
+  explicit GetBlobScoreTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
+      : chi::Task(alloc), 
+        tag_id_(TagId::GetNull()),
+        blob_name_(alloc),
+        blob_id_(BlobId::GetNull()),
+        score_(0.0f),
+        result_code_(0) {}
+
+  // Emplace constructor
+  explicit GetBlobScoreTask(
+      const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+      const chi::TaskNode &task_node,
+      const chi::PoolId &pool_id,
+      const chi::PoolQuery &pool_query,
+      const TagId& tag_id,
+      const std::string &blob_name,
+      const BlobId& blob_id = BlobId::GetNull())
+      : chi::Task(alloc, task_node, pool_id, pool_query, Method::kGetBlobScore),
+        tag_id_(tag_id),
+        blob_name_(alloc, blob_name),
+        blob_id_(blob_id),
+        score_(0.0f),
+        result_code_(0) {
+    task_node_ = task_node;
+    pool_id_ = pool_id;
+    method_ = Method::kGetBlobScore;
+    task_flags_.Clear();
+    pool_query_ = pool_query;
+  }
+};
+
+/**
+ * GetBlobSize task - Get the size of a blob
+ */
+struct GetBlobSizeTask : public chi::Task {
+  IN TagId tag_id_;                  // Tag ID for blob lookup
+  IN chi::string blob_name_;         // Blob name (required)
+  IN BlobId blob_id_;                // Blob ID (optional)
+  OUT chi::u64 size_;                // Blob size in bytes
+  OUT chi::u32 result_code_;         // Output result (0 = success)
+
+  // SHM constructor
+  explicit GetBlobSizeTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
+      : chi::Task(alloc), 
+        tag_id_(TagId::GetNull()),
+        blob_name_(alloc),
+        blob_id_(BlobId::GetNull()),
+        size_(0),
+        result_code_(0) {}
+
+  // Emplace constructor
+  explicit GetBlobSizeTask(
+      const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+      const chi::TaskNode &task_node,
+      const chi::PoolId &pool_id,
+      const chi::PoolQuery &pool_query,
+      const TagId& tag_id,
+      const std::string &blob_name,
+      const BlobId& blob_id = BlobId::GetNull())
+      : chi::Task(alloc, task_node, pool_id, pool_query, Method::kGetBlobSize),
+        tag_id_(tag_id),
+        blob_name_(alloc, blob_name),
+        blob_id_(blob_id),
+        size_(0),
+        result_code_(0) {
+    task_node_ = task_node;
+    pool_id_ = pool_id;
+    method_ = Method::kGetBlobSize;
+    task_flags_.Clear();
+    pool_query_ = pool_query;
+  }
+};
+
 }  // namespace wrp_cte::core
 
 #endif  // WRPCTE_CORE_TASKS_H_

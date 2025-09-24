@@ -95,13 +95,9 @@ public:
       // Initialize CTE core client and get or create tag
       // Use singleton client that should be configured globally
 
-      // Get or create the tag for this file
-      auto *cte_client = WRP_CTE_CLIENT;
-      wrp_cte::core::TagInfo tag_info = cte_client->GetOrCreateTag(
-          hipc::MemContext(), stat.path_,
-          wrp_cte::core::TagId::GetNull() // Let CTE assign the ID
-      );
-      stat.tag_id_ = tag_info.tag_id_;
+      // Create Tag object for this file - Tag constructor handles GetOrCreateTag
+      wrp_cte::core::Tag file_tag(stat.path_);
+      stat.tag_id_ = file_tag.GetTagId();
 
       if (stat.hflags_.Any(WRP_CTE_FS_TRUNC)) {
         // The file was opened with TRUNCATION
@@ -190,12 +186,14 @@ public:
       off = stat.file_size_;
     }
 
-    // Use page-based CTE PutBlob operations
+    // Use page-based CTE PutBlob operations with Tag API
     {
       size_t bytes_written = 0;
       size_t current_offset = off;
       const char *data_ptr = static_cast<const char *>(ptr);
-      auto *cte_client = WRP_CTE_CLIENT;
+      
+      // Create Tag object from stored TagId
+      wrp_cte::core::Tag file_tag(stat.tag_id_);
 
       while (bytes_written < total_size) {
         // Calculate current page index and offset within page
@@ -224,19 +222,12 @@ public:
         // Generate blob name using stringified page index
         std::string blob_name = std::to_string(page_index);
 
-        // Use CTE PutBlob for this page
-        bool success = cte_client->PutBlob(
-            hipc::MemContext(), stat.tag_id_, blob_name,
-            wrp_cte::core::BlobId::GetNull(), // Let CTE assign blob ID
-            page_offset,                      // offset within the page
-            bytes_to_write,                   // size of this write
-            page_blob_data.shm_, // Convert FullPtr to Pointer using .shm_
-            0.5f,                // default score
-            0                    // flags
-        );
-
-        if (!success) {
-          HILOG(kError, "CTE PutBlob failed for page {}", page_index);
+        // Use Tag API PutBlob for this page (SHM version for better performance)
+        try {
+          file_tag.PutBlob(blob_name, page_blob_data.shm_, bytes_to_write, 
+                          page_offset, 0.5f);
+        } catch (const std::exception &e) {
+          HILOG(kError, "Tag PutBlob failed for page {}: {}", page_index, e.what());
           io_status.success_ = false;
           return bytes_written;
         }
@@ -320,11 +311,13 @@ public:
             "Async read operations not yet fully supported, using sync read");
     }
 
-    // Use page-based CTE GetBlob operations
+    // Use page-based CTE GetBlob operations with Tag API
     size_t bytes_read = 0;
     size_t current_offset = off;
     char *data_ptr = static_cast<char *>(ptr);
-    auto *cte_client = WRP_CTE_CLIENT;
+    
+    // Create Tag object from stored TagId
+    wrp_cte::core::Tag file_tag(stat.tag_id_);
 
     while (bytes_read < total_size) {
       // Calculate current page index and offset within page
@@ -349,18 +342,11 @@ public:
       // Generate blob name using stringified page index
       std::string blob_name = std::to_string(page_index);
 
-      // Use CTE GetBlob for this page
-      bool success = cte_client->GetBlob(
-          hipc::MemContext(), stat.tag_id_, blob_name,
-          wrp_cte::core::BlobId::GetNull(), // Let CTE find by name
-          page_offset,                      // offset within the page
-          bytes_to_read,                    // size of this read
-          0,                                // flags
-          page_read_buffer.shm_ // Convert FullPtr to Pointer using .shm_
-      );
-
-      if (!success) {
-        HILOG(kError, "CTE GetBlob failed for page {}", page_index);
+      // Use Tag API GetBlob for this page
+      try {
+        file_tag.GetBlob(blob_name, page_read_buffer.shm_, bytes_to_read, page_offset);
+      } catch (const std::exception &e) {
+        HILOG(kError, "Tag GetBlob failed for page {}: {}", page_index, e.what());
         io_status.success_ = false;
         return bytes_read;
       }
@@ -559,6 +545,7 @@ public:
     // CTE tag cleanup - delete the tag associated with this file using
     // canonical path as tag name
     std::string canon_path = stdfs::absolute(pathname).string();
+    // Note: Tag API doesn't provide delete functionality yet, so we use core client directly
     auto *cte_client = WRP_CTE_CLIENT;
     bool tag_deleted = cte_client->DelTag(hipc::MemContext(), canon_path);
     if (tag_deleted) {

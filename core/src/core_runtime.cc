@@ -1711,6 +1711,144 @@ void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
   (void)task;
 }
 
+void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
+                          chi::RunContext &ctx) {
+  try {
+    // Extract input parameters
+    TagId tag_id = task->tag_id_;
+    std::string blob_name = task->blob_name_.str();
+    BlobId blob_id = task->blob_id_;
+
+    // Validate that either blob_id or blob_name is provided
+    bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
+    bool blob_name_provided = !blob_name.empty();
+
+    if (!blob_id_provided && !blob_name_provided) {
+      task->result_code_ = 1;
+      return;
+    }
+
+    // Step 1: Check if blob exists
+    BlobId found_blob_id;
+    BlobInfo *blob_info_ptr =
+        CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
+
+    if (blob_info_ptr == nullptr) {
+      task->result_code_ = 1; // Blob not found
+      return;
+    }
+
+    // Step 2: Return the blob score
+    task->score_ = blob_info_ptr->score_;
+
+    // Step 3: Update timestamps and log telemetry
+    auto now = std::chrono::steady_clock::now();
+    blob_info_ptr->last_read_ = now;
+
+    // No specific telemetry enum for GetBlobScore, using GetBlob as closest match
+    LogTelemetry(CteOp::kGetBlob, 0, 0, found_blob_id, tag_id,
+                 blob_info_ptr->last_modified_, now);
+
+    // Success
+    task->result_code_ = 0;
+    HILOG(kInfo, "GetBlobScore successful: blob_id={},{}, name={}, score={}",
+          found_blob_id.major_, found_blob_id.minor_, blob_name, 
+          blob_info_ptr->score_);
+
+  } catch (const std::exception &e) {
+    task->result_code_ = 1;
+  }
+}
+
+void Runtime::MonitorGetBlobScore(chi::MonitorModeId mode,
+                                  hipc::FullPtr<GetBlobScoreTask> task,
+                                  chi::RunContext &ctx) {
+  switch (mode) {
+  case chi::MonitorModeId::kLocalSchedule: {
+    // Route to blob operations queue (round-robin on lanes)
+    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
+    if (!lane_ptr.IsNull()) {
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
+    }
+    break;
+  }
+  case chi::MonitorModeId::kGlobalSchedule:
+    break;
+  case chi::MonitorModeId::kEstLoad:
+    // Estimate for blob score lookup
+    ctx.estimated_completion_time_us = 10.0; // 0.01ms for lookup
+    break;
+  }
+}
+
+void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
+                         chi::RunContext &ctx) {
+  try {
+    // Extract input parameters
+    TagId tag_id = task->tag_id_;
+    std::string blob_name = task->blob_name_.str();
+    BlobId blob_id = task->blob_id_;
+    
+    // Validate that either blob_id or blob_name is provided
+    bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
+    bool blob_name_provided = !blob_name.empty();
+    if (!blob_id_provided && !blob_name_provided) {
+      task->result_code_ = 1;
+      return;
+    }
+    
+    // Step 1: Check if blob exists
+    BlobId found_blob_id;
+    BlobInfo *blob_info_ptr =
+        CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
+    if (blob_info_ptr == nullptr) {
+      task->result_code_ = 1; // Blob not found
+      return;
+    }
+    
+    // Step 2: Calculate and return the blob size
+    task->size_ = blob_info_ptr->GetTotalSize();
+    
+    // Step 3: Update timestamps and log telemetry
+    auto now = std::chrono::steady_clock::now();
+    blob_info_ptr->last_read_ = now;
+    
+    // No specific telemetry enum for GetBlobSize, using GetBlob as closest match
+    LogTelemetry(CteOp::kGetBlob, 0, 0, found_blob_id, tag_id,
+                 blob_info_ptr->last_modified_, now);
+    
+    // Success
+    task->result_code_ = 0;
+    HILOG(kInfo, "GetBlobSize successful: blob_id={},{}, name={}, size={}",
+          found_blob_id.major_, found_blob_id.minor_, blob_name, 
+          task->size_);
+    
+  } catch (const std::exception &e) {
+    task->result_code_ = 1;
+  }
+}
+
+void Runtime::MonitorGetBlobSize(chi::MonitorModeId mode,
+                                hipc::FullPtr<GetBlobSizeTask> task,
+                                chi::RunContext &ctx) {
+  switch (mode) {
+  case chi::MonitorModeId::kLocalSchedule: {
+    // Route to blob operations queue (round-robin on lanes)
+    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
+    if (!lane_ptr.IsNull()) {
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
+    }
+    break;
+  }
+  case chi::MonitorModeId::kGlobalSchedule:
+    break;
+  case chi::MonitorModeId::kEstLoad:
+    // Estimate for blob size lookup (similar to score lookup)
+    ctx.estimated_completion_time_us = 10.0; // 0.01ms for lookup
+    break;
+  }
+}
+
 } // namespace wrp_cte::core
 
 // Define ChiMod entry points using CHI_TASK_CC macro

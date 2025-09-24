@@ -21,6 +21,7 @@ add_chimod_both(
   CLIENT_SOURCES 
     src/core_client.cc
     src/content_transfer_engine.cc
+    src/tag.cc
 )
 
 # Link yaml-cpp to the runtime library

@@ -446,6 +446,68 @@ public:
     ipc_manager->Enqueue(task);
     return task;
   }
+
+  /**
+   * Synchronous get blob score - waits for completion
+   */
+  float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
+                     const std::string &blob_name, 
+                     const BlobId &blob_id = BlobId::GetNull()) {
+    auto task = AsyncGetBlobScore(mctx, tag_id, blob_name, blob_id);
+    task->Wait();
+    float result = (task->result_code_ == 0) ? task->score_ : 0.0f;
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous get blob score - returns immediately
+   */
+  hipc::FullPtr<GetBlobScoreTask>
+  AsyncGetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
+                    const std::string &blob_name, 
+                    const BlobId &blob_id = BlobId::GetNull()) {
+    (void)mctx; // Suppress unused parameter warning
+    auto *ipc_manager = CHI_IPC;
+
+    auto task = ipc_manager->NewTask<GetBlobScoreTask>(
+        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        blob_name, blob_id);
+
+    ipc_manager->Enqueue(task);
+    return task;
+  }
+
+  /**
+   * Synchronous get blob size - waits for completion
+   */
+  chi::u64 GetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
+                       const std::string &blob_name, 
+                       const BlobId &blob_id = BlobId::GetNull()) {
+    auto task = AsyncGetBlobSize(mctx, tag_id, blob_name, blob_id);
+    task->Wait();
+    chi::u64 result = (task->result_code_ == 0) ? task->size_ : 0;
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous get blob size - returns immediately
+   */
+  hipc::FullPtr<GetBlobSizeTask>
+  AsyncGetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
+                   const std::string &blob_name, 
+                   const BlobId &blob_id = BlobId::GetNull()) {
+    (void)mctx; // Suppress unused parameter warning
+    auto *ipc_manager = CHI_IPC;
+
+    auto task = ipc_manager->NewTask<GetBlobSizeTask>(
+        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        blob_name, blob_id);
+
+    ipc_manager->Enqueue(task);
+    return task;
+  }
 };
 
 // Forward declaration for Config
@@ -461,6 +523,92 @@ HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::Config, g_cte_config);
  * @return true if initialization succeeded, false otherwise
  */
 bool WRP_CTE_CLIENT_INIT(const std::string &config_path = "");
+
+/**
+ * Tag wrapper class - provides convenient API for tag operations
+ */
+class Tag {
+private:
+  TagId tag_id_;
+  std::string tag_name_;
+
+public:
+  /**
+   * Constructor - Call the WRP_CTE client GetOrCreateTag function
+   * @param tag_name Tag name to get or create
+   */
+  explicit Tag(const std::string &tag_name);
+
+  /**
+   * Constructor - Does not call WRP_CTE client function, just sets the TagId variable
+   * @param tag_id Tag ID to use directly
+   */
+  explicit Tag(const TagId &tag_id);
+
+  /**
+   * PutBlob - Allocates a SHM pointer and then calls PutBlob (SHM)
+   * @param blob_name Name of the blob
+   * @param data Raw data pointer
+   * @param data_size Size of data
+   * @param off Offset within blob (default 0)
+   */
+  void PutBlob(const std::string &blob_name, const char *data, size_t data_size, size_t off = 0);
+
+  /**
+   * PutBlob (SHM) - Direct shared memory version
+   * @param blob_name Name of the blob
+   * @param data Shared memory pointer to data
+   * @param data_size Size of data
+   * @param off Offset within blob (default 0)
+   * @param score Blob score for placement decisions (default 1.0)
+   */
+  void PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_t data_size, 
+               size_t off = 0, float score = 1.0f);
+
+  /**
+   * Asynchronous PutBlob (SHM) - Caller must manage shared memory lifecycle
+   * @param blob_name Name of the blob
+   * @param data Shared memory pointer to data (must remain valid until task completes)
+   * @param data_size Size of data
+   * @param off Offset within blob (default 0)
+   * @param score Blob score for placement decisions (default 1.0)
+   * @return Task pointer for async operation
+   * @note For raw data, caller must allocate shared memory using CHI_IPC->AllocateBuffer<void>()
+   *       and keep the FullPtr alive until the async task completes
+   */
+  hipc::FullPtr<PutBlobTask> AsyncPutBlob(const std::string &blob_name, const hipc::Pointer &data, 
+                                          size_t data_size, size_t off = 0, float score = 1.0f);
+
+  /**
+   * GetBlob - Retrieves blob data into pre-allocated shared memory buffer
+   * @param blob_name Name of the blob to retrieve
+   * @param data Pre-allocated shared memory pointer for output data (must not be null)
+   * @param data_size Size of data to retrieve (must be > 0)
+   * @param off Offset within blob (default 0)
+   * @note Caller must pre-allocate shared memory using CHI_IPC->AllocateBuffer<void>(data_size)
+   */
+  void GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_size, size_t off = 0);
+
+  /**
+   * Get blob score
+   * @param blob_name Name of the blob
+   * @return Blob score (0.0-1.0)
+   */
+  float GetBlobScore(const std::string &blob_name);
+
+  /**
+   * Get blob size
+   * @param blob_name Name of the blob
+   * @return Blob size in bytes
+   */
+  chi::u64 GetBlobSize(const std::string &blob_name);
+
+  /**
+   * Get the TagId for this tag
+   * @return TagId of this tag
+   */
+  const TagId& GetTagId() const { return tag_id_; }
+};
 
 } // namespace wrp_cte::core
 

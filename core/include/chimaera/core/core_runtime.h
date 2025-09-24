@@ -414,6 +414,40 @@ class Runtime : public chi::Container {
   void MonitorPollTelemetryLog(chi::MonitorModeId mode, 
                               hipc::FullPtr<PollTelemetryLogTask> task,
                               chi::RunContext& ctx);
+
+  /**
+   * Get blob score operation - returns the score of a blob
+   * @param task GetBlobScore task containing blob lookup parameters and results
+   * @param ctx Runtime context for task execution
+   */
+  void GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor get blob score operation
+   * @param mode Monitor mode ID
+   * @param task GetBlobScore task to monitor
+   * @param ctx Runtime context for monitoring
+   */
+  void MonitorGetBlobScore(chi::MonitorModeId mode, 
+                          hipc::FullPtr<GetBlobScoreTask> task,
+                          chi::RunContext& ctx);
+
+  /**
+   * Get blob size operation - returns the size of a blob in bytes
+   * @param task GetBlobSize task containing blob lookup parameters and results
+   * @param ctx Runtime context for task execution
+   */
+  void GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor get blob size operation
+   * @param mode Monitor mode ID
+   * @param task GetBlobSize task to monitor
+   * @param ctx Runtime context for monitoring
+   */
+  void MonitorGetBlobSize(chi::MonitorModeId mode, 
+                         hipc::FullPtr<GetBlobSizeTask> task,
+                         chi::RunContext& ctx);
 };
 
 }  // namespace wrp_cte::core
