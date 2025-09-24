@@ -106,3 +106,33 @@ find . -name "Testing" -type d -exec rm -rf {} + 2>/dev/null || true
 
 echo "CMake cleanup completed!"
 ```
+
+## Documentation
+
+### CTE Core API Documentation
+Complete API documentation and usage guide is available at: `docs/cte/cte.md`
+
+This documentation covers:
+- Installation and linking instructions
+- Complete API reference with examples
+- Configuration guide
+- Python bindings usage
+- Advanced topics and troubleshooting
+
+### External Integration Test
+A standalone external integration test is available at: `test/unit/external/`
+
+This test demonstrates:
+- How to properly link external applications to CTE Core libraries
+- Complete API usage examples with error handling
+- Proper initialization and cleanup patterns
+- CMake configuration for external projects
+
+To run the external test:
+```bash
+cd test/unit/external
+mkdir -p build && cd build
+cmake ..
+make
+./cte_external_test
+```
