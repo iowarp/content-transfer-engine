@@ -87,4 +87,9 @@ chi::u64 Tag::GetBlobSize(const std::string &blob_name) {
   return cte_client->GetBlobSize(hipc::MemContext(), tag_id_, blob_name);
 }
 
+std::vector<std::string> Tag::GetContainedBlobs() {
+  auto *cte_client = WRP_CTE_CLIENT;
+  return cte_client->GetContainedBlobs(hipc::MemContext(), tag_id_);
+}
+
 } // namespace wrp_cte::core

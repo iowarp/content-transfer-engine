@@ -136,3 +136,7 @@ cmake ..
 make
 ./cte_external_test
 ```
+
+## Development Workflow
+
+- Never call chi_refresh_repo directly. Use bash env.sh instead.

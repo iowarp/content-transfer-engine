@@ -54,8 +54,12 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
       GetBlob(task_ptr.Cast<GetBlobTask>(), rctx);
       break;
     }
-    case Method::kReorganizeBlob: {
-      ReorganizeBlob(task_ptr.Cast<ReorganizeBlobTask>(), rctx);
+    case Method::kReorganizeBlobs: {
+      ReorganizeBlobs(task_ptr.Cast<ReorganizeBlobsTask>(), rctx);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      GetContainedBlobs(task_ptr.Cast<GetContainedBlobsTask>(), rctx);
       break;
     }
     case Method::kDelBlob: {
@@ -128,8 +132,12 @@ void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
       MonitorGetBlob(mode, task_ptr.Cast<GetBlobTask>(), rctx);
       break;
     }
-    case Method::kReorganizeBlob: {
-      MonitorReorganizeBlob(mode, task_ptr.Cast<ReorganizeBlobTask>(), rctx);
+    case Method::kReorganizeBlobs: {
+      MonitorReorganizeBlobs(mode, task_ptr.Cast<ReorganizeBlobsTask>(), rctx);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      MonitorGetContainedBlobs(mode, task_ptr.Cast<GetContainedBlobsTask>(), rctx);
       break;
     }
     case Method::kDelBlob: {
@@ -204,8 +212,12 @@ void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
       ipc_manager->DelTask(task_ptr.Cast<GetBlobTask>());
       break;
     }
-    case Method::kReorganizeBlob: {
-      ipc_manager->DelTask(task_ptr.Cast<ReorganizeBlobTask>());
+    case Method::kReorganizeBlobs: {
+      ipc_manager->DelTask(task_ptr.Cast<ReorganizeBlobsTask>());
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      ipc_manager->DelTask(task_ptr.Cast<GetContainedBlobsTask>());
       break;
     }
     case Method::kDelBlob: {
@@ -288,8 +300,13 @@ void Runtime::SaveIn(chi::u32 method, chi::TaskSaveInArchive& archive,
       typed_task->SerializeIn(archive);
       break;
     }
-    case Method::kReorganizeBlob: {
-      auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
+    case Method::kReorganizeBlobs: {
+      auto typed_task = task_ptr.Cast<ReorganizeBlobsTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      auto typed_task = task_ptr.Cast<GetContainedBlobsTask>();
       typed_task->SerializeIn(archive);
       break;
     }
@@ -378,8 +395,13 @@ void Runtime::LoadIn(chi::u32 method, chi::TaskLoadInArchive& archive,
       typed_task->SerializeIn(archive);
       break;
     }
-    case Method::kReorganizeBlob: {
-      auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
+    case Method::kReorganizeBlobs: {
+      auto typed_task = task_ptr.Cast<ReorganizeBlobsTask>();
+      typed_task->SerializeIn(archive);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      auto typed_task = task_ptr.Cast<GetContainedBlobsTask>();
       typed_task->SerializeIn(archive);
       break;
     }
@@ -468,8 +490,13 @@ void Runtime::SaveOut(chi::u32 method, chi::TaskSaveOutArchive& archive,
       typed_task->SerializeOut(archive);
       break;
     }
-    case Method::kReorganizeBlob: {
-      auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
+    case Method::kReorganizeBlobs: {
+      auto typed_task = task_ptr.Cast<ReorganizeBlobsTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      auto typed_task = task_ptr.Cast<GetContainedBlobsTask>();
       typed_task->SerializeOut(archive);
       break;
     }
@@ -558,8 +585,13 @@ void Runtime::LoadOut(chi::u32 method, chi::TaskLoadOutArchive& archive,
       typed_task->SerializeOut(archive);
       break;
     }
-    case Method::kReorganizeBlob: {
-      auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
+    case Method::kReorganizeBlobs: {
+      auto typed_task = task_ptr.Cast<ReorganizeBlobsTask>();
+      typed_task->SerializeOut(archive);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      auto typed_task = task_ptr.Cast<GetContainedBlobsTask>();
       typed_task->SerializeOut(archive);
       break;
     }
@@ -707,12 +739,23 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       }
       break;
     }
-    case Method::kReorganizeBlob: {
+    case Method::kReorganizeBlobs: {
       // Allocate new task using SHM default constructor
-      auto typed_task = ipc_manager->NewTask<ReorganizeBlobTask>();
+      auto typed_task = ipc_manager->NewTask<ReorganizeBlobsTask>();
       if (!typed_task.IsNull()) {
         // Use HSHM strong copy method for actual copying
-        typed_task->shm_strong_copy_main(*orig_task.Cast<ReorganizeBlobTask>());
+        typed_task->shm_strong_copy_main(*orig_task.Cast<ReorganizeBlobsTask>());
+        // Cast to base Task type for return
+        dup_task = typed_task.template Cast<chi::Task>();
+      }
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      // Allocate new task using SHM default constructor
+      auto typed_task = ipc_manager->NewTask<GetContainedBlobsTask>();
+      if (!typed_task.IsNull()) {
+        // Use HSHM strong copy method for actual copying
+        typed_task->shm_strong_copy_main(*orig_task.Cast<GetContainedBlobsTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
       }

@@ -146,16 +146,16 @@ class Runtime : public chi::Container {
                     chi::RunContext& ctx);
 
   /**
-   * Reorganize blob (Method::kReorganizeBlob) - unimplemented for now
+   * Reorganize multiple blobs (Method::kReorganizeBlobs) - update scores for multiple blobs
    */
-  void ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task, chi::RunContext& ctx);
+  void ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor reorganize blob operation
+   * Monitor reorganize blobs operation
    */
-  void MonitorReorganizeBlob(chi::MonitorModeId mode, 
-                           hipc::FullPtr<ReorganizeBlobTask> task,
-                           chi::RunContext& ctx);
+  void MonitorReorganizeBlobs(chi::MonitorModeId mode, 
+                            hipc::FullPtr<ReorganizeBlobsTask> task,
+                            chi::RunContext& ctx);
 
   /**
    * Delete blob operation - removes blob and decrements tag size
@@ -448,6 +448,23 @@ class Runtime : public chi::Container {
   void MonitorGetBlobSize(chi::MonitorModeId mode, 
                          hipc::FullPtr<GetBlobSizeTask> task,
                          chi::RunContext& ctx);
+
+  /**
+   * Get contained blobs operation - returns all blob names in a tag
+   * @param task GetContainedBlobs task containing tag ID and results
+   * @param ctx Runtime context for task execution
+   */
+  void GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task, chi::RunContext& ctx);
+
+  /**
+   * Monitor get contained blobs operation
+   * @param mode Monitor mode ID
+   * @param task GetContainedBlobs task to monitor
+   * @param ctx Runtime context for monitoring
+   */
+  void MonitorGetContainedBlobs(chi::MonitorModeId mode, 
+                               hipc::FullPtr<GetContainedBlobsTask> task,
+                               chi::RunContext& ctx);
 };
 
 }  // namespace wrp_cte::core

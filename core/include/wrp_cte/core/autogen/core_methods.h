@@ -22,13 +22,14 @@ GLOBAL_CONST chi::u32 kStatTargets = 13;
 GLOBAL_CONST chi::u32 kGetOrCreateTag = 14;
 GLOBAL_CONST chi::u32 kPutBlob = 15;
 GLOBAL_CONST chi::u32 kGetBlob = 16;
-GLOBAL_CONST chi::u32 kReorganizeBlob = 17;
+GLOBAL_CONST chi::u32 kReorganizeBlobs = 17;
 GLOBAL_CONST chi::u32 kDelBlob = 18;
 GLOBAL_CONST chi::u32 kDelTag = 19;
 GLOBAL_CONST chi::u32 kGetTagSize = 20;
 GLOBAL_CONST chi::u32 kPollTelemetryLog = 21;
 GLOBAL_CONST chi::u32 kGetBlobScore = 22;
 GLOBAL_CONST chi::u32 kGetBlobSize = 23;
+GLOBAL_CONST chi::u32 kGetContainedBlobs = 24;
 }  // namespace Method
 
 }  // namespace wrp_cte::core

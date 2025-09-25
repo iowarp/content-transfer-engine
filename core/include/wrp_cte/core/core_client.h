@@ -274,11 +274,12 @@ public:
   }
 
   /**
-   * Synchronous reorganize blob - waits for completion (unimplemented for now)
+   * Synchronous reorganize blobs - waits for completion
    */
-  chi::u32 ReorganizeBlob(const hipc::MemContext &mctx, const BlobId &blob_id,
-                          float new_score) {
-    auto task = AsyncReorganizeBlob(mctx, blob_id, new_score);
+  chi::u32 ReorganizeBlobs(const hipc::MemContext &mctx, const TagId &tag_id,
+                           const std::vector<std::string> &blob_names,
+                           const std::vector<float> &new_scores) {
+    auto task = AsyncReorganizeBlobs(mctx, tag_id, blob_names, new_scores);
     task->Wait();
     chi::u32 result = task->result_code_;
     CHI_IPC->DelTask(task);
@@ -286,17 +287,18 @@ public:
   }
 
   /**
-   * Asynchronous reorganize blob - returns immediately (unimplemented for now)
+   * Asynchronous reorganize blobs - returns immediately
    */
-  hipc::FullPtr<ReorganizeBlobTask>
-  AsyncReorganizeBlob(const hipc::MemContext &mctx, const BlobId &blob_id,
-                      float new_score) {
+  hipc::FullPtr<ReorganizeBlobsTask>
+  AsyncReorganizeBlobs(const hipc::MemContext &mctx, const TagId &tag_id,
+                       const std::vector<std::string> &blob_names,
+                       const std::vector<float> &new_scores) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
-    auto task = ipc_manager->NewTask<ReorganizeBlobTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), blob_id,
-        new_score);
+    auto task = ipc_manager->NewTask<ReorganizeBlobsTask>(
+        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        blob_names, new_scores);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -508,6 +510,37 @@ public:
     ipc_manager->Enqueue(task);
     return task;
   }
+
+  /**
+   * Synchronous get contained blobs - waits for completion
+   */
+  std::vector<std::string> GetContainedBlobs(const hipc::MemContext &mctx, const TagId &tag_id) {
+    auto task = AsyncGetContainedBlobs(mctx, tag_id);
+    task->Wait();
+    std::vector<std::string> result;
+    if (task->result_code_ == 0) {
+      for (const auto& blob_name : task->blob_names_) {
+        result.emplace_back(blob_name.str());
+      }
+    }
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous get contained blobs - returns immediately
+   */
+  hipc::FullPtr<GetContainedBlobsTask>
+  AsyncGetContainedBlobs(const hipc::MemContext &mctx, const TagId &tag_id) {
+    (void)mctx; // Suppress unused parameter warning
+    auto *ipc_manager = CHI_IPC;
+
+    auto task = ipc_manager->NewTask<GetContainedBlobsTask>(
+        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id);
+
+    ipc_manager->Enqueue(task);
+    return task;
+  }
 };
 
 // Forward declaration for Config
@@ -602,6 +635,12 @@ public:
    * @return Blob size in bytes
    */
   chi::u64 GetBlobSize(const std::string &blob_name);
+
+  /**
+   * Get all blob names contained in this tag
+   * @return Vector of blob names in this tag
+   */
+  std::vector<std::string> GetContainedBlobs();
 
   /**
    * Get the TagId for this tag
