@@ -19,7 +19,7 @@ CTE Core implements a ChiMod (Chimaera Module) that integrates with the Chimaera
 
 - CMake 3.20 or higher
 - C++17 compatible compiler
-- Chimaera framework (chimaera-core and chimaera-admin packages)
+- Chimaera framework (chimaera and chimaera_admin packages)
 - yaml-cpp library
 - Python 3.7+ (for Python bindings)
 - nanobind (for Python bindings)
@@ -46,32 +46,88 @@ sudo make install
 
 ### Linking to CTE Core in CMake Projects
 
-To use CTE Core in your CMake project, add the following to your `CMakeLists.txt`:
+To use CTE Core in your CMake project, follow the patterns established in the MODULE_DEVELOPMENT_GUIDE.md. Add the following to your `CMakeLists.txt`:
 
 ```cmake
-# Find the CTE Core package
-find_package(chimaera-core REQUIRED)
+# Find required Chimaera framework packages
+find_package(chimaera REQUIRED)              # Core Chimaera framework
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod (required)
+
+# Find CTE Core ChiMod package
+find_package(wrp_cte_core REQUIRED)          # CTE Core ChiMod
 
 # Create your executable or library
 add_executable(my_app main.cpp)
 
-# Link against CTE Core client library
+# Link against CTE Core libraries using modern target aliases
 target_link_libraries(my_app 
   PRIVATE 
-    wrp_cte_core_client
-    chimaera::chimaera-core
+    wrp_cte::core_client                     # CTE Core client library
+    # wrp_cte::core_runtime                  # Optional - if you need runtime functionality
+    # chimaera::admin_client                 # Optional - if you need admin functionality
 )
 
-# Include CTE Core headers
-target_include_directories(my_app 
-  PRIVATE 
-    ${CMAKE_INSTALL_PREFIX}/include
-)
+# Note: Include directories are handled automatically by the ChiMod targets
+# No manual target_include_directories() call needed
 ```
+
+#### Package and Target Naming
+
+CTE Core follows the Chimaera ChiMod naming conventions:
+
+- **Package Name**: `wrp_cte_core` (for `find_package(wrp_cte_core REQUIRED)`)
+- **Target Aliases**: `wrp_cte::core_client`, `wrp_cte::core_runtime` (recommended for linking)
+- **Actual Targets**: `wrp_cte_core_client`, `wrp_cte_core_runtime`
+- **Library Files**: `libwrp_cte_core_client.so`, `libwrp_cte_core_runtime.so`
+- **Include Path**: `wrp_cte/core/` (e.g., `#include <wrp_cte/core/core_client.h>`)
+
+#### Dependency Management
+
+The CTE Core ChiMod targets automatically include all required dependencies:
+
+- **Core Chimaera Framework**: Automatically linked via `wrp_cte::core_client` target
+- **Admin ChiMod**: Available via `chimaera::admin_client` if needed
+- **Include Paths**: Automatically configured by ChiMod targets
+- **System Dependencies**: Handled by the build system (threading, YAML, etc.)
+
+External applications only need to link against the CTE Core targets - all framework dependencies are resolved automatically.
 
 ### Runtime Dependencies
 
-The CTE Core runtime library (`wrp_cte_core_runtime.so`) must be available at runtime. It will be automatically loaded by the Chimaera framework when the CTE Core container is created.
+The CTE Core runtime library (`libwrp_cte_core_runtime.so`) must be available at runtime. It will be automatically loaded by the Chimaera framework when the CTE Core container is created.
+
+### External Application Example
+
+For external applications using CTE Core, follow these patterns (based on the MODULE_DEVELOPMENT_GUIDE.md):
+
+```cmake
+# External application CMakeLists.txt
+cmake_minimum_required(VERSION 3.20)
+project(my_cte_application)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find required packages
+find_package(chimaera REQUIRED)              # Core Chimaera framework
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod
+find_package(wrp_cte_core REQUIRED)          # CTE Core ChiMod
+
+# Find additional dependencies
+find_package(yaml-cpp REQUIRED)
+find_package(Threads REQUIRED)
+
+# Create your application
+add_executable(my_cte_app main.cpp)
+
+# Link with CTE Core - dependencies are automatically included
+target_link_libraries(my_cte_app
+  wrp_cte::core_client                       # CTE Core client (required)
+  # wrp_cte::core_runtime                    # Optional - if needed
+  # chimaera::admin_client                   # Optional - if needed
+  ${CMAKE_THREAD_LIBS_INIT}                 # Threading support
+)
+```
 
 ## API Reference
 
@@ -354,8 +410,8 @@ auto *config = WRP_CTE_CONFIG;
 
 ```cpp
 #include <chimaera/chimaera.h>
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_tasks.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_tasks.h>
 
 int main() {
   // Initialize Chimaera runtime
@@ -531,7 +587,7 @@ The Tag wrapper class provides a more convenient interface for blob operations w
 #### Basic Tag Wrapper Operations
 
 ```cpp
-#include <chimaera/core/core_client.h>
+#include <wrp_cte/core/core_client.h>
 #include <iostream>
 #include <vector>
 
@@ -860,7 +916,7 @@ dpe:
 ### Programmatic Configuration
 
 ```cpp
-#include <chimaera/core/core_config.h>
+#include <wrp_cte/core/core_config.h>
 
 // Access configuration manager
 auto& config_mgr = wrp_cte::core::ConfigManager::GetInstance();
