@@ -49,9 +49,9 @@ using namespace std::chrono_literals;
 #include <chimaera/bdev/bdev_client.h>
 #include <chimaera/bdev/bdev_tasks.h>
 #include <chimaera/chimaera.h>
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_runtime.h>
-#include <chimaera/core/core_tasks.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_runtime.h>
+#include <wrp_cte/core/core_tasks.h>
 
 namespace fs = std::filesystem;
 

@@ -1,6 +1,7 @@
 # External CTE Core Integration Test
 # This CMakeLists.txt demonstrates how external applications can link to CTE Core
-cmake_minimum_required(VERSION 3.16)
+# following the MODULE_DEVELOPMENT_GUIDE.md patterns
+cmake_minimum_required(VERSION 3.20)
 project(cte_external_integration_test)
 
 # Set C++ standard
@@ -12,77 +13,45 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-# Find primary dependencies (same as main CTE project)
-find_package(chimaera-core REQUIRED)
-find_package(chimaera-admin REQUIRED)
-find_package(yaml-cpp REQUIRED)
-
-# Find required system packages
-find_package(PkgConfig REQUIRED)
-find_package(Threads REQUIRED)
-
 # Add .env.cmake if it exists (for development environment)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../../.env.cmake")
     include("${CMAKE_CURRENT_SOURCE_DIR}/../../../.env.cmake")
 endif()
 
-# Set paths to the built CTE Core libraries (assumes they are installed or built)
-# In a real external project, these would come from find_package() or pkg-config
-set(CTE_CORE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
-set(CTE_BUILD_DIR "${CTE_CORE_ROOT}/build")
+# Find required Chimaera framework packages - core dependencies
+find_package(chimaera REQUIRED)              # Core Chimaera library (libcxx.so)
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod (required for most applications)
 
-# Include directories for CTE Core headers
-include_directories(
-    ${CTE_CORE_ROOT}/core/include
-    ${CTE_CORE_ROOT}/adapter
-    ${CTE_BUILD_DIR}/core/include  # For any generated headers
-)
+# Find CTE Core ChiMod package (main target for external applications)
+find_package(wrp_cte_core REQUIRED)          # CTE Core ChiMod package
 
-# Add Chimaera framework paths (would normally be installed system-wide)
-# For testing, we assume they're available via spack or similar
-pkg_check_modules(CHIMAERA REQUIRED chimaera)
-include_directories(${CHIMAERA_INCLUDE_DIRS})
-link_directories(${CHIMAERA_LIBRARY_DIRS})
-
-# Add HSHM paths
-pkg_check_modules(HSHM REQUIRED hermes_shm)
-include_directories(${HSHM_INCLUDE_DIRS})
-link_directories(${HSHM_LIBRARY_DIRS})
+# Find additional system dependencies
+find_package(yaml-cpp REQUIRED)
+find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
 
 # Create the external integration test executable
 add_executable(cte_external_test
     external_integration_test.cc
 )
 
-# Link against CTE Core libraries
-# In a real project, these paths would be resolved via find_package()
+# Link against CTE Core libraries using modern CMake target naming
+# These targets are created by the add_chimod_both() function in the core ChiMod
 target_link_libraries(cte_external_test
-    # CTE Core libraries (adjust paths as needed)
-    ${CTE_BUILD_DIR}/core/libwrp_cte_core_runtime.so
-    ${CTE_BUILD_DIR}/core/libwrp_cte_core_client.so
-    ${CTE_BUILD_DIR}/adapter/filesystem/libwrp_cte_fs_base.so
-    ${CTE_BUILD_DIR}/adapter/libwrp_cte_cae_config.so
+    # CTE Core ChiMod libraries (from find_package(wrp_cte_core))
+    wrp_cte::core_client                 # CTE Core client library
+    wrp_cte::core_runtime                # CTE Core runtime library (if needed)
     
-    # System dependencies
-    Threads::Threads
-    yaml-cpp
+    # Core Chimaera framework (automatically included by ChiMod libraries)
+    # chimaera::cxx                      # NOT needed - automatically included
     
-    # Chimaera framework dependencies
-    ${CHIMAERA_LIBRARIES}
-    ${HSHM_LIBRARIES}
+    # Admin ChiMod (if needed for advanced functionality)
+    # chimaera::admin_client             # Optional - uncomment if needed
 )
 
-# Set compile flags
+# Set compile flags - use standard flags for external projects
 target_compile_options(cte_external_test PRIVATE
-    ${CHIMAERA_CFLAGS_OTHER}
-    ${HSHM_CFLAGS_OTHER}
-    -Wall -Wextra
-)
-
-# Set compile definitions
-target_compile_definitions(cte_external_test PRIVATE
-    ${CHIMAERA_CFLAGS_OTHER}
-    ${HSHM_CFLAGS_OTHER}
+    -Wall -Wextra -Wno-unused-parameter
 )
 
 # Add a custom target to build and run the test
@@ -93,10 +62,21 @@ add_custom_target(run_external_test
     COMMENT "Running external CTE integration test"
 )
 
-# Print configuration information
-message(STATUS "CTE External Test Configuration:")
-message(STATUS "  CTE_CORE_ROOT: ${CTE_CORE_ROOT}")
-message(STATUS "  CTE_BUILD_DIR: ${CTE_BUILD_DIR}")
+# Print configuration information for external project setup verification
+message(STATUS "CTE External Integration Test Configuration:")
 message(STATUS "  CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Chimaera Found: ${chimaera-core_FOUND}")
+message(STATUS "  CMAKE_CXX_STANDARD: ${CMAKE_CXX_STANDARD}")
+message(STATUS "  Chimaera Core Found: ${chimaera_FOUND}")
+message(STATUS "  Chimaera Admin Found: ${chimaera_admin_FOUND}")
+message(STATUS "  CTE Core Found: ${wrp_cte_core_FOUND}")
 message(STATUS "  yaml-cpp Found: ${yaml-cpp_FOUND}")
+
+# Instructions for external developers
+message(STATUS "")
+message(STATUS "External Developer Notes:")
+message(STATUS "  This test demonstrates proper external linking to CTE Core libraries.")
+message(STATUS "  Required packages: chimaera, chimaera_admin, wrp_cte_core")
+message(STATUS "  Main target: wrp_cte::core_client (ChiMod client library)")
+message(STATUS "  Optional: wrp_cte::core_runtime (ChiMod runtime library)")
+message(STATUS "  Framework dependencies are automatically included by ChiMod targets.")
+message(STATUS "")

@@ -1,7 +1,7 @@
 #include <chimaera/chimaera.h>
-#include <chimaera/core/content_transfer_engine.h>
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_config.h>
+#include <wrp_cte/core/content_transfer_engine.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_config.h>
 
 // Define global pointer variable in source file (outside namespace)
 HSHM_DEFINE_GLOBAL_PTR_VAR_CC(wrp_cte::core::ContentTransferEngine,

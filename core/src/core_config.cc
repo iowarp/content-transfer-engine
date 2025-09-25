@@ -1,4 +1,4 @@
-#include <chimaera/core/core_config.h>
+#include <wrp_cte/core/core_config.h>
 #include <yaml-cpp/yaml.h>
 #include <fstream>
 #include <iostream>

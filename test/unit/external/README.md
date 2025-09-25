@@ -141,33 +141,42 @@ The CTE Core library is properly linkable and functional.
 
 ## CMake Integration Pattern
 
-The `CMakeLists.txt` in this directory demonstrates the proper way to link external applications to CTE Core:
+The `CMakeLists.txt` in this directory demonstrates the **proper MODULE_DEVELOPMENT_GUIDE.md patterns** for external applications to link with CTE Core ChiMods:
 
-### Key Patterns:
+### Key Patterns (Updated to Follow Guide):
 
-1. **Library Linking**:
+1. **Package Discovery** (Modern Pattern):
+   ```cmake
+   # Find required Chimaera framework packages
+   find_package(chimaera REQUIRED)              # Core library
+   find_package(chimaera_admin REQUIRED)        # Admin ChiMod
+   
+   # Find CTE Core ChiMod package
+   find_package(wrp_cte_core REQUIRED)          # CTE Core ChiMod
+   ```
+
+2. **Library Linking** (Modern Target Names):
    ```cmake
    target_link_libraries(your_app
-       ${CTE_BUILD_DIR}/core/libwrp_cte_core_runtime.so
-       ${CTE_BUILD_DIR}/core/libwrp_cte_core_client.so
-       # ... other CTE libraries
+       # CTE Core ChiMod libraries (recommended aliases)
+       wrp_cte::core_client                     # CTE Core client
+       wrp_cte::core_runtime                    # CTE Core runtime (optional)
+       
+       # Framework dependencies automatically included
+       # chimaera::cxx                          # NOT needed - auto-included
+       # chimaera::admin_client                 # Optional - if needed
    )
    ```
 
-2. **Include Directories**:
-   ```cmake
-   include_directories(
-       ${CTE_CORE_ROOT}/core/include
-       ${CTE_CORE_ROOT}/adapter
-   )
-   ```
+3. **Target Naming System**:
+   - **Package Names**: `wrp_cte_core` (for `find_package()`)
+   - **Target Aliases**: `wrp_cte::core_client`, `wrp_cte::core_runtime` (recommended)
+   - **Actual Targets**: `wrp_cte_core_client`, `wrp_cte_core_runtime`
 
-3. **Dependencies**:
-   ```cmake
-   find_package(chimaera-core REQUIRED)
-   find_package(chimaera-admin REQUIRED)
-   find_package(yaml-cpp REQUIRED)
-   ```
+4. **Automatic Dependencies**:
+   - ChiMod targets automatically include `chimaera::cxx` framework
+   - No need to manually link core framework libraries
+   - `add_chimod_both()` handles all standard dependencies
 
 ## Troubleshooting
 

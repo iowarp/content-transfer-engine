@@ -2,7 +2,7 @@
 #define WRPCTE_CORE_TASKS_H_
 
 #include <chimaera/chimaera.h>
-#include <chimaera/core/autogen/core_methods.h>
+#include <wrp_cte/core/autogen/core_methods.h>
 // Include admin tasks for GetOrCreatePoolTask
 #include <chimaera/admin/admin_tasks.h>
 // Include bdev tasks for BdevType enum

@@ -17,7 +17,7 @@ bool stdio_intercepted = true;
 #include <limits.h>
 #include <sys/file.h>
 
-#include "chimaera/core/core_client.h"
+#include "wrp_cte/core/core_client.h"
 #include <cstdio>
 
 #include "stdio_fs_api.h"

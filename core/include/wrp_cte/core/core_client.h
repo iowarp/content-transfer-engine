@@ -2,7 +2,7 @@
 #define WRPCTE_CORE_CLIENT_H_
 
 #include <chimaera/chimaera.h>
-#include <chimaera/core/core_tasks.h>
+#include <wrp_cte/core/core_tasks.h>
 #include <hermes_shm/util/singleton.h>
 
 namespace wrp_cte::core {

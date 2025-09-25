@@ -17,7 +17,7 @@ bool mpiio_intercepted = true;
 #include <hermes/bucket.h>
 #include <hermes/hermes.h>
 
-#include "chimaera/core/core_client.h"
+#include "wrp_cte/core/core_client.h"
 #include "hermes_shm/util/singleton.h"
 #include "mpiio_fs_api.h"
 

@@ -1,8 +1,8 @@
 #include "hermes_shm/util/logging.h"
 #include <chimaera/chimaera.h>
-#include <chimaera/core/content_transfer_engine.h>
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_config.h>
+#include <wrp_cte/core/content_transfer_engine.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_config.h>
 
 namespace wrp_cte::core {
 

@@ -3,8 +3,8 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_tasks.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_tasks.h>
 #include <chimaera/chimaera.h>
 
 namespace nb = nanobind;

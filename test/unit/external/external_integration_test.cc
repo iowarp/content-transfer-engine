@@ -14,9 +14,9 @@
 #include <thread>
 
 // CTE Core includes
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_tasks.h>
-#include <chimaera/core/content_transfer_engine.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_tasks.h>
+#include <wrp_cte/core/content_transfer_engine.h>
 #include <chimaera/chimaera.h>
 
 // Adapter includes for testing filesystem integration

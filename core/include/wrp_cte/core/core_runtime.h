@@ -2,9 +2,9 @@
 #define WRPCTE_CORE_RUNTIME_H_
 
 #include <chimaera/chimaera.h>
-#include <chimaera/core/core_tasks.h>
-#include <chimaera/core/core_client.h>
-#include <chimaera/core/core_config.h>
+#include <wrp_cte/core/core_tasks.h>
+#include <wrp_cte/core/core_client.h>
+#include <wrp_cte/core/core_config.h>
 #include <chimaera/comutex.h>
 #include <chimaera/corwlock.h>
 #include <unordered_map>

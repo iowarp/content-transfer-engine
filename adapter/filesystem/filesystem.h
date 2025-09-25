@@ -29,9 +29,9 @@
 #include "adapter/cae_config.h"
 #include "adapter/mapper/mapper_factory.h"
 #include "chimaera/chimaera.h"
-#include "chimaera/core/content_transfer_engine.h"
-#include "chimaera/core/core_client.h"
-#include "chimaera/core/core_tasks.h"
+#include "wrp_cte/core/content_transfer_engine.h"
+#include "wrp_cte/core/core_client.h"
+#include "wrp_cte/core/core_tasks.h"
 #include "filesystem_io_client.h"
 #include "filesystem_mdm.h"
 

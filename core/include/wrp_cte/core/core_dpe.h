@@ -2,7 +2,7 @@
 #define WRPCTE_CORE_DPE_H_
 
 #include <chimaera/chimaera.h>
-#include <chimaera/core/core_tasks.h>
+#include <wrp_cte/core/core_tasks.h>
 #include <vector>
 #include <string>
 #include <memory>

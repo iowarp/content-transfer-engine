@@ -6,8 +6,8 @@
  * Changes should be made to the autogen tool or the YAML configuration.
  */
 
-#include "chimaera/core/core_runtime.h"
-#include "chimaera/core/autogen/core_methods.h"
+#include "wrp_cte/core/core_runtime.h"
+#include "wrp_cte/core/autogen/core_methods.h"
 #include <chimaera/chimaera.h>
 
 namespace wrp_cte::core {

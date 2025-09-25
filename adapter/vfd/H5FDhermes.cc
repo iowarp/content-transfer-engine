@@ -38,7 +38,7 @@
 #include "H5FDhermes.h" /* Hermes file driver     */
 #include "H5PLextern.h"
 #include "adapter/posix/posix_fs_api.h"
-#include "chimaera/core/core_client.h"
+#include "wrp_cte/core/core_client.h"
 
 /**
  * Make this adapter use Hermes.

@@ -264,6 +264,47 @@ class Client : public chi::ContainerClient {
 #endif  // MOD_NAME_CLIENT_H_
 ```
 
+### ChiMod CreateTask Pool Assignment Requirements
+
+**CRITICAL**: All ChiMod clients implementing Create functions MUST use the explicit `chi::kAdminPoolId` variable when constructing CreateTask operations. You CANNOT use `pool_id_` for CreateTask operations.
+
+#### Why This is Required
+
+CreateTask operations are actually GetOrCreatePoolTask operations that must be processed by the admin ChiMod to create or find the target pool. The `pool_id_` variable is not initialized until after the Create operation completes successfully.
+
+#### Correct Usage
+```cpp
+// CORRECT: Always use chi::kAdminPoolId for CreateTask
+auto task = ipc_manager->NewTask<CreateTask>(
+    chi::CreateTaskNode(),
+    chi::kAdminPoolId,          // REQUIRED: Use admin pool for CreateTask
+    pool_query,
+    CreateParams::chimod_lib_name,
+    pool_name,
+    pool_id_,                   // Target pool ID to create
+    params);
+```
+
+#### Incorrect Usage
+```cpp
+// WRONG: Never use pool_id_ for CreateTask operations
+auto task = ipc_manager->NewTask<CreateTask>(
+    chi::CreateTaskNode(),
+    pool_id_,                   // WRONG: pool_id_ is not initialized yet
+    pool_query,
+    CreateParams::chimod_lib_name,
+    pool_name,
+    pool_id_,
+    params);
+```
+
+#### Key Points
+
+1. **Admin Pool Processing**: CreateTask is a GetOrCreatePoolTask that must be handled by the admin pool
+2. **Uninitialized Variable**: `pool_id_` is not set until after Create completes
+3. **Universal Requirement**: This applies to ALL ChiMod clients, including admin, bdev, and custom modules
+4. **Create Responsibility**: Create operations are responsible for allocating new pool IDs using the admin pool
+
 ### ChiMod Name Requirements
 
 **CRITICAL**: All ChiMod clients MUST use `CreateParams::chimod_lib_name` instead of hardcoding module names.
@@ -571,6 +612,93 @@ This automated approach ensures consistency across all ChiMods and reduces boile
 4. **Method Assignment**: Set the method_ field to identify the operation
 5. **FullPtr Usage**: All task method signatures use `hipc::FullPtr<TaskType>` instead of raw pointers
 6. **Monitor Methods**: Every task type MUST have a Monitor method that implements `kLocalSchedule`
+
+### Task Naming Conventions
+
+**CRITICAL**: All task names MUST follow consistent naming patterns to ensure proper code generation and maintenance.
+
+#### Required Naming Pattern
+
+The naming convention enforces consistency across function names, task types, and method constants:
+
+```
+Function Name → Task Name → Method Constant
+FunctionName()  → FunctionNameTask  → kFunctionName
+```
+
+#### Examples
+
+**Correct Naming:**
+```cpp
+// Function: GetStats() and AsyncGetStats()
+// Task: GetStatsTask  
+// Method: kGetStats
+
+// In bdev_client.h
+PerfMetrics GetStats(const hipc::MemContext& mctx, chi::u64& remaining_size);
+hipc::FullPtr<GetStatsTask> AsyncGetStats(const hipc::MemContext& mctx);
+
+// In bdev_tasks.h  
+struct GetStatsTask : public chi::Task {
+  OUT PerfMetrics metrics_;
+  OUT chi::u64 remaining_size_;
+  // ... constructors and methods
+};
+
+// In chimaera_mod.yaml
+kGetStats: 14    # Get performance statistics
+
+// In bdev_runtime.h
+void GetStats(hipc::FullPtr<GetStatsTask> task, chi::RunContext& ctx);
+void MonitorGetStats(chi::MonitorModeId mode, hipc::FullPtr<GetStatsTask> task, chi::RunContext& ctx);
+```
+
+**Incorrect Naming Examples:**
+```cpp
+// WRONG: Function and task names don't match
+PerfMetrics GetStats(...);           // Function name
+struct StatTask { ... };             // Task name doesn't match function
+
+// WRONG: Method constant doesn't match function  
+GLOBAL_CONST chi::u32 kStat = 14;    // Method doesn't match function name
+
+// WRONG: Runtime method doesn't match function
+void Stat(hipc::FullPtr<StatTask> task, ...);  // Runtime method doesn't match
+```
+
+#### Naming Rules
+
+1. **Function Names**: Use descriptive verbs (e.g., `GetStats`, `AllocateBlocks`, `WriteData`)
+2. **Task Names**: Always append "Task" to the function name (e.g., `GetStatsTask`, `AllocateBlocksTask`)  
+3. **Method Constants**: Prefix with "k" and match the function name exactly (e.g., `kGetStats`, `kAllocateBlocks`)
+4. **Runtime Methods**: Must match the function name exactly (e.g., `GetStats()`, `MonitorGetStats()`)
+
+#### Backward Compatibility
+
+When renaming tasks, provide backward compatibility aliases:
+
+```cpp
+// In bdev_tasks.h - provide alias for old name
+using StatTask = GetStatsTask;  // Backward compatibility
+
+// In autogen/bdev_methods.h - provide constant alias
+GLOBAL_CONST chi::u32 kGetStats = 14;
+GLOBAL_CONST chi::u32 kStat = kGetStats;  // Backward compatibility
+
+// In bdev_runtime.h - provide wrapper methods
+void GetStats(hipc::FullPtr<GetStatsTask> task, chi::RunContext& ctx);  // Primary
+void Stat(hipc::FullPtr<StatTask> task, chi::RunContext& ctx) {         // Wrapper
+  GetStats(task, ctx);
+}
+```
+
+#### Benefits of Consistent Naming
+
+1. **Code Generation**: Automated tools can reliably generate method dispatch code
+2. **Maintenance**: Clear correlation between client functions and runtime implementations
+3. **Documentation**: Self-documenting code with predictable naming patterns
+4. **Debugging**: Easy to trace from client calls to runtime execution
+5. **Testing**: Consistent patterns make it easier to write comprehensive tests
 
 ### Method System and Auto-Generated Files
 
@@ -1424,9 +1552,9 @@ ipc_manager->DelTask(task, chi::kMainSegment);
 // Framework Del dispatcher calls ipc_manager->DelTask() automatically
 ```
 
-### CHI_CLIENT Buffer Allocation
+### CHI_IPC Buffer Allocation
 
-The `CHI_CLIENT` singleton provides centralized buffer allocation for shared memory operations in client code. Use this for allocating temporary buffers that need to be shared between client and runtime processes.
+The `CHI_IPC` singleton provides centralized buffer allocation for shared memory operations in client code. Use this for allocating temporary buffers that need to be shared between client and runtime processes.
 
 **Important**: `AllocateBuffer` is a template function that returns `hipc::FullPtr<T>`, not `hipc::Pointer`. You must specify the template type parameter when calling it.
 
@@ -1434,40 +1562,40 @@ The `CHI_CLIENT` singleton provides centralized buffer allocation for shared mem
 ```cpp
 #include <chimaera/chimaera.h>
 
-// Get the client singleton
-auto* client = CHI_CLIENT;
+// Get the IPC manager singleton
+auto* ipc_manager = CHI_IPC;
 
 // Allocate a buffer in shared memory (returns FullPtr<T>, not hipc::Pointer)
 size_t buffer_size = 1024;
-hipc::FullPtr<void> buffer_ptr = client->AllocateBuffer<void>(buffer_size);
+hipc::FullPtr<void> buffer_ptr = ipc_manager->AllocateBuffer<void>(buffer_size);
 
 // Use the buffer (example: copy data into it)
 void* buffer_data = buffer_ptr.ptr_;
 memcpy(buffer_data, source_data, data_size);
 
 // Alternative: Allocate typed buffer
-hipc::FullPtr<char> char_buffer = client->AllocateBuffer<char>(buffer_size);
+hipc::FullPtr<char> char_buffer = ipc_manager->AllocateBuffer<char>(buffer_size);
 strncpy(char_buffer.ptr_, "example data", buffer_size);
 
 // The buffer will be automatically freed when buffer_ptr goes out of scope
 // or when explicitly deallocated by the framework
 ```
 
-#### Use Cases for CHI_CLIENT Buffers
+#### Use Cases for CHI_IPC Buffers
 - **Temporary data transfer**: When passing large data to tasks
 - **Intermediate storage**: For computations that need shared memory
 - **I/O operations**: Reading/writing data that needs to be accessible by runtime
 
 #### Best Practices
 ```cpp
-// ✅ Good: Use CHI_CLIENT for temporary shared buffers
-auto* client = CHI_CLIENT;
-hipc::FullPtr<void> temp_buffer = client->AllocateBuffer<void>(data_size);
+// ✅ Good: Use CHI_IPC for temporary shared buffers
+auto* ipc_manager = CHI_IPC;
+hipc::FullPtr<void> temp_buffer = ipc_manager->AllocateBuffer<void>(data_size);
 
 // ✅ Good: Use chi::ipc types for persistent task data
 chi::ipc::string task_string(ctx_alloc, "persistent data");
 
-// ❌ Avoid: Don't use CHI_CLIENT for small, simple task parameters
+// ❌ Avoid: Don't use CHI_IPC for small, simple task parameters
 // Use chi::ipc types directly in task definitions instead
 ```
 
@@ -1573,77 +1701,144 @@ cmake_minimum_required(VERSION 3.10)
 
 # Create both client and runtime libraries for your module
 # This creates targets: ${NAMESPACE}_${CHIMOD_NAME}_runtime and ${NAMESPACE}_${CHIMOD_NAME}_client
+# CMake aliases: ${NAMESPACE}::${CHIMOD_NAME}_runtime and ${NAMESPACE}::${CHIMOD_NAME}_client
 add_chimod_both(
   CHIMOD_NAME YOUR_MODULE_NAME
-  RUNTIME_SOURCES src/YOUR_MODULE_NAME_runtime.cc
+  RUNTIME_SOURCES src/YOUR_MODULE_NAME_runtime.cc src/autogen/YOUR_MODULE_NAME_lib_exec.cc
   CLIENT_SOURCES src/YOUR_MODULE_NAME_client.cc
 )
 
-# Install the ChiMod
-# Automatically finds and installs the targets created above
-install_chimod(
-  CHIMOD_NAME YOUR_MODULE_NAME
-)
+# Installation is automatic - no separate install_chimod() call required
+# The add_chimod_both() function automatically handles installation
 ```
 
 ### CMakeLists.txt Guidelines
 
 **DO:**
-- Use `add_chimod_both()` and `install_chimod()` utility functions
+- Use `add_chimod_both()` utility function (installation is automatic)
 - Set `CHIMOD_NAME` to your module's name
 - List source files explicitly in `RUNTIME_SOURCES` and `CLIENT_SOURCES`
+- Include autogen source files in `RUNTIME_SOURCES`
 - Keep the CMakeLists.txt minimal and consistent
 
 **DON'T:**
 - Use manual `add_library()` calls - use the utilities instead
+- Call `install_chimod()` separately - it's handled automatically
 - Include relative paths like `../include/*` - use proper include directories
 - Set custom compile definitions - the utilities handle this
 - Manually configure target properties - the utilities provide standard settings
 
-### ChiMod Utility Functions
+### Target Naming and Linking
 
-The `add_chimod_both()` function automatically:
+#### Target Format
+The system uses underscore-based target names for consistency with CMake conventions:
+
+**Target Names:**
+- **Runtime**: `${NAMESPACE}_${CHIMOD_NAME}_runtime` (e.g., `chimaera_admin_runtime`)
+- **Client**: `${NAMESPACE}_${CHIMOD_NAME}_client` (e.g., `chimaera_admin_client`)
+
+**CMake Aliases (Recommended):**
+- **Runtime**: `${NAMESPACE}::${CHIMOD_NAME}_runtime` (e.g., `chimaera::admin_runtime`)
+- **Client**: `${NAMESPACE}::${CHIMOD_NAME}_client` (e.g., `chimaera::admin_client`)
+
+**Package Names:**
+- Format: `${NAMESPACE}_${CHIMOD_NAME}` (e.g., `chimaera_admin`)
+- Used with: `find_package(chimaera_admin REQUIRED)`
+- Core package: `chimaera` (automatically included by `find_package(chimaera)`)
+
+**External Application Linking (Based on test/unit/external/CMakeLists.txt):**
+```cmake
+# External applications typically only need ChiMod client libraries
+# Core library dependencies are automatically included
+find_package(chimaera REQUIRED)
+find_package(chimaera_admin REQUIRED)
+
+target_link_libraries(my_external_app
+  chimaera::admin_client            # Admin client (includes all dependencies)
+  ${CMAKE_THREAD_LIBS_INIT}         # Threading support
+)
+# Note: chimaera::cxx is automatically included by ChiMod client libraries
+```
+
+**Internal Development Linking:**
+```cmake
+# For internal development within the Chimaera project
+target_link_libraries(internal_app
+  chimaera::admin_client            # ChiMod client
+  chimaera::bdev_client             # BDev client 
+  # Core dependencies are automatically linked by ChiMod libraries
+)
+```
+
+### Automatic Dependencies
+
+The `add_chimod_both()` function automatically handles common dependencies:
+
+**For Runtime Code:**
+- **rt library**: Automatically linked for POSIX real-time library support (async I/O operations)
+- **Admin ChiMod**: Automatically linked for all non-admin ChiMods (both runtime and client)
+- **Admin includes**: Automatically added to include directories for non-admin ChiMods
+
+**For All ChiMods:**
 - Creates both client and runtime shared libraries
 - Sets proper include directories (include/, ${CMAKE_SOURCE_DIR}/include)
-- Links against the chimaera library
-- Sets required compile definitions (CHI_CHIMOD_NAME, CHIMAERA_CLIENT, CHIMAERA_RUNTIME)
+- Automatically links core Chimaera dependencies
+- Sets required compile definitions (CHI_CHIMOD_NAME, CHI_NAMESPACE)
 - Configures proper build flags and settings
 
-The `install_chimod()` function automatically:
+**Simplified Development:**
+ChiMod developers no longer need to manually specify:
+- `rt` library dependencies
+- Admin ChiMod dependencies (`chimaera_admin_runtime`, `chimaera_admin_client`)
+- Admin include directories
+- Core Chimaera library dependencies
+- Common linking patterns
+
+**Important Note for External Applications:**
+External applications linking against ChiMod libraries receive all necessary dependencies automatically. The ChiMod client libraries include the core Chimaera library as a transitive dependency.
+
+**Automatic Installation:**
+The `add_chimod_both()` function automatically handles installation:
 - Installs libraries to the correct destination
 - Sets up proper runtime paths
 - Configures installation properties
+- Includes automatic dependencies in exported CMake packages
+- No separate `install_chimod()` call required
 
 ### Targets Created by add_chimod_both()
 
-When you call `add_chimod_both(CHIMOD_NAME YOUR_MODULE_NAME ...)`, it creates the following CMake targets using the format `${NAMESPACE}_${CHIMOD_NAME}_{client/runtime}`:
+When you call `add_chimod_both(CHIMOD_NAME YOUR_MODULE_NAME ...)`, it creates the following CMake targets using the underscore-based naming format:
+
+#### Target Naming System
+- **Actual Target Names**: `${NAMESPACE}_${CHIMOD_NAME}_runtime` and `${NAMESPACE}_${CHIMOD_NAME}_client`
+- **CMake Aliases**: `${NAMESPACE}::${CHIMOD_NAME}_runtime` and `${NAMESPACE}::${CHIMOD_NAME}_client` (**recommended**)
+- **Package Names**: `${NAMESPACE}_${CHIMOD_NAME}` (for `find_package()`)
 
 #### Runtime Target: `${NAMESPACE}_${CHIMOD_NAME}_runtime`
 - **Target Name**: `chimaera_YOUR_MODULE_NAME_runtime` (e.g., `chimaera_admin_runtime`, `chimaera_MOD_NAME_runtime`)
+- **CMake Alias**: `chimaera::YOUR_MODULE_NAME_runtime` (e.g., `chimaera::admin_runtime`) - **recommended for linking**
 - **Type**: Shared library (`.so` file)
 - **Purpose**: Contains server-side execution logic, runs in the Chimaera runtime process
 - **Compile Definitions**:
   - `CHI_CHIMOD_NAME="${CHIMOD_NAME}"` - Module name for runtime identification
   - `CHI_NAMESPACE="${NAMESPACE}"` - Project namespace
-  - `CHIMAERA_RUNTIME=1` - Enables runtime-specific code paths
 - **Include Directories**:
   - `include/` - Local module headers
   - `${CMAKE_SOURCE_DIR}/include` - Chimaera framework headers
-- **Dependencies**: Links against `chimaera` library
+- **Dependencies**: Links against `chimaera` library, rt library (automatic), admin dependencies (automatic)
 
 #### Client Target: `${NAMESPACE}_${CHIMOD_NAME}_client`
 - **Target Name**: `chimaera_YOUR_MODULE_NAME_client` (e.g., `chimaera_admin_client`, `chimaera_MOD_NAME_client`)
+- **CMake Alias**: `chimaera::YOUR_MODULE_NAME_client` (e.g., `chimaera::admin_client`) - **recommended for linking**
 - **Type**: Shared library (`.so` file)  
 - **Purpose**: Contains client-side API, runs in user processes
 - **Compile Definitions**:
   - `CHI_CHIMOD_NAME="${CHIMOD_NAME}"` - Module name for client identification
   - `CHI_NAMESPACE="${NAMESPACE}"` - Project namespace
-  - `CHIMAERA_CLIENT=1` - Enables client-specific code paths
-  - `CHIMAERA_RUNTIME=1` - Enables shared code paths between client/runtime
 - **Include Directories**:
   - `include/` - Local module headers
   - `${CMAKE_SOURCE_DIR}/include` - Chimaera framework headers
-- **Dependencies**: Links against `chimaera` library
+- **Dependencies**: Links against `chimaera` library, admin dependencies (automatic)
 
 #### Namespace Configuration
 The namespace is automatically read from `chimaera_repo.yaml` files. The system searches up the directory tree from the CMakeLists.txt location to find the first `chimaera_repo.yaml` file:
@@ -2048,15 +2243,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required Chimaera packages
 # These packages are installed by 'cmake --install build --prefix /usr/local'
-find_package(chimaera-core REQUIRED)        # Core Chimaera library (libcxx.so)
-find_package(chimaera-admin REQUIRED)       # Admin ChiMod (required for all ChiMods)
+find_package(chimaera REQUIRED)              # Core Chimaera (automatically includes ChimaeraCommon.cmake)
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod (often required)
 
 # Set CMAKE_PREFIX_PATH if Chimaera is installed in a custom location
 # set(CMAKE_PREFIX_PATH "/path/to/chimaera/install" ${CMAKE_PREFIX_PATH})
 
-# Include ChimaeraCommon.cmake utilities for add_chimod_both() and install_chimod()
-# This file is installed with Chimaera and provides the standard ChiMod build functions
-include(ChimaeraCommon)
+# ChimaeraCommon.cmake utilities are automatically included by find_package(chimaera)
+# This provides add_chimod_both(), install_chimod(), and other build functions
 
 # Add subdirectories containing your ChiMods
 add_subdirectory(modules/my_module)  # Use your actual directory name
@@ -2070,7 +2264,9 @@ Each ChiMod's `CMakeLists.txt` uses the standard Chimaera build utilities:
 cmake_minimum_required(VERSION 3.20)
 
 # Create both client and runtime libraries using standard Chimaera utilities
-# These functions are provided by ChimaeraCommon.cmake (included in root CMakeLists.txt)
+# These functions are provided by ChimaeraCommon.cmake (automatically included via find_package(chimaera))
+# Creates targets: my_namespace_my_module_client, my_namespace_my_module_runtime
+# Creates aliases: my_namespace::my_module_client, my_namespace::my_module_runtime
 add_chimod_both(
   CHIMOD_NAME my_module
   RUNTIME_SOURCES 
@@ -2080,16 +2276,32 @@ add_chimod_both(
     src/my_module_client.cc
 )
 
-# Install the ChiMod libraries
-install_chimod(
-  CHIMOD_NAME my_module
-)
+# Installation is automatic - no separate install_chimod() call required
+# Package name: my_namespace_my_module (for find_package)
 
 # Optional: Add additional dependencies if your ChiMod needs external libraries
 # get_property(RUNTIME_TARGET GLOBAL PROPERTY my_module_RUNTIME_TARGET)
 # get_property(CLIENT_TARGET GLOBAL PROPERTY my_module_CLIENT_TARGET)
 # target_link_libraries(${RUNTIME_TARGET} PRIVATE some_external_lib)
 # target_link_libraries(${CLIENT_TARGET} PRIVATE some_external_lib)
+```
+
+### External Applications Using Your ChiMod
+Once installed, external applications can find and link to your ChiMod. Based on our external unit test patterns (see test/unit/external-chimod/CMakeLists.txt):
+
+```cmake
+# External application CMakeLists.txt
+find_package(my_namespace_my_module REQUIRED)  # Your ChiMod package
+find_package(chimaera REQUIRED)                # Core Chimaera (automatically includes utilities)
+find_package(chimaera_admin REQUIRED)          # Admin ChiMod (often required)
+
+# Simple linking pattern - ChiMod libraries include all dependencies
+target_link_libraries(my_external_app
+  my_namespace::my_module_client    # Your ChiMod client
+  chimaera::admin_client            # Admin client (if needed)
+  ${CMAKE_THREAD_LIBS_INIT}         # Threading support
+)
+# Core Chimaera library is automatically included by ChiMod dependencies
 ```
 
 ### External ChiMod Implementation
@@ -2148,8 +2360,8 @@ make install
 ```
 
 The build system will automatically:
-- Link against `chimaera::cxx` (the core Chimaera library)
-- Link against `chimaera::admin_client` and `chimaera::admin_runtime` (required dependencies)
+- Link all necessary core Chimaera dependencies
+- Link against `chimaera::admin_client` and `chimaera::admin_runtime` (for non-admin modules)
 - Generate libraries with your custom namespace: `libmyproject_my_module_runtime.so`
 - Configure proper include paths and dependencies
 
@@ -2180,11 +2392,12 @@ int main() {
 
 External ChiMod development requires these components to be installed:
 
-1. **Core Library**: `chimaera::cxx` (main Chimaera library)
-2. **Admin ChiMod**: `chimaera::admin_client` and `chimaera::admin_runtime` (always required)
-3. **CMake Configs**: Package discovery files (`.cmake` files)
-4. **Headers**: All Chimaera framework headers
-5. **ChimaeraCommon.cmake**: Build utilities for `add_chimod_both()` and `install_chimod()`
+1. **Core Package**: `chimaera` (includes main library and ChimaeraCommon.cmake utilities)
+2. **Admin ChiMod**: `chimaera::admin_client` and `chimaera::admin_runtime` (required for most modules)
+3. **CMake Configs**: Package discovery files (automatically installed with packages)
+4. **Headers**: All Chimaera framework headers (installed with packages)
+
+All build utilities (`add_chimod_both()`, `install_chimod()`) are automatically available via `find_package(chimaera)`.
 
 If Chimaera is installed in a custom location, set `CMAKE_PREFIX_PATH`:
 
@@ -2197,27 +2410,30 @@ export CMAKE_PREFIX_PATH="/path/to/chimaera/install:$CMAKE_PREFIX_PATH"
 **ChimaeraCommon.cmake Not Found:**
 - Ensure Chimaera was installed with `cmake --install build --prefix <path>`
 - Verify `CMAKE_PREFIX_PATH` includes the Chimaera installation directory
-- Check that `find_package(chimaera-core REQUIRED)` succeeded
+- Check that `find_package(chimaera REQUIRED)` succeeded (ChimaeraCommon.cmake is included automatically)
 
 **Library Name Mismatch:**
 - Ensure `CreateParams::chimod_lib_name` exactly matches your namespace and module name
 - For namespace "myproject" and module "my_module": `chimod_lib_name = "myproject_my_module"`
 - The system automatically appends "_runtime" to find the runtime library
+- Target names use format: `myproject_my_module_runtime` and `myproject_my_module_client`
 
 **Missing Dependencies:**
-- Always include `find_package(chimaera-admin REQUIRED)` - required for all ChiMods
-- Ensure all external dependencies (Boost, MPI, etc.) are available in your build environment
+- The `add_chimod_both()` function automatically links admin and rt library dependencies
+- Ensure all external dependencies (Boost, MPI, etc.) are available in your build environment  
 - Use the same dependency versions that Chimaera was built with
+- For runtime code, rt library is automatically included for async I/O support
 
 ### External ChiMod Checklist
 
 - [ ] **Repository Configuration**: `chimaera_repo.yaml` with custom namespace
-- [ ] **CMake Setup**: Root CMakeLists.txt finds `chimaera-core` and `chimaera-admin` packages
+- [ ] **CMake Setup**: Root CMakeLists.txt finds `chimaera` package  
 - [ ] **ChiMod Configuration**: `chimaera_mod.yaml` with method definitions
 - [ ] **Library Name**: `CreateParams::chimod_lib_name` matches namespace pattern
 - [ ] **C++ Namespace**: All code uses custom namespace consistently  
-- [ ] **Build Integration**: ChiMod CMakeLists.txt uses `add_chimod_both()` and `install_chimod()`
+- [ ] **Build Integration**: ChiMod CMakeLists.txt uses `add_chimod_both()` (installation is automatic)
 - [ ] **Dependencies**: All required external libraries available at build time
+- [ ] **Automatic Linking**: Rely on `add_chimod_both()` for rt and admin dependencies
 
 ## Example Module
 
@@ -2827,16 +3043,6 @@ class Client : public chi::ContainerClient {
         pool_id_    // Target pool ID (unset during Create)
     );
     return task;
-  }
- 
-private:
-  // Utility for generating unique names when users need it
-  static std::string GeneratePoolName(const std::string& prefix) {
-    auto now = std::chrono::system_clock::now();
-    auto timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
-        now.time_since_epoch()).count();
-    pid_t pid = getpid();
-    return prefix + "_" + std::to_string(timestamp) + "_" + std::to_string(pid);
   }
 };
 ```

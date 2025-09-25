@@ -1,8 +1,8 @@
 #include "hermes_shm/util/logging.h"
 #include <algorithm>
-#include <chimaera/core/core_config.h>
-#include <chimaera/core/core_dpe.h>
-#include <chimaera/core/core_runtime.h>
+#include <wrp_cte/core/core_config.h>
+#include <wrp_cte/core/core_dpe.h>
+#include <wrp_cte/core/core_runtime.h>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>

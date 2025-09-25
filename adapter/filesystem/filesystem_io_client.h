@@ -19,8 +19,8 @@
 #include <future>
 #include <limits>
 
-#include "chimaera/core/core_client.h"
-#include "chimaera/core/core_tasks.h"
+#include "wrp_cte/core/core_client.h"
+#include "wrp_cte/core/core_tasks.h"
 #include "adapter/adapter_types.h"
 #include "adapter/mapper/balanced_mapper.h"
 #include "hermes_shm/types/bitfield.h"

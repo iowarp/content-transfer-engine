@@ -31,7 +31,7 @@
 
 #include "adapter/cae_config.h"
 #include "chimaera/chimaera.h"
-#include "chimaera/core/core_client.h"
+#include "wrp_cte/core/core_client.h"
 
 using namespace std::chrono_literals;
 namespace stdfs = std::filesystem;

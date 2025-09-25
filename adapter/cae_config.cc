@@ -11,7 +11,7 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "adapter/cae_config.h"
-#include "chimaera/core/content_transfer_engine.h"
+#include "wrp_cte/core/content_transfer_engine.h"
 #include "hermes_shm/util/logging.h"
 #include <algorithm>
 #include <filesystem>

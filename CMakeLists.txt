@@ -41,11 +41,36 @@ option(CTE_ENABLE_DOTENV "Enable loading .env.cmake file if it exists" ON)
 if(CTE_ENABLE_DOTENV AND EXISTS "${CMAKE_SOURCE_DIR}/.env.cmake")
     message(STATUS "Loading .env.cmake configuration")
     include("${CMAKE_SOURCE_DIR}/.env.cmake")
+    
+    # Convert the CMAKE_PREFIX_PATH environment variable to a CMake list and prepend to CMAKE_PREFIX_PATH
+    if(DEFINED ENV{CMAKE_PREFIX_PATH})
+        # Convert colon-separated path to semicolon-separated list for CMake
+        string(REPLACE ":" ";" ENV_CMAKE_PREFIX_PATH "$ENV{CMAKE_PREFIX_PATH}")
+        # Prepend to existing CMAKE_PREFIX_PATH
+        list(PREPEND CMAKE_PREFIX_PATH ${ENV_CMAKE_PREFIX_PATH})
+        message(STATUS "CMAKE_PREFIX_PATH set to: ${CMAKE_PREFIX_PATH}")
+    endif()
+    
+    # Set chimaera package directories directly based on the known installed locations
+    if(EXISTS "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-core")
+        set(chimaera-core_DIR "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-core")
+        message(STATUS "chimaera-core_DIR set to: ${chimaera-core_DIR}")
+    endif()
+    
+    if(EXISTS "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-admin")
+        set(chimaera-admin_DIR "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-admin")
+        message(STATUS "chimaera-admin_DIR set to: ${chimaera-admin_DIR}")
+    endif()
 endif()
 
-# Require Chimaera framework packages
-find_package(chimaera-core REQUIRED)
-find_package(chimaera-admin REQUIRED)
+# Find required Chimaera framework packages following MODULE_DEVELOPMENT_GUIDE.md patterns
+# For internal ChiMod development within the main repository, we need the core framework
+find_package(chimaera REQUIRED)              # Core Chimaera (automatically includes ChimaeraCommon.cmake)
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod (often required for ChiMod operations)
+
+message(STATUS "Found Chimaera packages:")
+message(STATUS "  chimaera: ${chimaera_FOUND}")
+message(STATUS "  chimaera_admin: ${chimaera_admin_FOUND}")
 
 # Add nanobind for Python bindings
 add_subdirectory(external/nanobind)
@@ -64,7 +89,7 @@ add_subdirectory(adapter)
 # Enable testing
 include(CTest)
 
-# Add tests
+# Add tests (skip external tests during internal development)
 add_subdirectory(test)
 
 # Add wrapper components (includes Python bindings if enabled)
