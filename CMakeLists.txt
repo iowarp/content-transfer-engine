@@ -63,10 +63,13 @@ message(STATUS "  chimaera_admin: ${chimaera_admin_FOUND}")
 
 # Add nanobind for Python bindings
 find_first_path_python()
-set(Python3_EXECUTABLE ${PYTHON_SCAN} CACHE FILEPATH "Python executable" FORCE) 
-message(STATUS "Python3_EXECUTABLE set to: ${Python3_EXECUTABLE}")
+
+# Force nanobind to use the Python found by find_first_path_python
+set(Python_EXECUTABLE ${PYTHON_SCAN} CACHE FILEPATH "Python executable" FORCE)
+set(Python3_EXECUTABLE ${PYTHON_SCAN} CACHE FILEPATH "Python3 executable" FORCE)
+message(STATUS "Forcing nanobind to use Python: ${PYTHON_SCAN}")
+
 add_subdirectory(external/nanobind)
-find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 
 
 message(STATUS "Found Chimaera framework - building full ChiMod implementation")
