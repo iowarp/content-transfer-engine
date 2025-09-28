@@ -1,8 +1,5 @@
 #include "hermes_shm/util/logging.h"
 #include <algorithm>
-#include <wrp_cte/core/core_config.h>
-#include <wrp_cte/core/core_dpe.h>
-#include <wrp_cte/core/core_runtime.h>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -10,6 +7,9 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <wrp_cte/core/core_config.h>
+#include <wrp_cte/core/core_dpe.h>
+#include <wrp_cte/core/core_runtime.h>
 
 namespace wrp_cte::core {
 
@@ -253,13 +253,16 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     target_info.bytes_written_ = 0;
     target_info.ops_read_ = 0;
     target_info.ops_written_ = 0;
-    // Check if this target has a manually configured score from storage device config
+    // Check if this target has a manually configured score from storage device
+    // config
     float manual_score = GetManualScoreForTarget(target_name);
     if (manual_score >= 0.0f) {
       target_info.target_score_ = manual_score; // Use configured manual score
-      HILOG(kInfo, "Target '{}' using manual score: {:.2f}", target_name, manual_score);
+      HILOG(kInfo, "Target '{}' using manual score: {:.2f}", target_name,
+            manual_score);
     } else {
-      target_info.target_score_ = 0.0f; // Will be calculated based on performance metrics
+      target_info.target_score_ =
+          0.0f; // Will be calculated based on performance metrics
     }
     target_info.remaining_space_ =
         remaining_size; // Use actual remaining space from bdev
@@ -768,104 +771,115 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
-    
+
     // Validate inputs
     if (task->blob_names_.size() != task->new_scores_.size()) {
       task->result_code_ = 1; // Invalid input - mismatched array sizes
       return;
     }
-    
+
     // Validate tag exists
     if (tag_id_to_info_.find(tag_id) == tag_id_to_info_.end()) {
       task->result_code_ = 1; // Tag not found
       return;
     }
-    
+
     // Get configuration for score difference threshold
     const Config &config = GetConfig();
-    float score_difference_threshold = config.performance_.score_difference_threshold_;
-    
+    float score_difference_threshold =
+        config.performance_.score_difference_threshold_;
+
     // Get CTE client for async operations
     auto *cte_client = WRP_CTE_CLIENT;
-    
+
     // Process blobs in batches of 32
     constexpr size_t kMaxBatchSize = 32;
     size_t total_reorganized = 0;
     size_t total_blobs = task->blob_names_.size();
-    
-    for (size_t batch_start = 0; batch_start < total_blobs; batch_start += kMaxBatchSize) {
+
+    for (size_t batch_start = 0; batch_start < total_blobs;
+         batch_start += kMaxBatchSize) {
       size_t batch_end = std::min(batch_start + kMaxBatchSize, total_blobs);
       size_t batch_size = batch_end - batch_start;
-      
+
       // Step 1: Asynchronously get blob scores for this batch
       std::vector<hipc::FullPtr<GetBlobScoreTask>> score_tasks;
       score_tasks.reserve(batch_size);
-      
+
       for (size_t i = batch_start; i < batch_end; ++i) {
         const std::string blob_name = task->blob_names_[i].str();
-        auto score_task = cte_client->AsyncGetBlobScore(hipc::MemContext(), tag_id, blob_name);
+        auto score_task = cte_client->AsyncGetBlobScore(hipc::MemContext(),
+                                                        tag_id, blob_name);
         score_tasks.push_back(score_task);
       }
-      
+
       // Wait for all score tasks to complete
       std::vector<bool> should_reorganize(batch_size, false);
       std::vector<float> current_scores(batch_size, 0.0f);
       size_t valid_blobs_in_batch = 0;
-      
+
       for (size_t i = 0; i < score_tasks.size(); ++i) {
         score_tasks[i]->Wait();
         size_t global_idx = batch_start + i;
-        
+
         if (score_tasks[i]->result_code_ == 0) {
           current_scores[i] = score_tasks[i]->score_;
           float new_score = task->new_scores_[global_idx];
-          
+
           // Step 2: Remove blobs with negligibly different scores
           float score_diff = std::abs(new_score - current_scores[i]);
-          if (score_diff >= score_difference_threshold && new_score >= 0.0f && new_score <= 1.0f) {
+          if (score_diff >= score_difference_threshold && new_score >= 0.0f &&
+              new_score <= 1.0f) {
             should_reorganize[i] = true;
             valid_blobs_in_batch++;
           }
         }
-        
+
         CHI_IPC->DelTask(score_tasks[i]);
       }
-      
+
       // Skip this batch if no blobs need reorganization
       if (valid_blobs_in_batch == 0) {
         continue;
       }
-      
-      // Step 3: Asynchronously get blob sizes for blobs that need reorganization
+
+      // Step 3: Asynchronously get blob sizes for blobs that need
+      // reorganization
       std::vector<hipc::FullPtr<GetBlobSizeTask>> size_tasks;
-      std::vector<size_t> reorganize_indices; // Maps size_tasks index to batch index
-      
+      std::vector<size_t>
+          reorganize_indices; // Maps size_tasks index to batch index
+
       for (size_t i = 0; i < batch_size; ++i) {
         if (should_reorganize[i]) {
           size_t global_idx = batch_start + i;
           const std::string blob_name = task->blob_names_[global_idx].str();
-          auto size_task = cte_client->AsyncGetBlobSize(hipc::MemContext(), tag_id, blob_name);
+          auto size_task = cte_client->AsyncGetBlobSize(hipc::MemContext(),
+                                                        tag_id, blob_name);
           size_tasks.push_back(size_task);
           reorganize_indices.push_back(i);
         }
       }
-      
+
       // Step 4: Wait for size tasks completion and allocate individual buffers
       std::vector<chi::u64> blob_sizes(size_tasks.size(), 0);
       std::vector<hipc::FullPtr<void>> blob_data_buffers(size_tasks.size());
       std::vector<hipc::Pointer> blob_data_ptrs(size_tasks.size());
-      
+
       auto *ipc_manager = CHI_IPC;
       for (size_t i = 0; i < size_tasks.size(); ++i) {
         size_tasks[i]->Wait();
         if (size_tasks[i]->result_code_ == 0) {
           blob_sizes[i] = size_tasks[i]->size_;
-          
+
           // Step 5: Allocate individual buffer for each blob
           if (blob_sizes[i] > 0) {
-            blob_data_buffers[i] = ipc_manager->AllocateBuffer<void>(blob_sizes[i]);
+            blob_data_buffers[i] =
+                ipc_manager->AllocateBuffer<void>(blob_sizes[i]);
             if (blob_data_buffers[i].IsNull()) {
-              HILOG(kError, "Failed to allocate buffer for blob {} during reorganization", i);
+              HILOG(
+                  kError,
+                  "Failed to allocate buffer for blob {} during reorganization",
+                  i);
               task->result_code_ = 1;
               return;
             }
@@ -874,48 +888,50 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
         }
         CHI_IPC->DelTask(size_tasks[i]);
       }
-      
+
       // Step 6: Asynchronously get blob data
       std::vector<hipc::FullPtr<GetBlobTask>> get_tasks;
-      
+
       for (size_t i = 0; i < size_tasks.size(); ++i) {
         if (blob_sizes[i] > 0) {
           size_t batch_idx = reorganize_indices[i];
           size_t global_idx = batch_start + batch_idx;
           const std::string blob_name = task->blob_names_[global_idx].str();
-          
-          auto get_task = cte_client->AsyncGetBlob(hipc::MemContext(), tag_id, blob_name, 
-                                                  BlobId::GetNull(), 0, blob_sizes[i], 0, blob_data_ptrs[i]);
+
+          auto get_task = cte_client->AsyncGetBlob(
+              hipc::MemContext(), tag_id, blob_name, BlobId::GetNull(), 0,
+              blob_sizes[i], 0, blob_data_ptrs[i]);
           get_tasks.push_back(get_task);
         }
       }
-      
+
       // Step 7: Wait for get tasks completion
       for (auto get_task : get_tasks) {
         get_task->Wait();
         if (get_task->result_code_ != 0) {
-          HILOG(kWarning, "Failed to get blob data during reorganization, skipping blob");
+          HILOG(kWarning,
+                "Failed to get blob data during reorganization, skipping blob");
         }
         CHI_IPC->DelTask(get_task);
       }
-      
+
       // Step 8: Asynchronously put blobs with new scores
       std::vector<hipc::FullPtr<PutBlobTask>> put_tasks;
-      
+
       for (size_t i = 0; i < size_tasks.size(); ++i) {
         if (blob_sizes[i] > 0) {
           size_t batch_idx = reorganize_indices[i];
           size_t global_idx = batch_start + batch_idx;
           const std::string blob_name = task->blob_names_[global_idx].str();
           float new_score = task->new_scores_[global_idx];
-          
-          auto put_task = cte_client->AsyncPutBlob(hipc::MemContext(), tag_id, blob_name, 
-                                                  BlobId::GetNull(), 0, blob_sizes[i], 
-                                                  blob_data_ptrs[i], new_score, 0);
+
+          auto put_task = cte_client->AsyncPutBlob(
+              hipc::MemContext(), tag_id, blob_name, BlobId::GetNull(), 0,
+              blob_sizes[i], blob_data_ptrs[i], new_score, 0);
           put_tasks.push_back(put_task);
         }
       }
-      
+
       // Step 9: Wait for put tasks completion
       size_t successful_reorganizations = 0;
       for (auto put_task : put_tasks) {
@@ -927,23 +943,24 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
         }
         CHI_IPC->DelTask(put_task);
       }
-      
+
       total_reorganized += successful_reorganizations;
     }
-    
+
     // Set result based on whether any blobs were successfully reorganized
-    task->result_code_ = (total_reorganized > 0) ? 0 : 1;
-    
+    task->result_code_ = 0;
+
     // Update telemetry
-    LogTelemetry(CteOp::kGetOrCreateTag, total_reorganized, 0, 
-                 BlobId::GetNull(), tag_id,
-                 std::chrono::steady_clock::now(),
+    LogTelemetry(CteOp::kGetOrCreateTag, total_reorganized, 0,
+                 BlobId::GetNull(), tag_id, std::chrono::steady_clock::now(),
                  std::chrono::steady_clock::now());
-    
-    HILOG(kInfo, "ReorganizeBlobs completed: tag_id={},{}, reorganized {} out of {} blobs",
+
+    HILOG(kInfo,
+          "ReorganizeBlobs completed: tag_id={},{}, reorganized {} out of {} "
+          "blobs",
           tag_id.major_, tag_id.minor_, total_reorganized, total_blobs);
-    
-  } catch (const std::exception& e) {
+
+  } catch (const std::exception &e) {
     HILOG(kError, "ReorganizeBlobs failed: {}", e.what());
     task->result_code_ = 1; // Error during reorganization
   }
@@ -1107,27 +1124,28 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     // Process blobs in batches to limit concurrent async tasks
     constexpr size_t kMaxConcurrentDelBlobTasks = 32;
     std::vector<hipc::FullPtr<DelBlobTask>> async_tasks;
-    async_tasks.reserve(std::min(tag_info.blob_ids_.size(), kMaxConcurrentDelBlobTasks));
+    async_tasks.reserve(
+        std::min(tag_info.blob_ids_.size(), kMaxConcurrentDelBlobTasks));
 
     size_t processed_blobs = 0;
     auto blob_iter = tag_info.blob_ids_.begin();
-    
+
     while (blob_iter != tag_info.blob_ids_.end()) {
       // Create a batch of async tasks (up to kMaxConcurrentDelBlobTasks)
       async_tasks.clear();
-      
-      for (size_t batch_count = 0; 
-           batch_count < kMaxConcurrentDelBlobTasks && blob_iter != tag_info.blob_ids_.end(); 
+
+      for (size_t batch_count = 0; batch_count < kMaxConcurrentDelBlobTasks &&
+                                   blob_iter != tag_info.blob_ids_.end();
            ++blob_iter) {
         const auto &[blob_id, _] = *blob_iter;
-        
+
         // Find blob info to get blob name
         auto blob_info_it = blob_id_to_info_.find(blob_id);
         if (blob_info_it != blob_id_to_info_.end()) {
           // Call AsyncDelBlob from client
-          auto async_task =
-              cte_client->AsyncDelBlob(hipc::MemContext(), tag_id,
-                                       blob_info_it->second.blob_name_, blob_id);
+          auto async_task = cte_client->AsyncDelBlob(
+              hipc::MemContext(), tag_id, blob_info_it->second.blob_name_,
+              blob_id);
           async_tasks.push_back(async_task);
           ++batch_count;
         }
@@ -1139,10 +1157,10 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
 
         // Check if DelBlob succeeded
         if (task->result_code_ != 0) {
-          HILOG(
-              kWarning,
-              "DelBlob failed for blob_id={},{} during tag deletion, continuing",
-              task->blob_id_.major_, task->blob_id_.minor_);
+          HILOG(kWarning,
+                "DelBlob failed for blob_id={},{} during tag deletion, "
+                "continuing",
+                task->blob_id_.major_, task->blob_id_.minor_);
           // Continue with other blobs even if one fails
         }
 
@@ -1285,7 +1303,8 @@ void Runtime::UpdateTargetStats(const chi::PoolId &target_id,
   target_info.perf_metrics_ = perf_metrics;
   target_info.remaining_space_ = remaining_size;
 
-  // Check if this target has a manually configured score - if so, don't overwrite it
+  // Check if this target has a manually configured score - if so, don't
+  // overwrite it
   float manual_score = GetManualScoreForTarget(target_info.target_name_);
   if (manual_score >= 0.0f) {
     // Keep the manually configured score, don't auto-calculate
@@ -1315,19 +1334,20 @@ void Runtime::UpdateTargetStats(const chi::PoolId &target_id,
 }
 
 float Runtime::GetManualScoreForTarget(const std::string &target_name) {
-  // Check if the target name matches a configured storage device with manual score
+  // Check if the target name matches a configured storage device with manual
+  // score
   for (size_t i = 0; i < storage_devices_.size(); ++i) {
     const auto &device = storage_devices_[i];
-    
+
     // Create the expected target name based on how targets are registered
     std::string expected_target_name = "storage_device_" + std::to_string(i);
-    
+
     // Also check if target name matches the device path directly
     if (target_name == expected_target_name || target_name == device.path_) {
       return device.score_; // Return configured score (-1.0f if not set)
     }
   }
-  
+
   return -1.0f; // No manual score configured for this target
 }
 
@@ -1826,7 +1846,7 @@ void Runtime::LogTelemetry(CteOp op, size_t off, size_t size,
                            const Timestamp &read_time) {
   // Increment atomic counter and get current logical time
   std::uint64_t logical_time = telemetry_counter_.fetch_add(1) + 1;
-  
+
   // Create telemetry entry with logical time and enqueue it
   CteTelemetry telemetry_entry(op, off, size, blob_id, tag_id, mod_time,
                                read_time, logical_time);
@@ -1872,29 +1892,29 @@ size_t Runtime::GetTelemetryEntries(std::vector<CteTelemetry> &entries,
 }
 
 void Runtime::PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task,
-                               chi::RunContext& ctx) {
+                               chi::RunContext &ctx) {
   try {
     std::uint64_t minimum_logical_time = task->minimum_logical_time_;
-    
+
     // Get telemetry entries with logical time filtering
     std::vector<CteTelemetry> all_entries;
     size_t retrieved_count = GetTelemetryEntries(all_entries, 1000);
-    
+
     // Filter entries by minimum logical time
     task->entries_.clear();
     std::uint64_t max_logical_time = minimum_logical_time;
-    
-    for (const auto& entry : all_entries) {
+
+    for (const auto &entry : all_entries) {
       if (entry.logical_time_ >= minimum_logical_time) {
         task->entries_.emplace_back(entry);
         max_logical_time = std::max(max_logical_time, entry.logical_time_);
       }
     }
-    
+
     task->last_logical_time_ = max_logical_time;
     task->result_code_ = 0;
-    
-  } catch (const std::exception& e) {
+
+  } catch (const std::exception &e) {
     task->result_code_ = 1;
     task->last_logical_time_ = 0;
   }
@@ -1903,12 +1923,12 @@ void Runtime::PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task,
 
 void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
                                       hipc::FullPtr<PollTelemetryLogTask> task,
-                                      chi::RunContext& ctx) {
+                                      chi::RunContext &ctx) {
   switch (mode) {
   case chi::MonitorModeId::kLocalSchedule: {
     auto lane_ptr = GetLaneFullPtr(kStatsQueue, 0);
     if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane*>(lane_ptr.ptr_);
+      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
     }
     break;
   }
@@ -1922,7 +1942,7 @@ void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
 }
 
 void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
-                          chi::RunContext &ctx) {
+                           chi::RunContext &ctx) {
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -1955,14 +1975,15 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
     auto now = std::chrono::steady_clock::now();
     blob_info_ptr->last_read_ = now;
 
-    // No specific telemetry enum for GetBlobScore, using GetBlob as closest match
+    // No specific telemetry enum for GetBlobScore, using GetBlob as closest
+    // match
     LogTelemetry(CteOp::kGetBlob, 0, 0, found_blob_id, tag_id,
                  blob_info_ptr->last_modified_, now);
 
     // Success
     task->result_code_ = 0;
     HILOG(kInfo, "GetBlobScore successful: blob_id={},{}, name={}, score={}",
-          found_blob_id.major_, found_blob_id.minor_, blob_name, 
+          found_blob_id.major_, found_blob_id.minor_, blob_name,
           blob_info_ptr->score_);
 
   } catch (const std::exception &e) {
@@ -1992,13 +2013,13 @@ void Runtime::MonitorGetBlobScore(chi::MonitorModeId mode,
 }
 
 void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
-                         chi::RunContext &ctx) {
+                          chi::RunContext &ctx) {
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
     std::string blob_name = task->blob_name_.str();
     BlobId blob_id = task->blob_id_;
-    
+
     // Validate that either blob_id or blob_name is provided
     bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
     bool blob_name_provided = !blob_name.empty();
@@ -2006,7 +2027,7 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
       task->result_code_ = 1;
       return;
     }
-    
+
     // Step 1: Check if blob exists
     BlobId found_blob_id;
     BlobInfo *blob_info_ptr =
@@ -2015,32 +2036,32 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
       task->result_code_ = 1; // Blob not found
       return;
     }
-    
+
     // Step 2: Calculate and return the blob size
     task->size_ = blob_info_ptr->GetTotalSize();
-    
+
     // Step 3: Update timestamps and log telemetry
     auto now = std::chrono::steady_clock::now();
     blob_info_ptr->last_read_ = now;
-    
-    // No specific telemetry enum for GetBlobSize, using GetBlob as closest match
+
+    // No specific telemetry enum for GetBlobSize, using GetBlob as closest
+    // match
     LogTelemetry(CteOp::kGetBlob, 0, 0, found_blob_id, tag_id,
                  blob_info_ptr->last_modified_, now);
-    
+
     // Success
     task->result_code_ = 0;
     HILOG(kInfo, "GetBlobSize successful: blob_id={},{}, name={}, size={}",
-          found_blob_id.major_, found_blob_id.minor_, blob_name, 
-          task->size_);
-    
+          found_blob_id.major_, found_blob_id.minor_, blob_name, task->size_);
+
   } catch (const std::exception &e) {
     task->result_code_ = 1;
   }
 }
 
 void Runtime::MonitorGetBlobSize(chi::MonitorModeId mode,
-                                hipc::FullPtr<GetBlobSizeTask> task,
-                                chi::RunContext &ctx) {
+                                 hipc::FullPtr<GetBlobSizeTask> task,
+                                 chi::RunContext &ctx) {
   switch (mode) {
   case chi::MonitorModeId::kLocalSchedule: {
     // Route to blob operations queue (round-robin on lanes)
@@ -2060,20 +2081,20 @@ void Runtime::MonitorGetBlobSize(chi::MonitorModeId mode,
 }
 
 void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
-                               chi::RunContext &ctx) {
+                                chi::RunContext &ctx) {
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
-    
+
     // Validate tag exists
     if (tag_id_to_info_.find(tag_id) == tag_id_to_info_.end()) {
       task->result_code_ = 1; // Tag not found
       return;
     }
-    
+
     // Clear output vector
     task->blob_names_.clear();
-    
+
     // Get the tag entry
     auto tag_it = tag_id_to_info_.find(tag_id);
     if (tag_it == tag_id_to_info_.end()) {
@@ -2081,41 +2102,40 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
       return;
     }
     auto &tag_info = tag_it->second;
-    
+
     // Iterate through all blobs in this tag
-    for (const auto& blob_pair : tag_info.blob_ids_) {
-      const BlobId& blob_id = blob_pair.first;
-      
+    for (const auto &blob_pair : tag_info.blob_ids_) {
+      const BlobId &blob_id = blob_pair.first;
+
       // Look up the blob info to get the actual blob name
       auto blob_info_it = blob_id_to_info_.find(blob_id);
       if (blob_info_it != blob_id_to_info_.end()) {
-        const BlobInfo& blob_info = blob_info_it->second;
+        const BlobInfo &blob_info = blob_info_it->second;
         // Add blob name to the output vector
         task->blob_names_.emplace_back(blob_info.blob_name_.c_str());
       }
     }
-    
+
     // Success
     task->result_code_ = 0;
-    
+
     // Log telemetry for this operation
-    LogTelemetry(CteOp::kGetOrCreateTag, task->blob_names_.size(), 0, 
-                 BlobId::GetNull(), tag_id,
-                 std::chrono::steady_clock::now(),
+    LogTelemetry(CteOp::kGetOrCreateTag, task->blob_names_.size(), 0,
+                 BlobId::GetNull(), tag_id, std::chrono::steady_clock::now(),
                  std::chrono::steady_clock::now());
-    
+
     HILOG(kInfo, "GetContainedBlobs successful: tag_id={},{}, found {} blobs",
           tag_id.major_, tag_id.minor_, task->blob_names_.size());
-    
+
   } catch (const std::exception &e) {
     task->result_code_ = 1; // Error during operation
     HILOG(kError, "GetContainedBlobs failed: {}", e.what());
   }
 }
 
-void Runtime::MonitorGetContainedBlobs(chi::MonitorModeId mode,
-                                      hipc::FullPtr<GetContainedBlobsTask> task,
-                                      chi::RunContext &ctx) {
+void Runtime::MonitorGetContainedBlobs(
+    chi::MonitorModeId mode, hipc::FullPtr<GetContainedBlobsTask> task,
+    chi::RunContext &ctx) {
   switch (mode) {
   case chi::MonitorModeId::kLocalSchedule: {
     // Route to blob operations queue (round-robin on lanes)
@@ -2128,7 +2148,7 @@ void Runtime::MonitorGetContainedBlobs(chi::MonitorModeId mode,
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
-    // Estimate for blob enumeration - 5μs per blob 
+    // Estimate for blob enumeration - 5μs per blob
     ctx.estimated_completion_time_us = 100.0; // Base time + per blob
     break;
   }

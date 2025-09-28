@@ -1973,6 +1973,272 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 }
 
 /**
+ * FUNCTIONAL Test Case: ReorganizeBlobs Operations
+ *
+ * This test verifies the complete ReorganizeBlobs functionality:
+ * 1. Setup core pool, register target, create tag
+ * 2. Store 10 blobs with initial score of 0.5
+ * 3. Use ReorganizeBlobs to update all blobs to score 1.0
+ * 4. Verify that scores have been updated correctly
+ * 5. Test score difference threshold filtering
+ * 6. Verify batch processing works correctly
+ *
+ * Following CLAUDE.md requirements:
+ * - Use real API calls with proper runtime initialization
+ * - Test the actual ReorganizeBlobs implementation with controlled async operations
+ * - Verify score filtering based on score_difference_threshold configuration
+ * - Test batch processing of up to 32 blobs at a time
+ */
+TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
+                 "FUNCTIONAL - ReorganizeBlobs Operations",
+                 "[cte][core][blob][reorganize][functional]") {
+  INFO("=== FUNCTIONAL ReorganizeBlobs Test ===");
+
+  // Setup: Create core pool, register target, create tag
+  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  wrp_cte::core::CreateParams params;
+  params.worker_count_ = kTestWorkerCount;
+
+  INFO("Step 1: Setting up CTE environment...");
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+
+  const std::string target_name = test_storage_path_;
+  chi::u32 reg_result = core_client_->RegisterTarget(
+      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+  REQUIRE(reg_result == 0);
+
+  auto tag_info = core_client_->GetOrCreateTag(mctx_, "reorganize_test_tag");
+  wrp_cte::core::TagId tag_id = tag_info.tag_id_;
+  REQUIRE((tag_id.major_ != 0 || tag_id.minor_ != 0));
+  INFO("✓ Environment setup completed");
+
+  SECTION("FUNCTIONAL - Store 10 blobs with score 0.5, then reorganize to score 1.0") {
+    INFO("=== Testing 10 blobs: 0.5 → 1.0 score reorganization ===");
+
+    const size_t num_blobs = 10;
+    const float initial_score = 0.5f;
+    const float target_score = 1.0f;
+    const chi::u64 blob_size = 2048; // 2KB per blob
+
+    std::vector<std::string> blob_names;
+    std::vector<std::vector<char>> blob_data;
+    std::vector<wrp_cte::core::BlobId> allocated_blob_ids;
+
+    // Phase 1: Store 10 blobs with initial score 0.5
+    INFO("Phase 1: Storing " << num_blobs << " blobs with score " << initial_score);
+    for (size_t i = 0; i < num_blobs; ++i) {
+      std::string blob_name = "reorganize_blob_" + std::to_string(i);
+      blob_names.push_back(blob_name);
+
+      char pattern = static_cast<char>('A' + (i % 26));
+      auto data = CreateTestData(blob_size, pattern);
+      blob_data.push_back(data);
+
+      // Allocate shared memory and store blob
+      hipc::FullPtr<void> put_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      REQUIRE(!put_buffer.IsNull());
+      REQUIRE(CopyToSharedMemory(put_buffer, data));
+
+      auto put_task = core_client_->AsyncPutBlob(
+          mctx_, tag_id, blob_name, wrp_cte::core::BlobId::GetNull(), 0,
+          blob_size, put_buffer.shm_, initial_score, 0);
+
+      REQUIRE(!put_task.IsNull());
+      REQUIRE(WaitForTaskCompletion(put_task, 10000));
+      REQUIRE(put_task->result_code_ == 0);
+
+      allocated_blob_ids.push_back(put_task->blob_id_);
+      INFO("✓ Blob " << i << " stored: " << blob_name 
+           << " (ID: {" << put_task->blob_id_.major_ 
+           << "," << put_task->blob_id_.minor_ << "})");
+      CHI_IPC->DelTask(put_task);
+    }
+
+    // Phase 2: Verify initial scores are 0.5
+    INFO("Phase 2: Verifying initial scores...");
+    for (size_t i = 0; i < num_blobs; ++i) {
+      float score = core_client_->GetBlobScore(mctx_, tag_id, blob_names[i]);
+      REQUIRE(std::abs(score - initial_score) < 0.01f);
+      INFO("✓ Blob " << i << " initial score verified: " << score);
+    }
+
+    // Phase 3: Use ReorganizeBlobs to update all scores to 1.0
+    INFO("Phase 3: Executing ReorganizeBlobs operation...");
+
+    // The ReorganizeBlobs API accepts std::vector types directly
+
+    // Create and execute ReorganizeBlobs task
+    auto reorganize_task = core_client_->AsyncReorganizeBlobs(
+        mctx_, tag_id, blob_names, std::vector<float>(num_blobs, target_score));
+
+    REQUIRE(!reorganize_task.IsNull());
+    INFO("Waiting for ReorganizeBlobs completion...");
+    REQUIRE(WaitForTaskCompletion(reorganize_task, 30000)); // Longer timeout for batch operation
+    REQUIRE(reorganize_task->result_code_ == 0);
+    INFO("✓ ReorganizeBlobs completed successfully");
+    CHI_IPC->DelTask(reorganize_task);
+
+    // Phase 4: Verify updated scores are 1.0
+    INFO("Phase 4: Verifying updated scores...");
+    for (size_t i = 0; i < num_blobs; ++i) {
+      float updated_score = core_client_->GetBlobScore(mctx_, tag_id, blob_names[i]);
+      REQUIRE(std::abs(updated_score - target_score) < 0.01f);
+      INFO("✓ Blob " << i << " updated score verified: " << updated_score);
+    }
+
+    // Phase 5: Verify data integrity after reorganization
+    INFO("Phase 5: Verifying data integrity after reorganization...");
+    for (size_t i = 0; i < num_blobs; ++i) {
+      hipc::FullPtr<void> get_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      REQUIRE(!get_buffer.IsNull());
+
+      bool get_success = core_client_->GetBlob(
+          mctx_, tag_id, "", allocated_blob_ids[i], 0, blob_size, 0, get_buffer.shm_);
+      REQUIRE(get_success);
+
+      auto retrieved_data = CopyFromSharedMemory(get_buffer.shm_, blob_size);
+      REQUIRE(retrieved_data == blob_data[i]);
+      
+      char expected_pattern = static_cast<char>('A' + (i % 26));
+      REQUIRE(VerifyTestData(retrieved_data, expected_pattern));
+      INFO("✓ Blob " << i << " data integrity verified after reorganization");
+    }
+
+    INFO("SUCCESS: All 10 blobs successfully reorganized from score 0.5 to 1.0!");
+  }
+
+  SECTION("FUNCTIONAL - Score difference threshold filtering") {
+    INFO("=== Testing score difference threshold filtering ===");
+
+    const size_t num_test_blobs = 5;
+    const chi::u64 blob_size = 1024;
+    
+    // Create test blobs with different initial scores
+    std::vector<std::string> test_blob_names;
+    std::vector<float> initial_scores = {0.1f, 0.5f, 0.7f, 0.9f, 0.95f};
+    std::vector<float> target_scores = {0.15f, 0.55f, 0.75f, 0.95f, 1.0f}; // Small and large differences
+
+    INFO("Creating test blobs with varying scores...");
+    for (size_t i = 0; i < num_test_blobs; ++i) {
+      std::string blob_name = "threshold_test_blob_" + std::to_string(i);
+      test_blob_names.push_back(blob_name);
+
+      auto data = CreateTestData(blob_size, static_cast<char>('T' + i));
+      hipc::FullPtr<void> put_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      REQUIRE(!put_buffer.IsNull());
+      REQUIRE(CopyToSharedMemory(put_buffer, data));
+
+      auto put_task = core_client_->AsyncPutBlob(
+          mctx_, tag_id, blob_name, wrp_cte::core::BlobId::GetNull(), 0,
+          blob_size, put_buffer.shm_, initial_scores[i], 0);
+
+      REQUIRE(!put_task.IsNull());
+      REQUIRE(WaitForTaskCompletion(put_task, 10000));
+      REQUIRE(put_task->result_code_ == 0);
+      CHI_IPC->DelTask(put_task);
+      
+      INFO("✓ Test blob " << i << " stored with score " << initial_scores[i]);
+    }
+
+    // Execute ReorganizeBlobs with mixed score differences
+    INFO("Executing ReorganizeBlobs with mixed score differences...");
+    auto threshold_reorganize_task = core_client_->AsyncReorganizeBlobs(
+        mctx_, tag_id, test_blob_names, target_scores);
+
+    REQUIRE(!threshold_reorganize_task.IsNull());
+    REQUIRE(WaitForTaskCompletion(threshold_reorganize_task, 20000));
+    REQUIRE(threshold_reorganize_task->result_code_ == 0);
+    CHI_IPC->DelTask(threshold_reorganize_task);
+
+    // Verify that blobs with significant score differences were updated
+    // Note: Default score_difference_threshold is 0.05 based on implementation
+    INFO("Verifying score updates based on threshold filtering...");
+    for (size_t i = 0; i < num_test_blobs; ++i) {
+      float current_score = core_client_->GetBlobScore(mctx_, tag_id, test_blob_names[i]);
+      float score_diff = std::abs(target_scores[i] - initial_scores[i]);
+      
+      if (score_diff >= 0.05f) { // Should be updated
+        REQUIRE(std::abs(current_score - target_scores[i]) < 0.01f);
+        INFO("✓ Blob " << i << " score updated: " << initial_scores[i] 
+             << " → " << current_score << " (diff: " << score_diff << ")");
+      } else { // Should remain unchanged
+        REQUIRE(std::abs(current_score - initial_scores[i]) < 0.01f);
+        INFO("✓ Blob " << i << " score unchanged: " << current_score 
+             << " (diff below threshold: " << score_diff << ")");
+      }
+    }
+
+    INFO("SUCCESS: Score difference threshold filtering verified!");
+  }
+
+  SECTION("FUNCTIONAL - Batch processing verification") {
+    INFO("=== Testing batch processing with exactly 32 blobs ===");
+
+    const size_t batch_size = 32; // Exactly the batch size limit
+    const float initial_score = 0.3f;
+    const float target_score = 0.8f;
+    const chi::u64 blob_size = 512; // Smaller blobs for batch test
+
+    std::vector<std::string> batch_blob_names;
+    
+    INFO("Creating " << batch_size << " blobs for batch processing test...");
+    for (size_t i = 0; i < batch_size; ++i) {
+      std::string blob_name = "batch_blob_" + std::to_string(i);
+      batch_blob_names.push_back(blob_name);
+
+      auto data = CreateTestData(blob_size, static_cast<char>('B'));
+      hipc::FullPtr<void> put_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      REQUIRE(!put_buffer.IsNull());
+      REQUIRE(CopyToSharedMemory(put_buffer, data));
+
+      auto put_task = core_client_->AsyncPutBlob(
+          mctx_, tag_id, blob_name, wrp_cte::core::BlobId::GetNull(), 0,
+          blob_size, put_buffer.shm_, initial_score, 0);
+
+      REQUIRE(!put_task.IsNull());
+      REQUIRE(WaitForTaskCompletion(put_task, 10000));
+      REQUIRE(put_task->result_code_ == 0);
+      CHI_IPC->DelTask(put_task);
+
+      if ((i + 1) % 8 == 0) {
+        INFO("✓ Created " << (i + 1) << "/" << batch_size << " batch blobs");
+      }
+    }
+
+    // Execute batch reorganization
+    INFO("Executing batch ReorganizeBlobs operation...");
+    std::vector<float> batch_target_scores(batch_size, target_score);
+    
+    auto batch_reorganize_task = core_client_->AsyncReorganizeBlobs(
+        mctx_, tag_id, batch_blob_names, batch_target_scores);
+
+    REQUIRE(!batch_reorganize_task.IsNull());
+    INFO("Waiting for batch reorganization (may take longer for 32 blobs)...");
+    REQUIRE(WaitForTaskCompletion(batch_reorganize_task, 60000)); // Extended timeout
+    REQUIRE(batch_reorganize_task->result_code_ == 0);
+    CHI_IPC->DelTask(batch_reorganize_task);
+
+    // Verify all blobs in batch were updated
+    INFO("Verifying all " << batch_size << " blobs were reorganized...");
+    size_t verified_count = 0;
+    for (size_t i = 0; i < batch_size; ++i) {
+      float current_score = core_client_->GetBlobScore(mctx_, tag_id, batch_blob_names[i]);
+      REQUIRE(std::abs(current_score - target_score) < 0.01f);
+      verified_count++;
+      
+      if ((i + 1) % 8 == 0) {
+        INFO("✓ Verified " << (i + 1) << "/" << batch_size << " batch blob scores");
+      }
+    }
+
+    REQUIRE(verified_count == batch_size);
+    INFO("SUCCESS: Batch processing of " << batch_size << " blobs completed successfully!");
+  }
+
+  INFO("=== ReorganizeBlobs FUNCTIONAL Test Completed Successfully ===");
+}
+
+/**
  * Integration Test: End-to-End CTE Core Workflow
  *
  * This test verifies the complete workflow:
