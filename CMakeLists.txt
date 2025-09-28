@@ -63,6 +63,7 @@ message(STATUS "  chimaera_admin: ${chimaera_admin_FOUND}")
 
 # Add nanobind for Python bindings
 add_subdirectory(external/nanobind)
+find_first_path_python()
 
 message(STATUS "Found Chimaera framework - building full ChiMod implementation")
 
