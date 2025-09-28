@@ -31,12 +31,14 @@ struct PerformanceConfig {
   chi::u32 blob_cache_size_mb_;         // Cache size for blob operations
   chi::u32 max_concurrent_operations_;  // Max concurrent I/O operations
   float score_threshold_;               // Threshold for blob reorganization
+  float score_difference_threshold_;    // Minimum score difference for reorganization
   
   PerformanceConfig() 
       : target_stat_interval_ms_(5000),
         blob_cache_size_mb_(256),
         max_concurrent_operations_(64),
-        score_threshold_(0.7f) {}
+        score_threshold_(0.7f),
+        score_difference_threshold_(0.05f) {}
 };
 
 /**
@@ -60,10 +62,11 @@ struct StorageDeviceConfig {
   std::string path_;          // Directory path for the block device
   std::string bdev_type_;     // Block device type ("file", "ram", etc.)
   chi::u64 capacity_limit_;   // Capacity limit in bytes (parsed from size string)
+  float score_;               // Optional manual score (0.0-1.0), -1.0 means use automatic scoring
   
-  StorageDeviceConfig() : capacity_limit_(0) {}
-  StorageDeviceConfig(const std::string& path, const std::string& bdev_type, chi::u64 capacity)
-      : path_(path), bdev_type_(bdev_type), capacity_limit_(capacity) {}
+  StorageDeviceConfig() : capacity_limit_(0), score_(-1.0f) {}
+  StorageDeviceConfig(const std::string& path, const std::string& bdev_type, chi::u64 capacity, float score = -1.0f)
+      : path_(path), bdev_type_(bdev_type), capacity_limit_(capacity), score_(score) {}
 };
 
 /**

@@ -253,8 +253,14 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     target_info.bytes_written_ = 0;
     target_info.ops_read_ = 0;
     target_info.ops_written_ = 0;
-    target_info.target_score_ =
-        0.0f; // Will be calculated based on performance metrics
+    // Check if this target has a manually configured score from storage device config
+    float manual_score = GetManualScoreForTarget(target_name);
+    if (manual_score >= 0.0f) {
+      target_info.target_score_ = manual_score; // Use configured manual score
+      HILOG(kInfo, "Target '{}' using manual score: {:.2f}", target_name, manual_score);
+    } else {
+      target_info.target_score_ = 0.0f; // Will be calculated based on performance metrics
+    }
     target_info.remaining_space_ =
         remaining_size; // Use actual remaining space from bdev
     target_info.perf_metrics_ =
@@ -775,34 +781,170 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
       return;
     }
     
-    // Process each blob
-    size_t updated_count = 0;
-    for (size_t i = 0; i < task->blob_names_.size(); ++i) {
-      const std::string blob_name = task->blob_names_[i].str();
-      float new_score = task->new_scores_[i];
+    // Get configuration for score difference threshold
+    const Config &config = GetConfig();
+    float score_difference_threshold = config.performance_.score_difference_threshold_;
+    
+    // Get CTE client for async operations
+    auto *cte_client = WRP_CTE_CLIENT;
+    
+    // Process blobs in batches of 32
+    constexpr size_t kMaxBatchSize = 32;
+    size_t total_reorganized = 0;
+    size_t total_blobs = task->blob_names_.size();
+    
+    for (size_t batch_start = 0; batch_start < total_blobs; batch_start += kMaxBatchSize) {
+      size_t batch_end = std::min(batch_start + kMaxBatchSize, total_blobs);
+      size_t batch_size = batch_end - batch_start;
       
-      // Validate score range
-      if (new_score < 0.0f || new_score > 1.0f) {
-        continue; // Skip invalid scores
+      // Step 1: Asynchronously get blob scores for this batch
+      std::vector<hipc::FullPtr<GetBlobScoreTask>> score_tasks;
+      score_tasks.reserve(batch_size);
+      
+      for (size_t i = batch_start; i < batch_end; ++i) {
+        const std::string blob_name = task->blob_names_[i].str();
+        auto score_task = cte_client->AsyncGetBlobScore(hipc::MemContext(), tag_id, blob_name);
+        score_tasks.push_back(score_task);
       }
       
-      // Find and update the blob score (simplified implementation)
-      // In a real implementation, this would lookup and update blob metadata
-      // For now, just count valid blob names as updated
-      if (!blob_name.empty()) {
-        updated_count++;
+      // Wait for all score tasks to complete
+      std::vector<bool> should_reorganize(batch_size, false);
+      std::vector<float> current_scores(batch_size, 0.0f);
+      size_t valid_blobs_in_batch = 0;
+      
+      for (size_t i = 0; i < score_tasks.size(); ++i) {
+        score_tasks[i]->Wait();
+        size_t global_idx = batch_start + i;
+        
+        if (score_tasks[i]->result_code_ == 0) {
+          current_scores[i] = score_tasks[i]->score_;
+          float new_score = task->new_scores_[global_idx];
+          
+          // Step 2: Remove blobs with negligibly different scores
+          float score_diff = std::abs(new_score - current_scores[i]);
+          if (score_diff >= score_difference_threshold && new_score >= 0.0f && new_score <= 1.0f) {
+            should_reorganize[i] = true;
+            valid_blobs_in_batch++;
+          }
+        }
+        
+        CHI_IPC->DelTask(score_tasks[i]);
       }
+      
+      // Skip this batch if no blobs need reorganization
+      if (valid_blobs_in_batch == 0) {
+        continue;
+      }
+      
+      // Step 3: Asynchronously get blob sizes for blobs that need reorganization
+      std::vector<hipc::FullPtr<GetBlobSizeTask>> size_tasks;
+      std::vector<size_t> reorganize_indices; // Maps size_tasks index to batch index
+      
+      for (size_t i = 0; i < batch_size; ++i) {
+        if (should_reorganize[i]) {
+          size_t global_idx = batch_start + i;
+          const std::string blob_name = task->blob_names_[global_idx].str();
+          auto size_task = cte_client->AsyncGetBlobSize(hipc::MemContext(), tag_id, blob_name);
+          size_tasks.push_back(size_task);
+          reorganize_indices.push_back(i);
+        }
+      }
+      
+      // Step 4: Wait for size tasks completion and allocate individual buffers
+      std::vector<chi::u64> blob_sizes(size_tasks.size(), 0);
+      std::vector<hipc::FullPtr<void>> blob_data_buffers(size_tasks.size());
+      std::vector<hipc::Pointer> blob_data_ptrs(size_tasks.size());
+      
+      auto *ipc_manager = CHI_IPC;
+      for (size_t i = 0; i < size_tasks.size(); ++i) {
+        size_tasks[i]->Wait();
+        if (size_tasks[i]->result_code_ == 0) {
+          blob_sizes[i] = size_tasks[i]->size_;
+          
+          // Step 5: Allocate individual buffer for each blob
+          if (blob_sizes[i] > 0) {
+            blob_data_buffers[i] = ipc_manager->AllocateBuffer<void>(blob_sizes[i]);
+            if (blob_data_buffers[i].IsNull()) {
+              HILOG(kError, "Failed to allocate buffer for blob {} during reorganization", i);
+              task->result_code_ = 1;
+              return;
+            }
+            blob_data_ptrs[i] = blob_data_buffers[i].shm_;
+          }
+        }
+        CHI_IPC->DelTask(size_tasks[i]);
+      }
+      
+      // Step 6: Asynchronously get blob data
+      std::vector<hipc::FullPtr<GetBlobTask>> get_tasks;
+      
+      for (size_t i = 0; i < size_tasks.size(); ++i) {
+        if (blob_sizes[i] > 0) {
+          size_t batch_idx = reorganize_indices[i];
+          size_t global_idx = batch_start + batch_idx;
+          const std::string blob_name = task->blob_names_[global_idx].str();
+          
+          auto get_task = cte_client->AsyncGetBlob(hipc::MemContext(), tag_id, blob_name, 
+                                                  BlobId::GetNull(), 0, blob_sizes[i], 0, blob_data_ptrs[i]);
+          get_tasks.push_back(get_task);
+        }
+      }
+      
+      // Step 7: Wait for get tasks completion
+      for (auto get_task : get_tasks) {
+        get_task->Wait();
+        if (get_task->result_code_ != 0) {
+          HILOG(kWarning, "Failed to get blob data during reorganization, skipping blob");
+        }
+        CHI_IPC->DelTask(get_task);
+      }
+      
+      // Step 8: Asynchronously put blobs with new scores
+      std::vector<hipc::FullPtr<PutBlobTask>> put_tasks;
+      
+      for (size_t i = 0; i < size_tasks.size(); ++i) {
+        if (blob_sizes[i] > 0) {
+          size_t batch_idx = reorganize_indices[i];
+          size_t global_idx = batch_start + batch_idx;
+          const std::string blob_name = task->blob_names_[global_idx].str();
+          float new_score = task->new_scores_[global_idx];
+          
+          auto put_task = cte_client->AsyncPutBlob(hipc::MemContext(), tag_id, blob_name, 
+                                                  BlobId::GetNull(), 0, blob_sizes[i], 
+                                                  blob_data_ptrs[i], new_score, 0);
+          put_tasks.push_back(put_task);
+        }
+      }
+      
+      // Step 9: Wait for put tasks completion
+      size_t successful_reorganizations = 0;
+      for (auto put_task : put_tasks) {
+        put_task->Wait();
+        if (put_task->result_code_ == 0) {
+          successful_reorganizations++;
+        } else {
+          HILOG(kWarning, "Failed to put blob during reorganization");
+        }
+        CHI_IPC->DelTask(put_task);
+      }
+      
+      total_reorganized += successful_reorganizations;
     }
     
-    task->result_code_ = (updated_count > 0) ? 0 : 1; // Success if at least one blob updated
+    // Set result based on whether any blobs were successfully reorganized
+    task->result_code_ = (total_reorganized > 0) ? 0 : 1;
     
-    // Update telemetry - using existing LogTelemetry method
-    LogTelemetry(CteOp::kGetOrCreateTag, updated_count, 0, 
+    // Update telemetry
+    LogTelemetry(CteOp::kGetOrCreateTag, total_reorganized, 0, 
                  BlobId::GetNull(), tag_id,
                  std::chrono::steady_clock::now(),
                  std::chrono::steady_clock::now());
     
+    HILOG(kInfo, "ReorganizeBlobs completed: tag_id={},{}, reorganized {} out of {} blobs",
+          tag_id.major_, tag_id.minor_, total_reorganized, total_blobs);
+    
   } catch (const std::exception& e) {
+    HILOG(kError, "ReorganizeBlobs failed: {}", e.what());
     task->result_code_ = 1; // Error during reorganization
   }
 }
@@ -1143,26 +1285,50 @@ void Runtime::UpdateTargetStats(const chi::PoolId &target_id,
   target_info.perf_metrics_ = perf_metrics;
   target_info.remaining_space_ = remaining_size;
 
-  // Auto-calculate target score using normalized log bandwidth
-  double max_bandwidth =
-      std::max(target_info.perf_metrics_.read_bandwidth_mbps_,
-               target_info.perf_metrics_.write_bandwidth_mbps_);
-  if (max_bandwidth > 0.0) {
-    // Find the maximum bandwidth across all targets for normalization
-    double global_max_bandwidth =
-        1000.0; // TODO: Calculate actual max from all targets
-
-    // Use logarithmic scaling for target score: log(bandwidth_i) /
-    // log(bandwidth_MAX)
-    target_info.target_score_ = static_cast<float>(
-        std::log(max_bandwidth + 1.0) / std::log(global_max_bandwidth + 1.0));
-
-    // Clamp to [0, 1] range
-    target_info.target_score_ =
-        std::max(0.0f, std::min(1.0f, target_info.target_score_));
+  // Check if this target has a manually configured score - if so, don't overwrite it
+  float manual_score = GetManualScoreForTarget(target_info.target_name_);
+  if (manual_score >= 0.0f) {
+    // Keep the manually configured score, don't auto-calculate
+    target_info.target_score_ = manual_score;
   } else {
-    target_info.target_score_ = 0.0f; // No bandwidth, lowest score
+    // Auto-calculate target score using normalized log bandwidth
+    double max_bandwidth =
+        std::max(target_info.perf_metrics_.read_bandwidth_mbps_,
+                 target_info.perf_metrics_.write_bandwidth_mbps_);
+    if (max_bandwidth > 0.0) {
+      // Find the maximum bandwidth across all targets for normalization
+      double global_max_bandwidth =
+          1000.0; // TODO: Calculate actual max from all targets
+
+      // Use logarithmic scaling for target score: log(bandwidth_i) /
+      // log(bandwidth_MAX)
+      target_info.target_score_ = static_cast<float>(
+          std::log(max_bandwidth + 1.0) / std::log(global_max_bandwidth + 1.0));
+
+      // Clamp to [0, 1] range
+      target_info.target_score_ =
+          std::max(0.0f, std::min(1.0f, target_info.target_score_));
+    } else {
+      target_info.target_score_ = 0.0f; // No bandwidth, lowest score
+    }
   }
+}
+
+float Runtime::GetManualScoreForTarget(const std::string &target_name) {
+  // Check if the target name matches a configured storage device with manual score
+  for (size_t i = 0; i < storage_devices_.size(); ++i) {
+    const auto &device = storage_devices_[i];
+    
+    // Create the expected target name based on how targets are registered
+    std::string expected_target_name = "storage_device_" + std::to_string(i);
+    
+    // Also check if target name matches the device path directly
+    if (target_name == expected_target_name || target_name == device.path_) {
+      return device.score_; // Return configured score (-1.0f if not set)
+    }
+  }
+  
+  return -1.0f; // No manual score configured for this target
 }
 
 TagId Runtime::GetOrAssignTagId(const std::string &tag_name,

@@ -41,21 +41,25 @@ storage:
   - path: "/mnt/nvme/cte_primary"
     bdev_type: "file"
     capacity_limit: "1TB"
+    score: 0.9           # Manual score override (0.0-1.0) - highest tier
   
   # RAM-based storage for temporary/cache data
   - path: "/tmp/cte_cache"
     bdev_type: "ram"
     capacity_limit: "8GB"
+    score: 1.0           # Manual score override - fastest tier
   
   # Secondary storage on traditional SSDs
   - path: "/mnt/ssd/cte_secondary"
     bdev_type: "file"
     capacity_limit: "500GB"
+    score: 0.6           # Manual score override - medium tier
   
-  # Additional NVMe for high-throughput workloads
+  # Additional NVMe for high-throughput workloads (no score = automatic)
   - path: "/mnt/nvme2/cte_bulk"
     bdev_type: "file"
     capacity_limit: "2TB"
+    # score not specified - will use automatic bandwidth-based scoring
 
 # Data Placement Engine configuration
 dpe:

@@ -51,8 +51,46 @@ NEVER DO MOCK CODE OR STUB CODE UNLESS SPECIFICALLY STATED OTHERWISE. ALWAYS IMP
 
 ## Build Configuration
 
-- Always use the debug CMakePreset when compiling code in this repo.
-- Always use cmake debug preset when compiling
+### ChiMod Build Patterns
+
+This project follows the Chimaera MODULE_DEVELOPMENT_GUIDE.md patterns for proper ChiMod development:
+
+**Required Packages for ChiMod Development:**
+```cmake
+# Core Chimaera framework (includes ChimaeraCommon.cmake functions)
+find_package(chimaera REQUIRED)              # Core library (chimaera::cxx)
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod (required for most ChiMods)
+```
+
+**ChiMod Creation Pattern:**
+```cmake
+# Use modern ChiMod build functions instead of manual add_library
+add_chimod_runtime(
+  CHIMOD_NAME core
+  SOURCES 
+    src/core_runtime.cc
+    src/core_config.cc
+    src/autogen/core_lib_exec.cc
+)
+
+add_chimod_client(
+  CHIMOD_NAME core
+  SOURCES 
+    src/core_client.cc
+    src/content_transfer_engine.cc
+)
+```
+
+**Target Naming:**
+- **Actual Targets**: `${NAMESPACE}_${CHIMOD_NAME}_runtime`, `${NAMESPACE}_${CHIMOD_NAME}_client`
+- **CMake Aliases**: `${NAMESPACE}::${CHIMOD_NAME}_runtime`, `${NAMESPACE}::${CHIMOD_NAME}_client` (recommended)
+- **Package Names**: `${NAMESPACE}_${CHIMOD_NAME}` (for external find_package)
+
+### Compilation Standards
+- Always use the debug CMakePreset when compiling code in this repo
+- Never hardcode paths in CMakeLists.txt files
+- Use find_package() for all dependencies
+- Follow ChiMod build patterns from MODULE_DEVELOPMENT_GUIDE.md
 - All compilation warnings have been resolved as of the current state
 
 ## Code Quality Standards
@@ -122,21 +160,57 @@ This documentation covers:
 ### External Integration Test
 A standalone external integration test is available at: `test/unit/external/`
 
-This test demonstrates:
-- How to properly link external applications to CTE Core libraries
-- Complete API usage examples with error handling
-- Proper initialization and cleanup patterns
-- CMake configuration for external projects
+This test demonstrates **MODULE_DEVELOPMENT_GUIDE.md compliant patterns**:
+- Modern find_package() usage for ChiMod discovery
+- Proper target linking with namespace::module_type aliases
+- Automatic dependency resolution through ChiMod targets
+- External application CMake configuration
+
+**Modern External Linking Pattern:**
+```cmake
+# Find required packages
+find_package(chimaera REQUIRED)              # Core framework
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod
+find_package(wrp_cte_core REQUIRED)          # CTE Core ChiMod
+
+# Link using modern target aliases (recommended)
+target_link_libraries(my_app
+    wrp_cte::core_client                      # CTE client library
+    # Framework dependencies auto-included by ChiMod targets
+)
+```
 
 To run the external test:
 ```bash
 cd test/unit/external
 mkdir -p build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Debug
 make
 ./cte_external_test
 ```
 
 ## Development Workflow
 
-- Never call chi_refresh_repo directly. Use bash env.sh instead.
+### ChiMod Development
+
+**Build System Requirements:**
+1. **Never hardcode paths** - always use find_package() and proper CMake variables
+2. **Use ChiMod build functions** - `add_chimod_runtime()`, `add_chimod_client()`, or `add_chimod_both()`
+3. **Follow target naming** - use namespace::module_type patterns
+4. **Automatic dependencies** - ChiMod functions handle core dependencies automatically
+
+**Required find_package patterns:**
+```cmake
+# For internal ChiMod development:
+find_package(chimaera REQUIRED)              # Core framework
+find_package(chimaera_admin REQUIRED)        # Admin ChiMod
+
+# For external applications:
+find_package(chimaera REQUIRED)              # Core framework  
+find_package(wrp_cte_core REQUIRED)          # CTE ChiMod package
+```
+
+**Build Commands:**
+- Never call chi_refresh_repo directly. Use bash env.sh instead
+- Always use debug cmake preset: `cmake --preset=debug`
+- Build: `cmake --build build --config Debug`

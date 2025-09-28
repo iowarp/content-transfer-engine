@@ -120,6 +120,11 @@ bool Config::Validate() const {
     return false;
   }
   
+  if (performance_.score_difference_threshold_ < 0.0f || performance_.score_difference_threshold_ > 1.0f) {
+    HELOG(kError, "Config validation error: Invalid score_difference_threshold {} (must be 0.0-1.0)", performance_.score_difference_threshold_);
+    return false;
+  }
+  
   // Validate target configuration
   if (targets_.max_targets_ == 0 || targets_.max_targets_ > 1024) {
     HELOG(kError, "Config validation error: Invalid max_targets {} (must be 1-1024)", targets_.max_targets_);
@@ -149,6 +154,9 @@ std::string Config::GetParameterString(const std::string &param_name) const {
   }
   if (param_name == "score_threshold") {
     return std::to_string(performance_.score_threshold_);
+  }
+  if (param_name == "score_difference_threshold") {
+    return std::to_string(performance_.score_difference_threshold_);
   }
   if (param_name == "max_targets") {
     return std::to_string(targets_.max_targets_);
@@ -184,6 +192,10 @@ bool Config::SetParameterFromString(const std::string &param_name,
     }
     if (param_name == "score_threshold") {
       performance_.score_threshold_ = std::stof(value);
+      return true;
+    }
+    if (param_name == "score_difference_threshold") {
+      performance_.score_difference_threshold_ = std::stof(value);
       return true;
     }
     if (param_name == "max_targets") {
@@ -299,6 +311,7 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
   emitter << YAML::Key << "blob_cache_size_mb" << YAML::Value << performance_.blob_cache_size_mb_;
   emitter << YAML::Key << "max_concurrent_operations" << YAML::Value << performance_.max_concurrent_operations_;
   emitter << YAML::Key << "score_threshold" << YAML::Value << performance_.score_threshold_;
+  emitter << YAML::Key << "score_difference_threshold" << YAML::Value << performance_.score_difference_threshold_;
   emitter << YAML::EndMap;
   
   // Emit target configuration
@@ -316,6 +329,12 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
       emitter << YAML::Key << "path" << YAML::Value << device.path_;
       emitter << YAML::Key << "bdev_type" << YAML::Value << device.bdev_type_;
       emitter << YAML::Key << "capacity_limit" << YAML::Value << FormatSizeBytes(device.capacity_limit_);
+      
+      // Emit score only if it's manually set (not using automatic scoring)
+      if (device.score_ >= 0.0f) {
+        emitter << YAML::Key << "score" << YAML::Value << device.score_;
+      }
+      
       emitter << YAML::EndMap;
     }
     emitter << YAML::EndSeq;
@@ -357,6 +376,10 @@ bool Config::ParsePerformanceConfig(const YAML::Node &node) {
   
   if (node["score_threshold"]) {
     performance_.score_threshold_ = node["score_threshold"].as<float>();
+  }
+  
+  if (node["score_difference_threshold"]) {
+    performance_.score_difference_threshold_ = node["score_difference_threshold"].as<float>();
   }
   
   return true;
@@ -422,6 +445,19 @@ bool Config::ParseStorageConfig(const YAML::Node &node) {
       HELOG(kError, "Config error: Invalid capacity_limit format '{}' for device {}", capacity_str, device_config.path_);
       return false;
     }
+    
+    // Parse score (optional)
+    if (device_node["score"]) {
+      device_config.score_ = device_node["score"].as<float>();
+      
+      // Validate score range
+      if (device_config.score_ < 0.0f || device_config.score_ > 1.0f) {
+        HELOG(kError, "Config error: Storage device score {} must be between 0.0 and 1.0 for device {}", 
+              device_config.score_, device_config.path_);
+        return false;
+      }
+    }
+    // score_ defaults to -1.0f (use automatic scoring) if not specified
     
     // Validate parsed values
     if (device_config.path_.empty()) {

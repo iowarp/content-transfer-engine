@@ -613,7 +613,17 @@ public:
                                           size_t data_size, size_t off = 0, float score = 1.0f);
 
   /**
-   * GetBlob - Retrieves blob data into pre-allocated shared memory buffer
+   * GetBlob - Allocates shared memory, retrieves blob data, copies to output buffer
+   * @param blob_name Name of the blob to retrieve
+   * @param data Output buffer to copy blob data into (must be pre-allocated by caller)
+   * @param data_size Size of data to retrieve (must be > 0)
+   * @param off Offset within blob (default 0)
+   * @note Automatically handles shared memory allocation/deallocation
+   */
+  void GetBlob(const std::string &blob_name, char *data, size_t data_size, size_t off = 0);
+
+  /**
+   * GetBlob (SHM) - Retrieves blob data into pre-allocated shared memory buffer
    * @param blob_name Name of the blob to retrieve
    * @param data Pre-allocated shared memory pointer for output data (must not be null)
    * @param data_size Size of data to retrieve (must be > 0)

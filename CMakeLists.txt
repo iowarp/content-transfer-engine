@@ -49,18 +49,7 @@ if(CTE_ENABLE_DOTENV AND EXISTS "${CMAKE_SOURCE_DIR}/.env.cmake")
         # Prepend to existing CMAKE_PREFIX_PATH
         list(PREPEND CMAKE_PREFIX_PATH ${ENV_CMAKE_PREFIX_PATH})
         message(STATUS "CMAKE_PREFIX_PATH set to: ${CMAKE_PREFIX_PATH}")
-    endif()
-    
-    # Set chimaera package directories directly based on the known installed locations
-    if(EXISTS "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-core")
-        set(chimaera-core_DIR "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-core")
-        message(STATUS "chimaera-core_DIR set to: ${chimaera-core_DIR}")
-    endif()
-    
-    if(EXISTS "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-admin")
-        set(chimaera-admin_DIR "/home/llogan/.scspkg/packages/iowarp-runtime/cmake/chimaera-admin")
-        message(STATUS "chimaera-admin_DIR set to: ${chimaera-admin_DIR}")
-    endif()
+    endif() 
 endif()
 
 # Find required Chimaera framework packages following MODULE_DEVELOPMENT_GUIDE.md patterns

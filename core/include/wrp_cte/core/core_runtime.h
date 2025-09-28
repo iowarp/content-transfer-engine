@@ -266,6 +266,13 @@ class Runtime : public chi::Container {
   void UpdateTargetStats(const chi::PoolId& target_id, TargetInfo& target_info);
 
   /**
+   * Helper function to get manual score for a target from storage device config
+   * @param target_name Name of the target to look up
+   * @return Manual score (0.0-1.0) if configured, -1.0f if not set (use automatic)
+   */
+  float GetManualScoreForTarget(const std::string& target_name);
+
+  /**
    * Helper function to get or assign a tag ID
    */
   TagId GetOrAssignTagId(const std::string& tag_name, const TagId& preferred_id = TagId::GetNull());

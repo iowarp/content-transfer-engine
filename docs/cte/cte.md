@@ -246,7 +246,8 @@ public:
                                           size_t data_size, size_t off = 0, float score = 1.0f);
   
   // Blob retrieval operations
-  void GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_size, size_t off = 0);
+  void GetBlob(const std::string &blob_name, char *data, size_t data_size, size_t off = 0);      // Automatic memory management
+  void GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_size, size_t off = 0); // Manual memory management
   
   // Blob metadata operations
   float GetBlobScore(const std::string &blob_name);
@@ -561,9 +562,13 @@ try {
     float blob_score = dataset_tag.GetBlobScore("blob_001");
     std::cout << "Blob score: " << blob_score << "\n";
     
-    // Retrieve the blob
-    auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
-    dataset_tag.GetBlob("blob_001", retrieve_buffer.shm_, blob_size);
+    // Retrieve the blob using automatic memory management (recommended)
+    std::vector<char> retrieve_data(blob_size);
+    dataset_tag.GetBlob("blob_001", retrieve_data.data(), blob_size);
+    
+    // Alternative: Retrieve using manual shared memory management
+    // auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    // dataset_tag.GetBlob("blob_001", retrieve_buffer.shm_, blob_size);
     
     std::cout << "Blob retrieved successfully\n";
     
@@ -616,6 +621,45 @@ try {
     
 } catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << "\n";
+}
+```
+
+#### Memory Management: Automatic vs Manual
+
+The Tag class provides two GetBlob variants to suit different memory management preferences:
+
+```cpp
+wrp_cte::core::Tag data_tag("performance_data");
+
+try {
+    // Store some test data
+    std::string test_data = "Sample blob data for retrieval testing";
+    data_tag.PutBlob("test_blob", test_data.c_str(), test_data.size());
+    
+    chi::u64 blob_size = data_tag.GetBlobSize("test_blob");
+    std::cout << "Blob size: " << blob_size << " bytes\n";
+    
+    // Method 1: Automatic memory management (recommended for most use cases)
+    std::vector<char> auto_buffer(blob_size);
+    data_tag.GetBlob("test_blob", auto_buffer.data(), blob_size);
+    std::cout << "Retrieved with automatic memory management\n";
+    
+    // Method 2: Manual shared memory management (for advanced use cases)
+    auto shm_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    if (!shm_buffer.IsNull()) {
+        data_tag.GetBlob("test_blob", shm_buffer.shm_, blob_size);
+        std::cout << "Retrieved with manual shared memory management\n";
+        // shm_buffer automatically freed when it goes out of scope
+    }
+    
+    // Method 1 is preferred because:
+    // - No shared memory allocation required
+    // - Automatic cleanup via RAII
+    // - Works with standard C++ containers
+    // - Simpler error handling
+    
+} catch (const std::exception& e) {
+    std::cerr << "Memory management example error: " << e.what() << "\n";
 }
 ```
 
@@ -893,20 +937,23 @@ queues:
 
 # Storage device configuration
 storage:
-  # Primary high-performance storage
+  # Primary high-performance storage with manual tier score
   - path: "/mnt/nvme/cte_primary"
     bdev_type: "file"
     capacity_limit: "1TB"
+    score: 0.9                # Optional: Manual tier score (0.0-1.0)
   
-  # RAM-based cache
+  # RAM-based cache (highest tier)
   - path: "/tmp/cte_cache"
     bdev_type: "ram"
     capacity_limit: "8GB"
+    score: 1.0                # Optional: Manual tier score for fastest access
   
-  # Secondary storage
+  # Secondary storage (uses automatic scoring)
   - path: "/mnt/ssd/cte_secondary"
     bdev_type: "file"
     capacity_limit: "500GB"
+    # No score specified - uses automatic bandwidth-based scoring
 
 # Data Placement Engine configuration
 dpe:
@@ -952,6 +999,49 @@ config.SaveToFile("/path/to/new_config.yaml");
 - `"ram"` - RAM-based block device (for caching)
 - `"dev_dax"` - Persistent memory device
 - `"posix"` - POSIX file system interface
+
+### Manual Tier Scoring
+
+Storage devices support optional manual tier scoring to override automatic bandwidth-based tier assignment:
+
+#### Configuration Parameters
+
+- **`score`** *(optional, float 0.0-1.0)*: Manual tier score for the storage device
+  - **1.0**: Highest tier (fastest access, e.g., RAM, high-end NVMe)
+  - **0.8-0.9**: High-performance tier (e.g., NVMe SSDs)
+  - **0.5-0.7**: Medium-performance tier (e.g., SATA SSDs)
+  - **0.1-0.4**: Low-performance tier (e.g., HDDs, network storage)
+  - **Not specified**: Uses automatic bandwidth-based scoring
+
+#### Behavior
+
+- Manual scores are preserved during target statistics updates
+- Targets with manual scores will not be overwritten by automatic scoring algorithms
+- Data placement engines use these scores for intelligent tier selection
+- Mixed configurations (some manual, some automatic) are fully supported
+
+#### Example Configuration
+
+```yaml
+storage:
+  # Fastest tier - manual score
+  - path: "/mnt/ram/cache"
+    bdev_type: "ram"
+    capacity_limit: "16GB"
+    score: 1.0
+  
+  # High-performance tier - manual score  
+  - path: "/mnt/nvme/primary"
+    bdev_type: "file"
+    capacity_limit: "1TB"
+    score: 0.85
+  
+  # Medium tier - automatic scoring
+  - path: "/mnt/ssd/secondary"
+    bdev_type: "file"
+    capacity_limit: "2TB"
+    # Uses automatic bandwidth measurement
+```
 
 ### Data Placement Engine Types
 
