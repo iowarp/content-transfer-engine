@@ -63,12 +63,6 @@ message(STATUS "  chimaera_admin: ${chimaera_admin_FOUND}")
 
 # Add nanobind for Python bindings
 find_first_path_python()
-
-# Force nanobind to use the Python found by find_first_path_python
-set(Python_EXECUTABLE ${PYTHON_SCAN} CACHE FILEPATH "Python executable" FORCE)
-set(Python3_EXECUTABLE ${PYTHON_SCAN} CACHE FILEPATH "Python3 executable" FORCE)
-message(STATUS "Forcing nanobind to use Python: ${PYTHON_SCAN}")
-
 add_subdirectory(external/nanobind)
 
 
