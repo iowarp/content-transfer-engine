@@ -66,6 +66,8 @@ find_first_path_python()
 set(Python3_EXECUTABLE ${PYTHON_SCAN} CACHE FILEPATH "Python executable" FORCE) 
 message(STATUS "Python3_EXECUTABLE set to: ${Python3_EXECUTABLE}")
 add_subdirectory(external/nanobind)
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+
 
 message(STATUS "Found Chimaera framework - building full ChiMod implementation")
 
