@@ -1,0 +1,478 @@
+from jarvis_cd.basic.pkg import Service
+from jarvis_cd.util import SizeType
+from jarvis_cd.shell.process import Rm
+from jarvis_cd.shell import PsshExecInfo
+import yaml
+import os
+
+class WrpCte(Service):
+    """
+    Content Transfer Engine (CTE) configuration service for IoWarp.
+    
+    This service configures the CTE core module by generating YAML configuration
+    files and setting appropriate environment variables. It does not run as a
+    persistent service but rather prepares the environment for CTE usage.
+    """
+    
+    def _init(self):
+        """
+        Initialize the WrpCte service.
+        
+        This method is called during service initialization.
+        """
+        self.config_file_path = None
+        self.devices_from_resource_graph = []
+
+    def _configure_menu(self):
+        """
+        Configure the service menu.
+        
+        Returns:
+            List[Dict]: Configuration menu options for CTE.
+        """
+        return [
+            {
+                'name': 'devices',
+                'msg': 'List of storage devices as tuples (path, capacity, score)',
+                'type': list,
+                'default': [],
+                'help': 'Example: [("/mnt/nvme", "1TB", 0.9), ("/tmp/ram_cache", "8GB", 1.0)]. Use /tmp/ paths for RAM storage. Supports SizeType format: k/K, m/M, g/G, t/T'
+            },
+            {
+                'name': 'worker_count',
+                'msg': 'Number of worker threads for CTE',
+                'type': int,
+                'default': 4
+            },
+            {
+                'name': 'dpe_type',
+                'msg': 'Data Placement Engine type',
+                'type': str,
+                'choices': ['random', 'round_robin', 'max_bw'],
+                'default': 'max_bw'
+            },
+            {
+                'name': 'blob_cache_size_mb',
+                'msg': 'Blob cache size in megabytes',
+                'type': int,
+                'default': 512
+            },
+            {
+                'name': 'max_concurrent_operations',
+                'msg': 'Maximum concurrent operations',
+                'type': int,
+                'default': 64
+            },
+            {
+                'name': 'target_stat_interval_ms',
+                'msg': 'Target statistics collection interval in milliseconds',
+                'type': int,
+                'default': 5000
+            },
+            {
+                'name': 'score_threshold',
+                'msg': 'Minimum score threshold for device selection',
+                'type': float,
+                'default': 0.7
+            },
+            {
+                'name': 'max_targets',
+                'msg': 'Maximum number of targets',
+                'type': int,
+                'default': 100
+            },
+            {
+                'name': 'default_target_timeout_ms',
+                'msg': 'Default target timeout in milliseconds',
+                'type': int,
+                'default': 30000
+            }
+        ]
+
+    def _configure(self, **kwargs):
+        """
+        Configure the CTE service with provided keyword arguments.
+        
+        This method generates the CTE YAML configuration file and sets
+        the WRP_CTE_CONF environment variable.
+        
+        Args:
+            **kwargs: Configuration arguments from _configure_menu.
+        """
+        print("Configuring Content Transfer Engine (CTE)...")
+        
+        # Handle devices configuration
+        devices = self.config.get('devices', [])
+        
+        if not devices:
+            print("No devices specified, attempting to use resource graph...")
+            devices = self._get_devices_from_resource_graph()
+            if not devices:
+                print("Warning: No devices available from resource graph, using defaults")
+                devices = self._get_default_devices()
+        else:
+            # Validate and convert device tuples
+            devices = self._validate_and_convert_devices(devices)
+        
+        
+        # Build CTE configuration
+        cte_config = self._build_cte_config(devices)
+        
+        # Save configuration to shared directory
+        self.config_file_path = os.path.join(self.shared_dir, 'cte_config.yaml')
+        
+        try:
+            with open(self.config_file_path, 'w') as f:
+                yaml.dump(cte_config, f, default_flow_style=False, indent=2)
+            print(f"CTE configuration written to: {self.config_file_path}")
+        except Exception as e:
+            print(f"Error writing CTE configuration: {e}")
+            raise
+        
+        # Set environment variable
+        self.setenv('WRP_CTE_CONF', self.config_file_path)
+        print(f"Environment variable WRP_CTE_CONF set to: {self.config_file_path}")
+        
+        print("CTE configuration completed successfully")
+
+    def _get_devices_from_resource_graph(self):
+        """
+        Extract device information from the resource graph.
+        
+        Returns:
+            List[Tuple[str, str, float]]: List of device tuples (path, capacity, score).
+        """
+        try:
+            from jarvis_cd.core.resource_graph import ResourceGraphManager
+            
+            rg_manager = ResourceGraphManager()
+            if not hasattr(rg_manager, 'resource_graph'):
+                print("Warning: Resource graph not available")
+                return []
+            
+            common_storage = rg_manager.resource_graph.get_common_storage()
+            if not common_storage:
+                print("Warning: No common storage found in resource graph")
+                return []
+            
+            devices = []
+            for storage in common_storage:
+                # Convert storage info to device tuple
+                base_path = storage.get('path', '/tmp/cte_storage')
+                # Append cte_target.bin for bdev temporary file creation
+                path = os.path.join(base_path, 'cte_target.bin')
+                capacity = storage.get('capacity', '100GB')
+                
+                # Calculate score based on storage type and characteristics
+                storage_type = storage.get('type', 'unknown').lower()
+                score = self._calculate_device_score(storage_type, storage)
+                
+                devices.append((path, capacity, score))
+                print(f"Found storage device: {path} ({capacity}, score: {score})")
+            
+            return devices
+            
+        except ImportError:
+            print("Warning: ResourceGraphManager not available")
+            return []
+        except Exception as e:
+            print(f"Warning: Error accessing resource graph: {e}")
+            return []
+
+    def _calculate_device_score(self, storage_type, storage_info):
+        """
+        Calculate a performance score for a storage device.
+        
+        Args:
+            storage_type (str): Type of storage (nvme, ssd, hdd, ram, etc.)
+            storage_info (dict): Additional storage information.
+            
+        Returns:
+            float: Score between 0.0 and 1.0.
+        """
+        # Base scores by storage type
+        type_scores = {
+            'ram': 1.0,
+            'ramdisk': 1.0,
+            'tmpfs': 1.0,
+            'nvme': 0.9,
+            'ssd': 0.7,
+            'hdd': 0.4,
+            'network': 0.3,
+            'unknown': 0.5
+        }
+        
+        base_score = type_scores.get(storage_type, 0.5)
+        
+        # Adjust based on additional characteristics
+        if 'bandwidth' in storage_info:
+            # Higher bandwidth increases score
+            bandwidth = storage_info['bandwidth']
+            if isinstance(bandwidth, (int, float)) and bandwidth > 1000:  # MB/s
+                base_score = min(1.0, base_score + 0.1)
+        
+        if 'latency' in storage_info:
+            # Lower latency increases score
+            latency = storage_info['latency']
+            if isinstance(latency, (int, float)) and latency < 1:  # ms
+                base_score = min(1.0, base_score + 0.1)
+        
+        return round(base_score, 2)
+
+    def _get_default_devices(self):
+        """
+        Get default device configuration when no resource graph is available.
+        
+        Returns:
+            List[Tuple[str, str, float]]: Default device configuration.
+        """
+        return [
+            ('/tmp/cte_storage/cte_target.bin', '100GB', 0.6)
+        ]
+
+    def _validate_and_convert_devices(self, devices):
+        """
+        Validate and convert device specifications.
+        
+        Args:
+            devices (List): Device specifications to validate.
+            
+        Returns:
+            List[Tuple[str, str, float]]: Validated device tuples.
+        """
+        validated_devices = []
+        
+        for i, device in enumerate(devices):
+            try:
+                if isinstance(device, (list, tuple)) and len(device) >= 3:
+                    path, capacity, score = device[0], device[1], device[2]
+                    
+                    # Validate path
+                    if not isinstance(path, str) or not path.strip():
+                        raise ValueError(f"Invalid path in device {i}: {path}")
+                    
+                    # Validate capacity using SizeType
+                    capacity_str = self._normalize_capacity_with_sizetype(capacity)
+                    
+                    # Validate score
+                    score_float = float(score)
+                    if not 0.0 <= score_float <= 1.0:
+                        raise ValueError(f"Score must be between 0.0 and 1.0, got: {score_float}")
+                    
+                    validated_devices.append((path.strip(), capacity_str, score_float))
+                else:
+                    raise ValueError(f"Device {i} must be a tuple/list with at least 3 elements")
+                    
+            except Exception as e:
+                print(f"Warning: Invalid device specification {i}: {device} - {e}")
+                continue
+        
+        if not validated_devices:
+            print("Warning: No valid devices found, using defaults")
+            return self._get_default_devices()
+        
+        return validated_devices
+
+    def _normalize_capacity_with_sizetype(self, capacity):
+        """
+        Normalize capacity specification using Jarvis SizeType utility.
+        
+        Args:
+            capacity: Capacity specification (string or number).
+            
+        Returns:
+            str: Normalized capacity string.
+        """
+        try:
+            # Convert capacity to SizeType - it handles the string formatting automatically
+            size_type = SizeType(capacity)
+            return str(size_type)
+                
+        except Exception as e:
+            raise ValueError(f"Invalid capacity format '{capacity}': {e}")
+
+    def _build_cte_config(self, devices):
+        """
+        Build the complete CTE configuration dictionary.
+        
+        Args:
+            devices (List[Tuple]): List of device tuples.
+            
+        Returns:
+            dict: Complete CTE configuration.
+        """
+        # Convert devices to storage configuration format
+        storage_config = []
+        for path, capacity, score in devices:
+            # Determine bdev_type: check if path indicates RAM storage
+            if any(indicator in path.lower() for indicator in ['/tmp/', 'ramdisk', 'tmpfs', 'ram']):
+                bdev_type = 'ram'
+            else:
+                bdev_type = 'file'
+            
+            storage_config.append({
+                'path': path,
+                'bdev_type': bdev_type,
+                'capacity_limit': capacity,
+                'score': score
+            })
+        
+        # Build complete configuration
+        config = {
+            'worker_count': self.config.get('worker_count', 4),
+            
+            'targets': {
+                'max_targets': self.config.get('max_targets', 100),
+                'default_target_timeout_ms': self.config.get('default_target_timeout_ms', 30000),
+                'auto_unregister_failed': True
+            },
+            
+            'performance': {
+                'target_stat_interval_ms': self.config.get('target_stat_interval_ms', 5000),
+                'blob_cache_size_mb': self.config.get('blob_cache_size_mb', 512),
+                'max_concurrent_operations': self.config.get('max_concurrent_operations', 64),
+                'score_threshold': self.config.get('score_threshold', 0.7)
+            },
+            
+            'queues': {
+                'target_management': {
+                    'lane_count': 2,
+                    'priority': 'low_latency'
+                },
+                'tag_management': {
+                    'lane_count': 2,
+                    'priority': 'low_latency'
+                },
+                'blob_operations': {
+                    'lane_count': 4,
+                    'priority': 'high_latency'
+                },
+                'stats': {
+                    'lane_count': 1,
+                    'priority': 'high_latency'
+                }
+            },
+            
+            'storage': storage_config,
+            
+            'dpe': {
+                'dpe_type': self.config.get('dpe_type', 'max_bw')
+            },
+            
+            'logging': {
+                'level': 'info',
+                'file_path': '/var/log/cte/cte.log'
+            },
+            
+            'network': {
+                'port': 8080,
+                'max_connections': 1000
+            }
+        }
+        
+        return config
+
+    def start(self):
+        """
+        Start the WrpCte service.
+        
+        Since this is a configuration-only service, this method just passes.
+        The actual CTE functionality is provided by other components that
+        use the configuration file we generated.
+        
+        Returns:
+            bool: Always True since this is configuration-only.
+        """
+        print("WrpCte is a configuration service - no persistent process to start")
+        if self.config_file_path and os.path.exists(self.config_file_path):
+            print(f"CTE configuration is available at: {self.config_file_path}")
+        return True
+
+    def stop(self):
+        """
+        Stop the WrpCte service.
+        
+        Since this is a configuration-only service, this method just passes.
+        
+        Returns:
+            bool: Always True since this is configuration-only.
+        """
+        print("WrpCte is a configuration service - no persistent process to stop")
+        return True
+
+    def kill(self):
+        """
+        Force stop the WrpCte service.
+        
+        Since this is a configuration-only service, this method just passes.
+        
+        Returns:
+            bool: Always True since this is configuration-only.
+        """
+        print("WrpCte is a configuration service - no persistent process to kill")
+        return True
+
+    def status(self):
+        """
+        Check the current status of the WrpCte service.
+        
+        Returns:
+            dict: A dictionary containing service status information.
+        """
+        if self.config_file_path and os.path.exists(self.config_file_path):
+            return {
+                "running": True,
+                "details": "Configuration service active",
+                "config_file": self.config_file_path,
+                "env_var_set": 'WRP_CTE_CONF' in (self.env or {})
+            }
+        else:
+            return {
+                "running": False,
+                "details": "Configuration not generated",
+                "config_file": None,
+                "env_var_set": False
+            }
+
+    def clean(self):
+        """
+        Clean up CTE configuration files and storage devices using Rm with PsshExecInfo.
+        """
+        print("Starting CTE cleanup process...")
+        
+        # Clean up configuration file
+        if self.config_file_path and os.path.exists(self.config_file_path):
+            try:
+                os.remove(self.config_file_path)
+                print(f"Removed CTE configuration file: {self.config_file_path}")
+            except Exception as e:
+                print(f"Error removing configuration file: {e}")
+        
+        # Clean up storage devices using Rm with PsshExecInfo
+        try:
+            # Get all configured storage devices
+            devices = self.config.get('devices', [])
+            
+            # If no devices were manually configured, get from resource graph
+            if not devices:
+                devices.extend(self._get_devices_from_resource_graph())
+            
+            # Clean up each device using Rm with PsshExecInfo
+            if devices:
+                print(f"Cleaning up {len(devices)} storage devices...")
+                
+                for path, capacity, score in devices:
+                    try:
+                        # Execute removal using Rm with PsshExecInfo across all nodes
+                        Rm(path, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+                        print(f"Successfully cleaned storage device: {path}")
+                            
+                    except Exception as e:
+                        print(f"Error cleaning storage device {path}: {e}")
+            else:
+                print("No storage devices to clean")
+                
+        except Exception as e:
+            print(f"Error during storage device cleanup: {e}")
+        
+        print("CTE configuration cleanup completed")
