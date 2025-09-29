@@ -1,4 +1,4 @@
-from jarvis_cd.basic.pkg import Service
+from jarvis_cd.core.pkg import Service
 from jarvis_cd.util import SizeType
 from jarvis_cd.shell.process import Rm
 from jarvis_cd.shell import PsshExecInfo
