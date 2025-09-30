@@ -106,6 +106,7 @@ public:
     // map assignment. We need to reserve here, or else the vector
     // will resize and cause the map to be erronous.
     targets_.reserve(128);
+    size_t dev_idx = 0;
     for (chi::bdev::Client &tgt_pool : tgt_pools_) {
       targets_.emplace_back();
       TargetInfo &target = targets_.back();
@@ -128,8 +129,10 @@ public:
       target.poll_stats_->stats_ =
           target.client_.PollStats(HSHM_MCTX, target.dom_query_);
       target.stats_ = &target.poll_stats_->stats_;
+      target.score_ = HERMES_SERVER_CONF.devices_[dev_idx].score_;
       target_map_[target.id_] = &target;
       HILOG(kInfo, "Got stats for target: {}", target.id_);
+      dev_idx++;
     }
     // TODO(llogan): We should sort targets first
     fallback_target_ = &targets_.back();

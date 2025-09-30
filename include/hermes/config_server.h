@@ -54,6 +54,8 @@ struct DeviceInfo {
   bool is_shared_;
   /** BORG's minimum and maximum capacity threshold for device */
   f32 borg_min_thresh_, borg_max_thresh_;
+  /** Device score for data placement */
+  f32 score_;
 };
 
 /**
@@ -211,6 +213,11 @@ class ServerConfig : public BaseConfig {
       for (const std::string &size_str : size_vec) {
         dev.slab_sizes_.emplace_back(
             hshm::ConfigParse::ParseSize(size_str));
+      }
+      if (dev_info["score"]) {
+        dev.score_ = dev_info["score"].as<float>();
+      } else {
+        dev.score_ = 0.0f;
       }
     }
   }

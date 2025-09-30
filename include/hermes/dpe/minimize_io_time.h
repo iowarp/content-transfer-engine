@@ -26,10 +26,10 @@ class MinimizeIoTime : public Dpe {
   Status Placement(const std::vector<size_t> &blob_sizes,
                    std::vector<TargetInfo> &targets, Context &ctx,
                    std::vector<PlacementSchema> &output) {
-    // Sort the targets by score
+    // Sort the targets by score in descending order
     std::sort(targets.begin(), targets.end(),
               [](const TargetInfo &a, const TargetInfo &b) {
-                return a.stats_->write_bw_ > b.stats_->write_bw_;
+                return a.score_ > b.score_;
               });
     for (size_t blob_size : blob_sizes) {
       // Initialize blob's size, score, and schema
