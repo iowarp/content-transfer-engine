@@ -187,7 +187,8 @@ ssize_t HERMES_DECL(read)(int fd, void *buf, size_t count) {
     f.hermes_fd_ = fd;
     IoStatus io_status;
     size_t ret = fs_api->Read(f, stat_exists, buf, count, io_status);
-    if (stat_exists) return ret;
+    if (stat_exists)
+      return ret;
   }
   return real_api->read(fd, buf, count);
 }
@@ -202,7 +203,8 @@ ssize_t HERMES_DECL(write)(int fd, const void *buf, size_t count) {
     f.hermes_fd_ = fd;
     IoStatus io_status;
     size_t ret = fs_api->Write(f, stat_exists, buf, count, io_status);
-    if (stat_exists) return ret;
+    if (stat_exists)
+      return ret;
   }
   return real_api->write(fd, buf, count);
 }
@@ -217,7 +219,8 @@ ssize_t HERMES_DECL(pread)(int fd, void *buf, size_t count, off_t offset) {
     f.hermes_fd_ = fd;
     IoStatus io_status;
     size_t ret = fs_api->Read(f, stat_exists, buf, offset, count, io_status);
-    if (stat_exists) return ret;
+    if (stat_exists)
+      return ret;
   }
   return real_api->pread(fd, buf, count, offset);
 }
@@ -233,7 +236,8 @@ ssize_t HERMES_DECL(pwrite)(int fd, const void *buf, size_t count,
     IoStatus io_status;
     HILOG(kDebug, "Intercept pwrite.");
     size_t ret = fs_api->Write(f, stat_exists, buf, offset, count, io_status);
-    if (stat_exists) return ret;
+    if (stat_exists)
+      return ret;
   }
   return real_api->pwrite(fd, buf, count, offset);
 }
@@ -248,7 +252,8 @@ ssize_t HERMES_DECL(pread64)(int fd, void *buf, size_t count, off64_t offset) {
     IoStatus io_status;
     HILOG(kDebug, "Intercept pread64.");
     size_t ret = fs_api->Read(f, stat_exists, buf, offset, count, io_status);
-    if (stat_exists) return ret;
+    if (stat_exists)
+      return ret;
   }
   return real_api->pread64(fd, buf, count, offset);
 }
@@ -264,7 +269,8 @@ ssize_t HERMES_DECL(pwrite64)(int fd, const void *buf, size_t count,
     IoStatus io_status;
     HILOG(kDebug, "Intercept pwrite64.");
     size_t ret = fs_api->Write(f, stat_exists, buf, offset, count, io_status);
-    if (stat_exists) return ret;
+    if (stat_exists)
+      return ret;
   }
   return real_api->pwrite64(fd, buf, count, offset);
 }
@@ -550,4 +556,4 @@ int HERMES_DECL(unlink)(const char *pathname) {
   return real_api->unlink(pathname);
 }
 
-}  // extern C
+} // extern C

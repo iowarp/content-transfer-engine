@@ -24,13 +24,12 @@ class MinimizeIoTime : public Dpe {
   MinimizeIoTime() = default;
   ~MinimizeIoTime() = default;
   Status Placement(const std::vector<size_t> &blob_sizes,
-                   std::vector<TargetInfo> &targets,
-                   Context &ctx,
+                   std::vector<TargetInfo> &targets, Context &ctx,
                    std::vector<PlacementSchema> &output) {
-    // Sort the targets by score
+    // Sort the targets by score in descending order
     std::sort(targets.begin(), targets.end(),
               [](const TargetInfo &a, const TargetInfo &b) {
-                return a.stats_->write_bw_ < b.stats_->write_bw_;
+                return a.score_ > b.score_;
               });
     for (size_t blob_size : blob_sizes) {
       // Initialize blob's size, score, and schema
@@ -43,16 +42,17 @@ class MinimizeIoTime : public Dpe {
       PlacementSchema &blob_schema = output.back();
 
       for (u32 tgt_idx = 0; tgt_idx < targets.size(); ++tgt_idx) {
-        if (rem_blob_size == 0) {
-          break;
-        }
         TargetInfo &target = targets[tgt_idx];
+        if (rem_blob_size == 0) {
+          blob_schema.plcmnts_.emplace_back(rem_blob_size, target.id_);
+          continue;
+        }
         // NOTE(llogan): We skip targets that are too high of priority or
         // targets that can't fit the ENTIRE blob
         size_t rem_cap = target.GetRemCap();
         // TODO(llogan): add back
         if (target.score_ > score || rem_cap < blob_size) {
-        // if (rem_cap < blob_size) {
+          // if (rem_cap < blob_size) {
           // TODO(llogan): add other considerations of this Dpe
           continue;
         }
@@ -62,21 +62,15 @@ class MinimizeIoTime : public Dpe {
 
         // NOTE(llogan): we assume the TargetInfo list is sorted
         if (rem_cap >= rem_blob_size) {
-          blob_schema.plcmnts_.emplace_back(rem_blob_size,
-                                            target.id_);
+          blob_schema.plcmnts_.emplace_back(rem_blob_size, target.id_);
           rem_cap -= rem_blob_size;
           rem_blob_size = 0;
         } else {
           // NOTE(llogan): this code technically never gets called,
           // but it might in the future
-          blob_schema.plcmnts_.emplace_back(rem_cap,
-                                            target.id_);
+          blob_schema.plcmnts_.emplace_back(rem_cap, target.id_);
           rem_blob_size -= rem_cap;
           rem_cap = 0;
-        }
-
-        if (rem_blob_size == 0) {
-          break;
         }
       }
 

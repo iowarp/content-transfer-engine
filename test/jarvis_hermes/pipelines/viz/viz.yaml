@@ -1,0 +1,44 @@
+name: hermes_unit_ior
+env: hermes
+pkgs:
+  # Launch IOWarp runtime
+  - pkg_type: chimaera_run
+    pkg_name: chimaera_run
+    sleep: 3
+    do_dbg: False
+    dbg_port: 4000
+    port: 6000
+    modules: ['hermes_hermes_core']
+  # Add hermes to the runtime
+  - pkg_type: hermes_run
+    pkg_name: hermes_run
+    devices:
+      - mount: ${HOME}/hermes_data/tier1
+        size: 64m
+      - mount: ${HOME}/hermes_data/tier2
+        size: 64m
+      - mount: ${HOME}/hermes_data/tier3
+        size: 64m
+      - mount: ${HOME}/hermes_data/tier4
+        size: 64m
+  # Launch vizualizer
+  - pkg_type: hermes_viz
+    pkg_name: hermes_viz
+    port: 6001
+    refresh: .07
+    sleep: 3
+  # Intercept client I/O calls
+  - pkg_type: hermes_api
+    pkg_name: hermes_api
+    mpi: true
+  # Launch IOR
+  - pkg_type: ior
+    pkg_name: ior
+    api: mpiio
+    out: /tmp/test_hermes/ior.bin  # Output directory
+    xfer: 1m
+    block: 200m
+    nprocs: 1  # Total number of processes
+    ppn: 16  # Process per node
+    do_dbg: False
+    dbg_port: 4001

@@ -1,5 +1,6 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 project(hermes)
+include(CTest)
 
 # -----------------------------------------------------------------------------
 # Define Constants
@@ -9,13 +10,6 @@ set(HERMES_VERSION_MINOR 0)
 set(HERMES_VERSION_PATCH 0)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --diag-suppress=20012")
 
-# ------------------------------------------------------------------------------
-# DOTENV
-# ------------------------------------------------------------------------------
-if(EXISTS ${CMAKE_SOURCE_DIR}/.env.cmake)
-    include(.env.cmake)
-endif()
-
 # -----------------------------------------------------------------------------
 # Define Options
 # -----------------------------------------------------------------------------
@@ -24,7 +18,7 @@ option(BUILD_MPI_TESTS "Build tests which depend on MPI" ON)
 option(BUILD_OpenMP_TESTS "Build tests which depend on OpenMP" ON)
 option(HERMES_ENABLE_COVERAGE "Check how well tests cover code" OFF)
 option(HERMES_ENABLE_DOXYGEN "Check how well the code is documented" ON)
-option(HERMES_REMOTE_DEBUG "Enable remote debug mode on hrun" OFF)
+option(HERMES_ENABLE_CMAKE_DOTENV "Load environment variables from .env.cmake" OFF)
 
 option(HERMES_ENABLE_NVIDIA_GDS_ADAPTER "Build the Hermes NVIDIA GDS adapter." OFF)
 option(HERMES_ENABLE_POSIX_ADAPTER "Build the Hermes POSIX adapter." ON)
@@ -34,7 +28,6 @@ option(HERMES_ENABLE_VFD "Build the Hermes HDF5 Virtual File Driver" OFF)
 option(HERMES_ENABLE_PUBSUB_ADAPTER "Build the Hermes pub/sub adapter." OFF)
 option(HERMES_ENABLE_KVSTORE "Build the Hermes KVStore adapter." OFF)
 option(HERMES_ENABLE_PYTHON "Build the Hermes Python wrapper" OFF)
-option(HERMES_ENABLE_ADIOS "Build the Hermes Python wrapper" OFF)
 
 option(HERMES_MPICH "Specify that this a MPICH build" OFF)
 option(HERMES_OPENMPI "Specify that this a OpenMPI build" OFF)
@@ -60,6 +53,15 @@ if(HERMES_NO_COMPILE)
     return()
 endif()
 
+# ------------------------------------------------------------------------------
+# DOTENV
+# ------------------------------------------------------------------------------
+if(HERMES_ENABLE_CMAKE_DOTENV)
+    if(EXISTS ${CMAKE_SOURCE_DIR}/.env.cmake)
+        include(.env.cmake)
+    endif()
+endif()
+
 # -----------------------------------------------------------------------------
 # Compiler Optimization
 # -----------------------------------------------------------------------------
@@ -77,14 +79,15 @@ else()
     add_compile_definitions(HERMES_LOG_VERBOSITY=1)
 endif()
 
-add_compile_options(-march=native -fomit-frame-pointer)
+# Enable Position Independent Code globally
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # -----------------------------------------------------------------------------
 # Targets built within this project are exported at Install time for use
 # by other projects.
 # -----------------------------------------------------------------------------
-if(NOT HERMES_EXPORTED_TARGETS)
-    set(HERMES_EXPORTED_TARGETS "Hermes")
+if(NOT CHIMAERA_EXPORTED_TARGETS)
+    set(CHIMAERA_EXPORTED_TARGETS "HermesCore")
 endif()
 
 # -----------------------------------------------------------------------------
@@ -131,14 +134,39 @@ endif()
 add_custom_target(coverage COMMAND bash ${CMAKE_SOURCE_DIR}/ci/coverage.sh
     ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR})
 
+# ------------------------------------------------------------------------------
+# Setup install and output Directories
+# ------------------------------------------------------------------------------
+if(NOT HERMES_INSTALL_BIN_DIR)
+    set(HERMES_INSTALL_BIN_DIR ${CMAKE_INSTALL_PREFIX}/bin)
+endif()
+
+if(NOT HERMES_INSTALL_LIB_DIR)
+    set(HERMES_INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/lib)
+endif()
+
+if(NOT HERMES_INSTALL_INCLUDE_DIR)
+    set(HERMES_INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
+endif()
+
+if(NOT HERMES_INSTALL_DATA_DIR)
+    set(HERMES_INSTALL_DATA_DIR ${CMAKE_INSTALL_PREFIX}/share)
+endif()
+
 # -----------------------------------------------------------------------------
 # Find Packages
 # -----------------------------------------------------------------------------
 
+# This is for compatibility with CLANG + Spack
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+list(APPEND CMAKE_INSTALL_RPATH "${HERMES_INSTALL_LIB_DIR}")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # Include most packages needed by both client and host
 include(CMake/HermesCommonConfig.cmake)
-set(Hermes_CLIENT_DEPS hermes_client)
-set(Hermes_RUNTIME_DEPS hermes_runtime)
+set(Hermes_CLIENT_DEPS hermes_hermes_core_client)
+set(Hermes_RUNTIME_DEPS hermes_hermes_core_runtime)
 
 # ENABLE GPU SUPPORT
 if(CHIMAERA_ENABLE_CUDA)
@@ -187,22 +215,6 @@ if(HERMES_ENABLE_VFD)
     endif()
 endif()
 
-# Dependencies for the client
-add_library(client_deps INTERFACE)
-target_link_libraries(client_deps INTERFACE
-    chimaera::client_host)
-target_include_directories(client_deps INTERFACE ${libelf_INCLUDE_DIRS})
-target_link_directories(client_deps INTERFACE ${libelf_LIBRARY_DIRS})
-target_link_libraries(client_deps INTERFACE ${libelf_LIBRARIES})
-
-# Dependencies for the runtime
-add_library(runtime_deps INTERFACE)
-target_link_libraries(runtime_deps INTERFACE
-    chimaera::runtime)
-target_include_directories(runtime_deps INTERFACE ${libelf_INCLUDE_DIRS})
-target_link_directories(runtime_deps INTERFACE ${libelf_LIBRARY_DIRS})
-target_link_libraries(runtime_deps INTERFACE ${libelf_LIBRARIES})
-
 # ------------------------------------------------------------------------------
 # Setup CMake Environment
 # ------------------------------------------------------------------------------
@@ -213,25 +225,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
     ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Libraries")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY
     ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all static libraries.")
-
-# ------------------------------------------------------------------------------
-# Setup install and output Directories
-# ------------------------------------------------------------------------------
-if(NOT HERMES_INSTALL_BIN_DIR)
-    set(HERMES_INSTALL_BIN_DIR ${CMAKE_INSTALL_PREFIX}/bin)
-endif()
-
-if(NOT HERMES_INSTALL_LIB_DIR)
-    set(HERMES_INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/lib)
-endif()
-
-if(NOT HERMES_INSTALL_INCLUDE_DIR)
-    set(HERMES_INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
-endif()
-
-if(NOT HERMES_INSTALL_DATA_DIR)
-    set(HERMES_INSTALL_DATA_DIR ${CMAKE_INSTALL_PREFIX}/share)
-endif()
 
 # -----------------------------------------------------------------------------
 # Build Hermes Main Packages
@@ -249,12 +242,11 @@ include_directories(${CMAKE_SOURCE_DIR}/tasks/hermes_core/include)
 include_directories(${CMAKE_SOURCE_DIR}/test/unit)
 
 set(TEST_MAIN ${CMAKE_SOURCE_DIR}/test/unit)
-add_subdirectory(src)
 add_subdirectory(hermes_adapters)
 add_subdirectory(tasks)
 
 # add_subdirectory(benchmark)
-# add_subdirectory(wrapper)
+add_subdirectory(wrapper)
 add_custom_target(lint COMMAND bash ${CMAKE_SOURCE_DIR}/ci/lint.sh ${CMAKE_SOURCE_DIR})
 
 # -----------------------------------------------------------------------------
@@ -270,7 +262,7 @@ endfunction()
 
 function(jarvis_test test_type test_name)
     add_test(NAME ${test_name}
-        COMMAND jarvis pipeline run yaml "${CMAKE_SOURCE_DIR}/test/unit/pipelines/${test_type}/${test_name}.yaml")
+        COMMAND jarvis pipeline run yaml "${CMAKE_SOURCE_DIR}/test/jarvis_hermes/pipelines/${test_type}/${test_name}.yaml")
 endfunction()
 
 enable_testing()
@@ -298,8 +290,5 @@ install(
 )
 
 install(DIRECTORY include DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(EXPORT ${HERMES_EXPORTED_TARGETS}
-    FILE ${HERMES_EXPORTED_TARGETS}CoreConfig.cmake
-    NAMESPACE Hermes::
-    DESTINATION cmake
-)
+
+jarvis_repo_add("${CMAKE_SOURCE_DIR}/test/jarvis_hermes" "${CMAKE_SOURCE_DIR}/test/jarvis_hermes/pipelines")

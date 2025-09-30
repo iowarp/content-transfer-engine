@@ -1,0 +1,49 @@
+name: ubuntu-24.04
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Debug
+  LOCAL: local
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: "iowarp/iowarp-user:latest"
+    steps:
+      - name: Get Sources
+        uses: actions/checkout@v4
+      - name: Build
+        run: |
+          . /module_load.sh
+          pushd .
+          cd /root/spack
+          . ./share/spack/setup-env.sh
+          which spack
+          spack repo add /iowarp-install/iowarp-spack
+          spack load iowarp@main
+          popd
+          jarvis init p q
+          jarvis bootstrap from local
+          jarvis rg build
+          mkdir -p /github/home/.jarvis/config/env/
+          CTE=`spack find --paths iowarp-cte | awk 'NR == 2' | cut -d ' ' -f 3`
+          echo $CTE
+          jarvis repo add $CTE/jarvis/jarvis_hermes
+          CRT=`spack find --paths iowarp-runtime | awk 'NR == 2' | cut -d ' ' -f 3`
+          echo $CRT
+          jarvis repo add $CRT/jarvis/jarvis_chimaera
+          jarvis ppl index copy jarvis_hermes.hermes.test_hermes
+          ls
+          jarvis env build hermes
+          jarvis env show hermes
+          jarvis ppl load yaml test_hermes.yaml
+          jarvis ppl list
+          mkdir build
+          cd build
+          cmake -DSITE="ubu-24" -DBUILDNAME="r/gcc-13" ..
+          ctest -D Experimental -C Release
+        shell: bash

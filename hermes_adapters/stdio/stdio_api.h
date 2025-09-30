@@ -12,43 +12,48 @@
 
 #ifndef HERMES_ADAPTER_STDIO_H
 #define HERMES_ADAPTER_STDIO_H
-#include <string>
 #include <dlfcn.h>
-#include <iostream>
-#include "hermes_shm/util/logging.h"
+
 #include <cstdio>
-#include "hermes_adapters/real_api.h"
+#include <iostream>
+#include <string>
+
+#include "hermes_shm/util/logging.h"
+#include "hermes_shm/util/real_api.h"
 
 extern "C" {
-typedef FILE * (*fopen_t)(const char * path, const char * mode);
-typedef FILE * (*fopen64_t)(const char * path, const char * mode);
-typedef FILE * (*fdopen_t)(int fd, const char * mode);
-typedef FILE * (*freopen_t)(const char * path, const char * mode, FILE * stream);
-typedef FILE * (*freopen64_t)(const char * path, const char * mode, FILE * stream);
-typedef int (*fflush_t)(FILE * fp);
-typedef int (*fclose_t)(FILE * fp);
-typedef size_t (*fwrite_t)(const void * ptr, size_t size, size_t nmemb, FILE * fp);
-typedef int (*fputc_t)(int c, FILE * fp);
-typedef int (*fgetpos_t)(FILE * fp, fpos_t * pos);
-typedef int (*fgetpos64_t)(FILE * fp, fpos64_t * pos);
-typedef int (*putc_t)(int c, FILE * fp);
-typedef int (*putw_t)(int w, FILE * fp);
-typedef int (*fputs_t)(const char * s, FILE * stream);
-typedef size_t (*fread_t)(void * ptr, size_t size, size_t nmemb, FILE * stream);
-typedef int (*fgetc_t)(FILE * stream);
-typedef int (*getc_t)(FILE * stream);
-typedef int (*getw_t)(FILE * stream);
-typedef char * (*fgets_t)(char * s, int size, FILE * stream);
-typedef void (*rewind_t)(FILE * stream);
-typedef int (*fseek_t)(FILE * stream, long offset, int whence);
-typedef int (*fseeko_t)(FILE * stream, off_t offset, int whence);
-typedef int (*fseeko64_t)(FILE * stream, off64_t offset, int whence);
-typedef int (*fsetpos_t)(FILE * stream, const fpos_t * pos);
-typedef int (*fsetpos64_t)(FILE * stream, const fpos64_t * pos);
-typedef long int (*ftell_t)(FILE * fp);
+typedef FILE* (*fopen_t)(const char* path, const char* mode);
+typedef FILE* (*fopen64_t)(const char* path, const char* mode);
+typedef FILE* (*fdopen_t)(int fd, const char* mode);
+typedef FILE* (*freopen_t)(const char* path, const char* mode, FILE* stream);
+typedef FILE* (*freopen64_t)(const char* path, const char* mode, FILE* stream);
+typedef int (*fflush_t)(FILE* fp);
+typedef int (*fclose_t)(FILE* fp);
+typedef size_t (*fwrite_t)(const void* ptr, size_t size, size_t nmemb,
+                           FILE* fp);
+typedef int (*fputc_t)(int c, FILE* fp);
+typedef int (*fgetpos_t)(FILE* fp, fpos_t* pos);
+typedef int (*fgetpos64_t)(FILE* fp, fpos64_t* pos);
+typedef int (*putc_t)(int c, FILE* fp);
+typedef int (*putw_t)(int w, FILE* fp);
+typedef int (*fputs_t)(const char* s, FILE* stream);
+typedef size_t (*fread_t)(void* ptr, size_t size, size_t nmemb, FILE* stream);
+typedef int (*fgetc_t)(FILE* stream);
+typedef int (*getc_t)(FILE* stream);
+typedef int (*getw_t)(FILE* stream);
+typedef char* (*fgets_t)(char* s, int size, FILE* stream);
+typedef void (*rewind_t)(FILE* stream);
+typedef int (*fseek_t)(FILE* stream, long offset, int whence);
+typedef int (*fseeko_t)(FILE* stream, off_t offset, int whence);
+typedef int (*fseeko64_t)(FILE* stream, off64_t offset, int whence);
+typedef int (*fsetpos_t)(FILE* stream, const fpos_t* pos);
+typedef int (*fsetpos64_t)(FILE* stream, const fpos64_t* pos);
+typedef long int (*ftell_t)(FILE* fp);
 }
 
 namespace hermes::adapter {
+
+using hshm::RealApi;
 
 /** Pointers to the real stdio API */
 class StdioApi : public RealApi {

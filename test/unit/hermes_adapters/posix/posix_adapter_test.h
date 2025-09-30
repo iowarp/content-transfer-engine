@@ -16,9 +16,8 @@
 #include "binary_file_tests.h"
 
 namespace hermes::adapter::test {
-template <bool WITH_MPI>
-class PosixTest : public BinaryFileTests {
- public:
+template <bool WITH_MPI> class PosixTest : public BinaryFileTests {
+public:
   FileInfo new_file_;
   FileInfo existing_file_;
   FileInfo shared_new_file_;
@@ -36,6 +35,7 @@ class PosixTest : public BinaryFileTests {
   size_t large_min_ = 256 * 1024 + 1;
   size_t large_max_ = 3 * 1024 * 1024;
 
+  FileInfo info_;
   int fh_orig_;
   int fh_cmp_;
   int status_orig_;
@@ -43,7 +43,7 @@ class PosixTest : public BinaryFileTests {
   size_t size_written_orig_;
   bool is_scase_ = false;
 
- public:
+public:
   void RegisterFiles() override {
     RegisterPath("new", 0, new_file_);
     RegisterPath("ext", TEST_DO_CREATE, existing_file_);
@@ -64,6 +64,7 @@ class PosixTest : public BinaryFileTests {
       va_end(arg);
     }
     std::string cmp_path;
+    info_ = info;
     if (flags & O_CREAT || flags & O_TMPFILE) {
       fh_orig_ = open(info.hermes_.c_str(), flags, mode);
       fh_cmp_ = open(info.cmp_.c_str(), flags, mode);
@@ -92,6 +93,10 @@ class PosixTest : public BinaryFileTests {
     size_read_orig_ = read(fh_orig_, ptr, size);
     std::vector<unsigned char> read_data(size, 'r');
     size_t size_read = read(fh_cmp_, read_data.data(), size);
+    if (size_read != size_read_orig_) {
+      std::cerr << "size_read: " << size_read
+                << " size_read_orig_: " << size_read_orig_ << std::endl;
+    }
     REQUIRE(size_read == size_read_orig_);
     if (size_read > 0) {
       size_t unmatching_chars = 0;
@@ -115,15 +120,15 @@ class PosixTest : public BinaryFileTests {
   }
 };
 
-}  // namespace hermes::adapter::test
+} // namespace hermes::adapter::test
 
 #if defined(HERMES_MPI_TESTS)
-#define TESTER     \
-  hshm::Singleton< \
+#define TESTER                                                                 \
+  hshm::Singleton<                                                             \
       hermes::adapter::test::PosixTest<HERMES_MPI_TESTS>>::GetInstance()
 #else
-#define TESTER \
+#define TESTER                                                                 \
   hshm::Singleton<hermes::adapter::test::PosixTest<false>>::GetInstance()
 #endif
 
-#endif  // HERMES_TEST_UNIT_HERMES_ADAPTERS_POSIX_POSIX_ADAPTER_BASE_TEST_H_
+#endif // HERMES_TEST_UNIT_HERMES_ADAPTERS_POSIX_POSIX_ADAPTER_BASE_TEST_H_

@@ -24,10 +24,10 @@ namespace hermes::adapter {
 
 /** A class to represent POSIX IO file system */
 class StdioFs : public hermes::adapter::Filesystem {
- public:
+public:
   HERMES_STDIO_API_T real_api_; /**< pointer to real APIs */
 
- public:
+public:
   StdioFs() : Filesystem(AdapterType::kStdio) { real_api_ = HERMES_STDIO_API; }
 
   /** Close an existing stream and then open with new path */
@@ -93,7 +93,7 @@ class StdioFs : public hermes::adapter::Filesystem {
     return filename;
   }
 
- public:
+public:
   /** Allocate an fd for the file f */
   void RealOpen(File &f, AdapterStat &stat, const std::string &path) override {
     if (stat.mode_str_.find('w') != std::string::npos) {
@@ -103,6 +103,15 @@ class StdioFs : public hermes::adapter::Filesystem {
     if (stat.mode_str_.find('a') != std::string::npos) {
       stat.hflags_.SetBits(HERMES_FS_APPEND);
       stat.hflags_.SetBits(HERMES_FS_CREATE);
+    }
+    if (stat.mode_str_.find('r') != std::string::npos) {
+      stat.hflags_.SetBits(HERMES_FS_READ);
+    }
+    if (stat.mode_str_.find('w') != std::string::npos) {
+      stat.hflags_.SetBits(HERMES_FS_WRITE);
+    }
+    if (stat.mode_str_.find('+') != std::string::npos) {
+      stat.hflags_.SetBits(HERMES_FS_READ | HERMES_FS_WRITE);
     }
 
     if (stat.hflags_.Any(HERMES_FS_CREATE)) {
@@ -237,10 +246,10 @@ class StdioFs : public hermes::adapter::Filesystem {
 };
 
 /** Simplify access to the stateless StdioFs Singleton */
-#define HERMES_STDIO_FS \
+#define HERMES_STDIO_FS                                                        \
   hshm::Singleton<::hermes::adapter::StdioFs>::GetInstance()
 #define HERMES_STDIO_FS_T hermes::adapter::StdioFs *
 
-}  // namespace hermes::adapter
+} // namespace hermes::adapter
 
-#endif  // HERMES_ADAPTER_STDIO_NATIVE_H_
+#endif // HERMES_ADAPTER_STDIO_NATIVE_H_

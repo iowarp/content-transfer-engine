@@ -3,12 +3,13 @@
 //
 
 #include <zmq.hpp>
+
 #include "basic_test.h"
 #include "chimaera/api/chimaera_client.h"
-#include "chimaera_admin/chimaera_admin.h"
-#include "small_message/small_message.h"
-#include "hermes_shm/util/timer.h"
 #include "chimaera/work_orchestrator/affinity.h"
+#include "chimaera_admin/chimaera_admin_client.h"
+#include "hermes_shm/util/timer.h"
+#include "small_message/small_message.h"
 
 /** ZeroMQ allocate + free request */
 TEST_CASE("TestZeromqAllocateFree") {

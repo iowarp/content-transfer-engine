@@ -11,12 +11,12 @@
 namespace hermes {
 
 class BinaryFileStager : public AbstractStager {
- public:
+public:
   size_t page_size_;
   std::string path_;
   bitfield32_t flags_;
 
- public:
+public:
   /** Default constructor */
   BinaryFileStager() = default;
 
@@ -73,7 +73,7 @@ class BinaryFileStager : public AbstractStager {
     int fd = HERMES_POSIX_API->open(path_.c_str(), O_CREAT | O_RDWR, 0666);
     if (fd < 0) {
       HELOG(kError, "Failed to open file {}", path_);
-      CHI_CLIENT->FreeBuffer(blob);
+      CHI_CLIENT->FreeBuffer(HSHM_MCTX, blob);
       return;
     }
     ssize_t real_size = HERMES_POSIX_API->pread(fd, blob.ptr_, page_size_,
@@ -81,21 +81,17 @@ class BinaryFileStager : public AbstractStager {
     HERMES_POSIX_API->close(fd);
     // Verify the data was staged in
     if (real_size < 0) {
-      CHI_CLIENT->FreeBuffer(blob);
+      CHI_CLIENT->FreeBuffer(HSHM_MCTX, blob);
       return;
     } else if (real_size == 0) {
-      CHI_CLIENT->FreeBuffer(blob);
+      CHI_CLIENT->FreeBuffer(HSHM_MCTX, blob);
       return;
     }
     // Put the new blob into hermes
     HILOG(kDebug, "Staged {} bytes from the backend file {}", real_size, path_);
-    hapi::Context ctx;
-    ctx.flags_.SetBits(HERMES_SHOULD_STAGE);
-    client.PutBlob(
-        mctx,
-        chi::DomainQuery::GetDirectHash(chi::SubDomainId::kLocalContainers, 0),
-        tag_id, chi::string(blob_name), hermes::BlobId::GetNull(), 0, real_size,
-        blob.shm_, score, TASK_DATA_OWNER, 0, ctx);
+    client.PutBlob(mctx, chi::DomainQuery::GetDynamic(), tag_id,
+                   chi::string(blob_name), hermes::BlobId::GetNull(), 0,
+                   real_size, blob.shm_, score, TASK_DATA_OWNER, 0);
   }
 
   /** Stage data out to remote source */
@@ -112,13 +108,13 @@ class BinaryFileStager : public AbstractStager {
           "Attempting to stage {} bytes to the backend file {} at offset {}",
           page_size_, path_, plcmnt.bucket_off_);
     // Stage out the data to the file
-    char *data = CHI_CLIENT->GetDataPointer(data_p);
+    FullPtr data(data_p);
     int fd = HERMES_POSIX_API->open(path_.c_str(), O_CREAT | O_RDWR, 0666);
     if (fd < 0) {
       HELOG(kError, "Failed to open file {}", path_);
       return;
     }
-    ssize_t real_size = HERMES_POSIX_API->pwrite(fd, data, data_size,
+    ssize_t real_size = HERMES_POSIX_API->pwrite(fd, data.ptr_, data_size,
                                                  (off_t)plcmnt.bucket_off_);
     HERMES_POSIX_API->close(fd);
     // Verify the data was staged out
@@ -134,13 +130,12 @@ class BinaryFileStager : public AbstractStager {
                   size_t blob_off, size_t data_size) override {
     adapter::BlobPlacement p;
     p.DecodeBlobName(blob_name, page_size_);
-    client.AsyncTagUpdateSize(
-        mctx,
-        chi::DomainQuery::GetDirectHash(chi::SubDomainId::kLocalContainers, 0),
-        tag_id, p.bucket_off_ + blob_off + data_size, UpdateSizeMode::kCap);
+    client.AsyncTagUpdateSize(mctx, chi::DomainQuery::GetDynamic(), tag_id,
+                              p.bucket_off_ + blob_off + data_size,
+                              UpdateSizeMode::kCap);
   }
 };
 
-}  // namespace hermes
+} // namespace hermes
 
-#endif  // HERMES_TASKS_DATA_STAGER_SRC_BINARY_STAGER_H_
+#endif // HERMES_TASKS_DATA_STAGER_SRC_BINARY_STAGER_H_

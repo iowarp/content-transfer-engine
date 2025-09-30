@@ -46,6 +46,10 @@ devices:
     # that the device is always at least 30% occupied.
     borg_capacity_thresh: [0.0, 1.0]
 
+    # Manual score override for device performance (0.0 to 1.0)
+    # Higher scores indicate faster devices. Leave unset to use bandwidth/latency calculations.
+    score: 1.0
+
   nvme:
     mount_point: "./"
     capacity: 100MB
@@ -53,6 +57,7 @@ devices:
     slab_sizes: [ 4KB, 16KB, 64KB, 1MB ]
     is_shared_device: false
     borg_capacity_thresh: [ 0.0, 1.0 ]
+    score: 0.9
 
   ssd:
     mount_point: "./"
@@ -61,6 +66,7 @@ devices:
     slab_sizes: [ 4KB, 16KB, 64KB, 1MB ]
     is_shared_device: false
     borg_capacity_thresh: [ 0.0, 1.0 ]
+    score: 0.7
 
   pfs:
     mount_point: "./"
@@ -69,6 +75,7 @@ devices:
     slab_sizes: [ 4KB, 16KB, 64KB, 1MB ]
     is_shared_device: true
     borg_capacity_thresh: [ 0.0, 1.0 ]
+    score: 0.5
 
 ### Define properties of the BORG
 buffer_organizer:

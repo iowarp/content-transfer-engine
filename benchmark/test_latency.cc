@@ -8,7 +8,7 @@
 #include "chimaera/api/chimaera_client.h"
 #include "chimaera/api/chimaera_runtime.h"
 #include "chimaera/work_orchestrator/affinity.h"
-#include "chimaera_admin/chimaera_admin.h"
+#include "chimaera_admin/chimaera_admin_client.h"
 #include "hermes/hermes.h"
 #include "hermes_shm/util/timer.h"
 #include "small_message/small_message.h"

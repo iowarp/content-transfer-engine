@@ -14,17 +14,12 @@
 #define HRUN_TASKS_HERMES_INCLUDE_HERMES_HERMES_H_
 
 #include "hermes/bucket.h"
+#include "hermes/config_manager.h"
 #ifdef CHIMAERA_RUNTIME
 #include "hermes/hermes_run_types.h"
 #endif
 
 namespace hermes {
-
-struct MetadataTable {
-  std::vector<BlobInfo> blob_info_;
-  std::vector<TargetStats> target_info_;
-  std::vector<TagInfo> bkt_info_;
-};
 
 class Hermes {
  public:
@@ -37,42 +32,47 @@ class Hermes {
   /** Check if initialized */
   bool IsInitialized() { return HERMES_CONF->is_initialized_; }
 
-  /** Get tag ID */
-  //  TagId GetTagId(const std::string &tag_name) {
-  //    return HERMES_CONF->bkt_mdm_.GetTagId(hshm::to_charbuf(tag_name));
-  //  }
-  //
-  /** Collect a snapshot of all metadata in Hermes */
-  MetadataTable CollectMetadataSnapshot(const hipc::MemContext &mctx) {
-    MetadataTable table;
-    table.blob_info_ = HERMES_CONF->mdm_.PollBlobMetadata(
-        mctx, chi::DomainQuery::GetGlobalBcast());
-    table.target_info_ = HERMES_CONF->mdm_.PollTargetMetadata(
-        mctx, chi::DomainQuery::GetGlobalBcast());
-    table.bkt_info_ = HERMES_CONF->mdm_.PollTagMetadata(
-        mctx, chi::DomainQuery::GetGlobalBcast());
-    return table;
+  /** Get a bucket */
+  Bucket GetBucket(const std::string &name) { return hermes::Bucket(name); }
+
+  /** Collects blob metadata */
+  std::vector<BlobInfo> PollBlobMetadata(const std::string &filter,
+                                         int max_count) {
+    return HERMES_CONF->mdm_.PollBlobMetadata(
+        HSHM_MCTX, chi::DomainQuery::GetGlobalBcast(), filter, max_count);
+  }
+
+  /** Collects tag metadata */
+  std::vector<TagInfo> PollTagMetadata(const std::string &filter,
+                                       int max_count) {
+    return HERMES_CONF->mdm_.PollTagMetadata(
+        HSHM_MCTX, chi::DomainQuery::GetGlobalBcast(), filter, max_count);
+  }
+
+  /** Collects target metadata */
+  std::vector<TargetStats> PollTargetMetadata(const std::string &filter,
+                                              int max_count) {
+    return HERMES_CONF->mdm_.PollTargetMetadata(
+        HSHM_MCTX, chi::DomainQuery::GetGlobalBcast(), filter, max_count);
+  }
+
+  /**
+   * Poll the access pattern log.
+   * @param last_access The id of the last element accessed.
+   * @return A vector of IoStat objects sorted by id.
+   */
+  std::vector<IoStat> PollAccessPattern(int last_access) {
+    return HERMES_CONF->mdm_.PollAccessPattern(
+        HSHM_MCTX,
+        chi::DomainQuery::GetDirectHash(chi::SubDomainId::kLocalContainers, 0),
+        last_access);
   }
 
   /** Get tag id */
   TagId GetTagId(const hipc::MemContext &mctx, const std::string &tag_name) {
-    return HERMES_CONF->mdm_.GetTagId(
-        mctx, DomainQuery::GetDirectHash(chi::SubDomainId::kLocalContainers, 0),
-        chi::string(tag_name));
+    return HERMES_CONF->mdm_.GetTagId(mctx, DomainQuery::GetDynamic(),
+                                      chi::string(tag_name));
   }
-
-  /** Get or create a bucket */
-  hermes::Bucket GetBucket(const hipc::MemContext &mctx,
-                           const std::string &path, Context ctx = Context(),
-                           size_t backend_size = 0, u32 flags = 0) {
-    return hermes::Bucket(mctx, path, ctx, backend_size, flags);
-  }
-
-  //
-  //  /** Register an operation graph */
-  //  void RegisterOp(hermes::data_op::OpGraph &op_graph) {
-  //    HERMES_CONF->op_mdm_.RegisterOp(op_graph);
-  //  }
 
   /** Clear all data from hermes */
   void Clear() {

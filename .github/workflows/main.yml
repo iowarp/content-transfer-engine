@@ -6,8 +6,9 @@ name: GitHub Actions
 # events but only for the master branch
 on:
   push:
+    branches: [ main- ]  
   pull_request:
-    branches: [ master ]
+    branches: [ main- ]
   workflow_dispatch:
     inputs:
       debug_enabled:
@@ -34,8 +35,8 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
 
-      - name: Run cpplint
-        run: pip install cpplint==1.5.4 && bash ci/lint.sh `pwd`
+#      - name: Run cpplint
+#        run: pip install cpplint==1.5.4 && bash ci/lint.sh `pwd`
 
       - name: Cache Spack packages
         uses: actions/cache@v3

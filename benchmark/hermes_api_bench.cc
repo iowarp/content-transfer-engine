@@ -39,7 +39,7 @@ void PutTest(int nprocs, int rank, int repeat, size_t blobs_per_rank,
              size_t blob_size) {
   MpiTimer t(MPI_COMM_WORLD);
   hermes::Context ctx;
-  hermes::Bucket bkt(HSHM_DEFAULT_MEM_CTX, "hello", ctx);
+  hermes::Bucket bkt("hello", ctx);
   hermes::Blob blob(blob_size);
   t.Resume();
   for (int j = 0; j < repeat; ++j) {
@@ -63,7 +63,7 @@ void GetTest(int nprocs, int rank, int repeat, size_t blobs_per_rank,
              size_t blob_size) {
   MpiTimer t(MPI_COMM_WORLD);
   hermes::Context ctx;
-  hermes::Bucket bkt(HSHM_DEFAULT_MEM_CTX, "hello", ctx);
+  hermes::Bucket bkt("hello", ctx);
   t.Resume();
   for (int j = 0; j < repeat; ++j) {
     for (size_t i = 0; i < blobs_per_rank; ++i) {
@@ -84,7 +84,7 @@ void PutGetTest(int nprocs, int rank, int repeat, size_t blobs_per_rank,
   HILOG(kInfo, "Beginning barrier");
   MPI_Barrier(MPI_COMM_WORLD);
   HILOG(kInfo, "Beginning flushing");
-  CHI_ADMIN->Flush(HSHM_DEFAULT_MEM_CTX, chi::DomainQuery::GetGlobalBcast());
+  CHI_ADMIN->Flush(HSHM_MCTX, chi::DomainQuery::GetGlobalBcast());
   HILOG(kInfo, "Finished flushing");
   GetTest(nprocs, rank, repeat, blobs_per_rank, blob_size);
 }
@@ -94,7 +94,7 @@ void PartialPutTest(int nprocs, int rank, int repeat, size_t blobs_per_rank,
                     size_t blob_size, size_t part_size) {
   MpiTimer t(MPI_COMM_WORLD);
   hermes::Context ctx;
-  hermes::Bucket bkt(HSHM_DEFAULT_MEM_CTX, "hello", ctx);
+  hermes::Bucket bkt("hello", ctx);
   hermes::Blob blob(blob_size);
   t.Resume();
   for (int j = 0; j < repeat; ++j) {
@@ -118,7 +118,7 @@ void PartialGetTest(int nprocs, int rank, int repeat, size_t blobs_per_rank,
                     size_t blob_size, size_t part_size) {
   MpiTimer t(MPI_COMM_WORLD);
   hermes::Context ctx;
-  hermes::Bucket bkt(HSHM_DEFAULT_MEM_CTX, "hello", ctx);
+  hermes::Bucket bkt("hello", ctx);
   t.Resume();
   for (int j = 0; j < repeat; ++j) {
     for (size_t i = 0; i < blobs_per_rank; ++i) {
@@ -150,7 +150,7 @@ void CreateBucketTest(int nprocs, int rank, size_t bkts_per_rank) {
   for (size_t i = 0; i < bkts_per_rank; ++i) {
     int bkt_name_int = rank * bkts_per_rank + i;
     std::string bkt_name = std::to_string(bkt_name_int);
-    hermes::Bucket bkt(HSHM_DEFAULT_MEM_CTX, bkt_name, ctx);
+    hermes::Bucket bkt(bkt_name, ctx);
   }
   t.Pause();
   GatherTimes("CreateBucket", bkts_per_rank * nprocs, t);
@@ -162,7 +162,7 @@ void GetBucketTest(int nprocs, int rank, size_t bkts_per_rank) {
   hapi::Context ctx;
   for (size_t i = 0; i < bkts_per_rank; ++i) {
     int bkt_name = rank * bkts_per_rank + i;
-    hermes::Bucket bkt(HSHM_DEFAULT_MEM_CTX, std::to_string(bkt_name), ctx);
+    hermes::Bucket bkt(std::to_string(bkt_name), ctx);
   }
 
   // Get existing buckets
@@ -170,7 +170,7 @@ void GetBucketTest(int nprocs, int rank, size_t bkts_per_rank) {
   t.Resume();
   for (size_t i = 0; i < bkts_per_rank; ++i) {
     int bkt_name = rank * bkts_per_rank + i;
-    hapi::Bucket bkt(HSHM_DEFAULT_MEM_CTX, std::to_string(bkt_name), ctx);
+    hapi::Bucket bkt(std::to_string(bkt_name), ctx);
   }
   t.Pause();
   GatherTimes("GetBucket", bkts_per_rank * nprocs, t);
@@ -184,8 +184,8 @@ void DeleteBucketTest(int nprocs, int rank, size_t bkt_per_rank,
 
   // Create the buckets
   for (size_t i = 0; i < bkt_per_rank; ++i) {
-    hapi::Bucket bkt(HSHM_DEFAULT_MEM_CTX,
-                     hshm::Formatter::format("DeleteBucket{}", rank), ctx);
+    hapi::Bucket bkt(HSHM_MCTX, hshm::Formatter::format("DeleteBucket{}", rank),
+                     ctx);
     hapi::Blob blob;
     for (size_t j = 0; j < blobs_per_bucket; ++j) {
       std::string name = std::to_string(j);
@@ -196,8 +196,8 @@ void DeleteBucketTest(int nprocs, int rank, size_t bkt_per_rank,
   // Delete the buckets
   t.Resume();
   for (size_t i = 0; i < bkt_per_rank; ++i) {
-    hapi::Bucket bkt(HSHM_DEFAULT_MEM_CTX,
-                     hshm::Formatter::format("DeleteBucket{}", rank), ctx);
+    hapi::Bucket bkt(HSHM_MCTX, hshm::Formatter::format("DeleteBucket{}", rank),
+                     ctx);
     bkt.Destroy();
   }
   t.Pause();

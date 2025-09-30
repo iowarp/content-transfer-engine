@@ -88,6 +88,10 @@ void Run(u32 method, Task *task, RunContext &rctx) override {
       GetBlob(reinterpret_cast<GetBlobTask *>(task), rctx);
       break;
     }
+    case Method::kAppendBlob: {
+      AppendBlob(reinterpret_cast<AppendBlobTask *>(task), rctx);
+      break;
+    }
     case Method::kTruncateBlob: {
       TruncateBlob(reinterpret_cast<TruncateBlobTask *>(task), rctx);
       break;
@@ -108,6 +112,10 @@ void Run(u32 method, Task *task, RunContext &rctx) override {
       ReorganizeBlob(reinterpret_cast<ReorganizeBlobTask *>(task), rctx);
       break;
     }
+    case Method::kReorganizeNode: {
+      ReorganizeNode(reinterpret_cast<ReorganizeNodeTask *>(task), rctx);
+      break;
+    }
     case Method::kFlushBlob: {
       FlushBlob(reinterpret_cast<FlushBlobTask *>(task), rctx);
       break;
@@ -126,6 +134,10 @@ void Run(u32 method, Task *task, RunContext &rctx) override {
     }
     case Method::kPollTagMetadata: {
       PollTagMetadata(reinterpret_cast<PollTagMetadataTask *>(task), rctx);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      PollAccessPattern(reinterpret_cast<PollAccessPatternTask *>(task), rctx);
       break;
     }
     case Method::kRegisterStager: {
@@ -233,6 +245,10 @@ void Monitor(MonitorModeId mode, MethodId method, Task *task, RunContext &rctx) 
       MonitorGetBlob(mode, reinterpret_cast<GetBlobTask *>(task), rctx);
       break;
     }
+    case Method::kAppendBlob: {
+      MonitorAppendBlob(mode, reinterpret_cast<AppendBlobTask *>(task), rctx);
+      break;
+    }
     case Method::kTruncateBlob: {
       MonitorTruncateBlob(mode, reinterpret_cast<TruncateBlobTask *>(task), rctx);
       break;
@@ -253,6 +269,10 @@ void Monitor(MonitorModeId mode, MethodId method, Task *task, RunContext &rctx) 
       MonitorReorganizeBlob(mode, reinterpret_cast<ReorganizeBlobTask *>(task), rctx);
       break;
     }
+    case Method::kReorganizeNode: {
+      MonitorReorganizeNode(mode, reinterpret_cast<ReorganizeNodeTask *>(task), rctx);
+      break;
+    }
     case Method::kFlushBlob: {
       MonitorFlushBlob(mode, reinterpret_cast<FlushBlobTask *>(task), rctx);
       break;
@@ -271,6 +291,10 @@ void Monitor(MonitorModeId mode, MethodId method, Task *task, RunContext &rctx) 
     }
     case Method::kPollTagMetadata: {
       MonitorPollTagMetadata(mode, reinterpret_cast<PollTagMetadataTask *>(task), rctx);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      MonitorPollAccessPattern(mode, reinterpret_cast<PollAccessPatternTask *>(task), rctx);
       break;
     }
     case Method::kRegisterStager: {
@@ -378,6 +402,10 @@ void Del(const hipc::MemContext &mctx, u32 method, Task *task) override {
       CHI_CLIENT->DelTask<GetBlobTask>(mctx, reinterpret_cast<GetBlobTask *>(task));
       break;
     }
+    case Method::kAppendBlob: {
+      CHI_CLIENT->DelTask<AppendBlobTask>(mctx, reinterpret_cast<AppendBlobTask *>(task));
+      break;
+    }
     case Method::kTruncateBlob: {
       CHI_CLIENT->DelTask<TruncateBlobTask>(mctx, reinterpret_cast<TruncateBlobTask *>(task));
       break;
@@ -398,6 +426,10 @@ void Del(const hipc::MemContext &mctx, u32 method, Task *task) override {
       CHI_CLIENT->DelTask<ReorganizeBlobTask>(mctx, reinterpret_cast<ReorganizeBlobTask *>(task));
       break;
     }
+    case Method::kReorganizeNode: {
+      CHI_CLIENT->DelTask<ReorganizeNodeTask>(mctx, reinterpret_cast<ReorganizeNodeTask *>(task));
+      break;
+    }
     case Method::kFlushBlob: {
       CHI_CLIENT->DelTask<FlushBlobTask>(mctx, reinterpret_cast<FlushBlobTask *>(task));
       break;
@@ -416,6 +448,10 @@ void Del(const hipc::MemContext &mctx, u32 method, Task *task) override {
     }
     case Method::kPollTagMetadata: {
       CHI_CLIENT->DelTask<PollTagMetadataTask>(mctx, reinterpret_cast<PollTagMetadataTask *>(task));
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      CHI_CLIENT->DelTask<PollAccessPatternTask>(mctx, reinterpret_cast<PollAccessPatternTask *>(task));
       break;
     }
     case Method::kRegisterStager: {
@@ -565,6 +601,12 @@ void CopyStart(u32 method, const Task *orig_task, Task *dup_task, bool deep) ove
         reinterpret_cast<GetBlobTask*>(dup_task), deep);
       break;
     }
+    case Method::kAppendBlob: {
+      chi::CALL_COPY_START(
+        reinterpret_cast<const AppendBlobTask*>(orig_task), 
+        reinterpret_cast<AppendBlobTask*>(dup_task), deep);
+      break;
+    }
     case Method::kTruncateBlob: {
       chi::CALL_COPY_START(
         reinterpret_cast<const TruncateBlobTask*>(orig_task), 
@@ -595,6 +637,12 @@ void CopyStart(u32 method, const Task *orig_task, Task *dup_task, bool deep) ove
         reinterpret_cast<ReorganizeBlobTask*>(dup_task), deep);
       break;
     }
+    case Method::kReorganizeNode: {
+      chi::CALL_COPY_START(
+        reinterpret_cast<const ReorganizeNodeTask*>(orig_task), 
+        reinterpret_cast<ReorganizeNodeTask*>(dup_task), deep);
+      break;
+    }
     case Method::kFlushBlob: {
       chi::CALL_COPY_START(
         reinterpret_cast<const FlushBlobTask*>(orig_task), 
@@ -623,6 +671,12 @@ void CopyStart(u32 method, const Task *orig_task, Task *dup_task, bool deep) ove
       chi::CALL_COPY_START(
         reinterpret_cast<const PollTagMetadataTask*>(orig_task), 
         reinterpret_cast<PollTagMetadataTask*>(dup_task), deep);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      chi::CALL_COPY_START(
+        reinterpret_cast<const PollAccessPatternTask*>(orig_task), 
+        reinterpret_cast<PollAccessPatternTask*>(dup_task), deep);
       break;
     }
     case Method::kRegisterStager: {
@@ -738,6 +792,10 @@ void NewCopyStart(u32 method, const Task *orig_task, FullPtr<Task> &dup_task, bo
       chi::CALL_NEW_COPY_START(reinterpret_cast<const GetBlobTask*>(orig_task), dup_task, deep);
       break;
     }
+    case Method::kAppendBlob: {
+      chi::CALL_NEW_COPY_START(reinterpret_cast<const AppendBlobTask*>(orig_task), dup_task, deep);
+      break;
+    }
     case Method::kTruncateBlob: {
       chi::CALL_NEW_COPY_START(reinterpret_cast<const TruncateBlobTask*>(orig_task), dup_task, deep);
       break;
@@ -758,6 +816,10 @@ void NewCopyStart(u32 method, const Task *orig_task, FullPtr<Task> &dup_task, bo
       chi::CALL_NEW_COPY_START(reinterpret_cast<const ReorganizeBlobTask*>(orig_task), dup_task, deep);
       break;
     }
+    case Method::kReorganizeNode: {
+      chi::CALL_NEW_COPY_START(reinterpret_cast<const ReorganizeNodeTask*>(orig_task), dup_task, deep);
+      break;
+    }
     case Method::kFlushBlob: {
       chi::CALL_NEW_COPY_START(reinterpret_cast<const FlushBlobTask*>(orig_task), dup_task, deep);
       break;
@@ -776,6 +838,10 @@ void NewCopyStart(u32 method, const Task *orig_task, FullPtr<Task> &dup_task, bo
     }
     case Method::kPollTagMetadata: {
       chi::CALL_NEW_COPY_START(reinterpret_cast<const PollTagMetadataTask*>(orig_task), dup_task, deep);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      chi::CALL_NEW_COPY_START(reinterpret_cast<const PollAccessPatternTask*>(orig_task), dup_task, deep);
       break;
     }
     case Method::kRegisterStager: {
@@ -885,6 +951,10 @@ void SaveStart(
       ar << *reinterpret_cast<GetBlobTask*>(task);
       break;
     }
+    case Method::kAppendBlob: {
+      ar << *reinterpret_cast<AppendBlobTask*>(task);
+      break;
+    }
     case Method::kTruncateBlob: {
       ar << *reinterpret_cast<TruncateBlobTask*>(task);
       break;
@@ -905,6 +975,10 @@ void SaveStart(
       ar << *reinterpret_cast<ReorganizeBlobTask*>(task);
       break;
     }
+    case Method::kReorganizeNode: {
+      ar << *reinterpret_cast<ReorganizeNodeTask*>(task);
+      break;
+    }
     case Method::kFlushBlob: {
       ar << *reinterpret_cast<FlushBlobTask*>(task);
       break;
@@ -923,6 +997,10 @@ void SaveStart(
     }
     case Method::kPollTagMetadata: {
       ar << *reinterpret_cast<PollTagMetadataTask*>(task);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      ar << *reinterpret_cast<PollAccessPatternTask*>(task);
       break;
     }
     case Method::kRegisterStager: {
@@ -1073,6 +1151,12 @@ TaskPointer LoadStart(    u32 method, BinaryInputArchive<true> &ar) override {
       ar >> *reinterpret_cast<GetBlobTask*>(task_ptr.ptr_);
       break;
     }
+    case Method::kAppendBlob: {
+      task_ptr.ptr_ = CHI_CLIENT->NewEmptyTask<AppendBlobTask>(
+             HSHM_DEFAULT_MEM_CTX, task_ptr.shm_);
+      ar >> *reinterpret_cast<AppendBlobTask*>(task_ptr.ptr_);
+      break;
+    }
     case Method::kTruncateBlob: {
       task_ptr.ptr_ = CHI_CLIENT->NewEmptyTask<TruncateBlobTask>(
              HSHM_DEFAULT_MEM_CTX, task_ptr.shm_);
@@ -1103,6 +1187,12 @@ TaskPointer LoadStart(    u32 method, BinaryInputArchive<true> &ar) override {
       ar >> *reinterpret_cast<ReorganizeBlobTask*>(task_ptr.ptr_);
       break;
     }
+    case Method::kReorganizeNode: {
+      task_ptr.ptr_ = CHI_CLIENT->NewEmptyTask<ReorganizeNodeTask>(
+             HSHM_DEFAULT_MEM_CTX, task_ptr.shm_);
+      ar >> *reinterpret_cast<ReorganizeNodeTask*>(task_ptr.ptr_);
+      break;
+    }
     case Method::kFlushBlob: {
       task_ptr.ptr_ = CHI_CLIENT->NewEmptyTask<FlushBlobTask>(
              HSHM_DEFAULT_MEM_CTX, task_ptr.shm_);
@@ -1131,6 +1221,12 @@ TaskPointer LoadStart(    u32 method, BinaryInputArchive<true> &ar) override {
       task_ptr.ptr_ = CHI_CLIENT->NewEmptyTask<PollTagMetadataTask>(
              HSHM_DEFAULT_MEM_CTX, task_ptr.shm_);
       ar >> *reinterpret_cast<PollTagMetadataTask*>(task_ptr.ptr_);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      task_ptr.ptr_ = CHI_CLIENT->NewEmptyTask<PollAccessPatternTask>(
+             HSHM_DEFAULT_MEM_CTX, task_ptr.shm_);
+      ar >> *reinterpret_cast<PollAccessPatternTask*>(task_ptr.ptr_);
       break;
     }
     case Method::kRegisterStager: {
@@ -1247,6 +1343,10 @@ void SaveEnd(u32 method, BinaryOutputArchive<false> &ar, Task *task) override {
       ar << *reinterpret_cast<GetBlobTask*>(task);
       break;
     }
+    case Method::kAppendBlob: {
+      ar << *reinterpret_cast<AppendBlobTask*>(task);
+      break;
+    }
     case Method::kTruncateBlob: {
       ar << *reinterpret_cast<TruncateBlobTask*>(task);
       break;
@@ -1267,6 +1367,10 @@ void SaveEnd(u32 method, BinaryOutputArchive<false> &ar, Task *task) override {
       ar << *reinterpret_cast<ReorganizeBlobTask*>(task);
       break;
     }
+    case Method::kReorganizeNode: {
+      ar << *reinterpret_cast<ReorganizeNodeTask*>(task);
+      break;
+    }
     case Method::kFlushBlob: {
       ar << *reinterpret_cast<FlushBlobTask*>(task);
       break;
@@ -1285,6 +1389,10 @@ void SaveEnd(u32 method, BinaryOutputArchive<false> &ar, Task *task) override {
     }
     case Method::kPollTagMetadata: {
       ar << *reinterpret_cast<PollTagMetadataTask*>(task);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      ar << *reinterpret_cast<PollAccessPatternTask*>(task);
       break;
     }
     case Method::kRegisterStager: {
@@ -1392,6 +1500,10 @@ void LoadEnd(u32 method, BinaryInputArchive<false> &ar, Task *task) override {
       ar >> *reinterpret_cast<GetBlobTask*>(task);
       break;
     }
+    case Method::kAppendBlob: {
+      ar >> *reinterpret_cast<AppendBlobTask*>(task);
+      break;
+    }
     case Method::kTruncateBlob: {
       ar >> *reinterpret_cast<TruncateBlobTask*>(task);
       break;
@@ -1412,6 +1524,10 @@ void LoadEnd(u32 method, BinaryInputArchive<false> &ar, Task *task) override {
       ar >> *reinterpret_cast<ReorganizeBlobTask*>(task);
       break;
     }
+    case Method::kReorganizeNode: {
+      ar >> *reinterpret_cast<ReorganizeNodeTask*>(task);
+      break;
+    }
     case Method::kFlushBlob: {
       ar >> *reinterpret_cast<FlushBlobTask*>(task);
       break;
@@ -1430,6 +1546,10 @@ void LoadEnd(u32 method, BinaryInputArchive<false> &ar, Task *task) override {
     }
     case Method::kPollTagMetadata: {
       ar >> *reinterpret_cast<PollTagMetadataTask*>(task);
+      break;
+    }
+    case Method::kPollAccessPattern: {
+      ar >> *reinterpret_cast<PollAccessPatternTask*>(task);
       break;
     }
     case Method::kRegisterStager: {

@@ -2,7 +2,7 @@
 #define HRUN_SRC_CONFIG_HERMES_CLIENT_DEFAULT_H_
 const inline char* kHermesClientDefaultConfigStr = 
 "stop_daemon: false\n"
-"path_inclusions: [\"/tmp/test_hermes/*\"]\n"
+"path_inclusions: [\"\"]\n"
 "path_exclusions: [\"/*\"]\n"
 "file_page_size: 1024KB\n"
 "base_adapter_mode: kDefault\n"

@@ -26,9 +26,9 @@ add_executable(stdio_adapter_test
   stdio_adapter_func_test.cc
   stdio_adapter_rs_test.cc)
 add_dependencies(stdio_adapter_test
-  hermes_client)
+  ${Hermes_CLIENT_DEPS})
 target_link_libraries(stdio_adapter_test
-  hermes_client)
+  ${Hermes_CLIENT_DEPS})
 target_compile_definitions(stdio_adapter_test PUBLIC
   HERMES_MPI_TESTS=false)
 jarvis_test(stdio test_stdio_basic)
@@ -54,9 +54,9 @@ add_executable(stdio_adapter_mpi_test
   stdio_adapter_rs_test.cc
   stdio_adapter_shared_test.cc)
 add_dependencies(stdio_adapter_mpi_test
-  hermes_client)
+  ${Hermes_CLIENT_DEPS})
 target_link_libraries(stdio_adapter_mpi_test
-  hermes_client)
+  ${Hermes_CLIENT_DEPS})
 target_compile_definitions(stdio_adapter_mpi_test PUBLIC
   HERMES_MPI_TESTS=true)
 jarvis_test(stdio test_stdio_basic_mpi)

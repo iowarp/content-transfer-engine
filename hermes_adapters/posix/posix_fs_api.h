@@ -23,14 +23,13 @@ namespace hermes::adapter {
 
 /** A class to represent POSIX IO file system */
 class PosixFs : public hermes::adapter::Filesystem {
- public:
+public:
   HERMES_POSIX_API_T real_api_; /**< pointer to real APIs */
 
- public:
+public:
   PosixFs() : Filesystem(AdapterType::kPosix) { real_api_ = HERMES_POSIX_API; }
 
-  template <typename StatT>
-  int Stat(File &f, StatT *buf) {
+  template <typename StatT> int Stat(File &f, StatT *buf) {
     auto mdm = HERMES_FS_METADATA_MANAGER;
     auto existing = mdm->Find(f);
     if (existing) {
@@ -59,8 +58,7 @@ class PosixFs : public hermes::adapter::Filesystem {
     }
   }
 
-  template <typename StatT>
-  int Stat(const char *__filename, StatT *buf) {
+  template <typename StatT> int Stat(const char *__filename, StatT *buf) {
     bool stat_exists;
     AdapterStat stat;
     stat.flags_ = O_RDONLY;
@@ -93,18 +91,21 @@ class PosixFs : public hermes::adapter::Filesystem {
     return IsFdTracked(fd, stat);
   }
 
-  /** get the file name from \a fd file descriptor */
-  std::string GetFilenameFromFD(int fd) {
-    std::vector<char> proclnk(kMaxPathLen);
-    std::vector<char> filename(kMaxPathLen);
-    snprintf(proclnk.data(), kMaxPathLen - 1, "/proc/self/fd/%d", fd);
-    size_t r = readlink(proclnk.data(), filename.data(), kMaxPathLen);
-    return std::string(filename.data(), r);
-  }
-
- public:
+public:
   /** Allocate an fd for the file f */
   void RealOpen(File &f, AdapterStat &stat, const std::string &path) override {
+    // Check the first two bits for read/write mode
+    switch (stat.flags_ & O_ACCMODE) {
+    case O_RDONLY:
+      stat.hflags_.SetBits(HERMES_FS_READ);
+      break;
+    case O_WRONLY:
+      stat.hflags_.SetBits(HERMES_FS_WRITE);
+      break;
+    case O_RDWR:
+      stat.hflags_.SetBits(HERMES_FS_READ | HERMES_FS_WRITE);
+      break;
+    }
     if (stat.flags_ & O_APPEND) {
       stat.hflags_.SetBits(HERMES_FS_APPEND);
     }
@@ -246,10 +247,10 @@ class PosixFs : public hermes::adapter::Filesystem {
 };
 
 /** Simplify access to the stateless PosixFs Singleton */
-#define HERMES_POSIX_FS \
+#define HERMES_POSIX_FS                                                        \
   hshm::Singleton<::hermes::adapter::PosixFs>::GetInstance()
 #define HERMES_POSIX_FS_T hermes::adapter::PosixFs *
 
-}  // namespace hermes::adapter
+} // namespace hermes::adapter
 
-#endif  // HERMES_ADAPTER_POSIX_NATIVE_H_
+#endif // HERMES_ADAPTER_POSIX_NATIVE_H_

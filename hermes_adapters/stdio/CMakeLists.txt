@@ -7,15 +7,15 @@ include_directories(
 
 # Create the STDIO interceptor
 set(INTERCEPTOR_DEPS
-        hermes_client hermes_fs_base)
+        ${Hermes_CLIENT_DEPS} hermes_fs_base)
 add_library(hermes_stdio SHARED
         ${CMAKE_CURRENT_SOURCE_DIR}/stdio_api.cc)
 add_dependencies(hermes_stdio ${INTERCEPTOR_DEPS})
 target_link_libraries(hermes_stdio MPI::MPI_CXX stdc++fs ${libelf_LIBRARIES} ${INTERCEPTOR_DEPS})
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Add Target(s) to CMake Install
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 install(
         TARGETS
         hermes_stdio
@@ -24,9 +24,9 @@ install(
         RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}
 )
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Install headers
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 file(GLOB_RECURSE HERMES_HEADERS "*.h")
 install(
         FILES
@@ -37,9 +37,9 @@ install(
         headers
 )
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Add Target(s) to Coverage
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 if(HERMES_ENABLE_COVERAGE)
-    set_coverage_flags(hermes_stdio)
+        set_coverage_flags(hermes_stdio)
 endif()

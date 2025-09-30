@@ -10,35 +10,21 @@
  * have access to the file, you may request a copy from help@hdfgroup.org.   *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#define CATCH_CONFIG_RUNNER
-#include <catch2/catch_all.hpp>
-#include <iostream>
-#include <cstdlib>
-#include <mpi.h>
+#include <cassert>
+
 #include "hermes/hermes.h"
 
-namespace cl = Catch::Clara;
-cl::Parser define_options();
+int main() {
+  TRANSPARENT_HERMES();
+  hermes::Bucket bkt("hello");
+  size_t blob_size = KILOBYTES(4);
+  hermes::Context ctx;
 
-int main(int argc, char **argv) {
-  int rc;
-  MPI_Init(&argc, &argv);
-  Catch::Session session;
-  auto cli = session.cli();
-  session.cli(cli);
-  rc = session.applyCommandLine(argc, argv);
-  if (rc != 0) return rc;
-  rc = session.run();
-  if (rc != 0) return rc;
-  MPI_Finalize();
-  return rc;
-}
+  std::vector<int> data_put(1024, 0);
+  bkt.Put<std::vector<int>>("0", data_put, ctx);
 
-TEST_CASE("TestHermesConnect") {
-  int rank, nprocs;
-  MPI_Barrier(MPI_COMM_WORLD);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-  HERMES->ClientInit();
-  MPI_Barrier(MPI_COMM_WORLD);
+  std::vector<int> data_get(1024, 1);
+  bkt.Get<std::vector<int>>("0", data_get, ctx);
+
+  assert(data_put == data_get);
 }

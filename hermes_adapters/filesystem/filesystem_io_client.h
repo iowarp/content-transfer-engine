@@ -41,6 +41,10 @@ namespace hermes::adapter {
 #define HERMES_FS_TRUNC BIT_OPT(uint32_t, 5)
 /** Whether the file was found on-disk */
 #define HERMES_FS_EXISTS BIT_OPT(uint32_t, 6)
+/** Whether the file supports reading */
+#define HERMES_FS_READ BIT_OPT(uint32_t, 7)
+/** Whether the file supports writing */
+#define HERMES_FS_WRITE BIT_OPT(uint32_t, 8)
 
 /** A structure to represent IO status */
 struct IoStatus {
@@ -52,9 +56,7 @@ struct IoStatus {
 
   /** Default constructor */
   IoStatus()
-      : size_(0),
-        mpi_ret_(MPI_SUCCESS),
-        mpi_status_ptr_(&mpi_status_),
+      : size_(0), mpi_ret_(MPI_SUCCESS), mpi_status_ptr_(&mpi_status_),
         success_(true) {}
 
   /** Copy constructor */
@@ -85,12 +87,8 @@ struct FsIoOptions {
 
   /** Default constructor */
   FsIoOptions()
-      : flags_(),
-        mpi_type_(MPI_CHAR),
-        mpi_count_(0),
-        type_size_(1),
-        backend_off_(0),
-        backend_size_(0) {
+      : flags_(), mpi_type_(MPI_CHAR), mpi_count_(0), type_size_(1),
+        backend_off_(0), backend_size_(0) {
     SetSeek();
   }
 
@@ -120,10 +118,17 @@ struct FsIoOptions {
   }
 };
 
+/** The get task */
+struct GetBlobAsyncTask {
+  FullPtr<GetBlobTask> task_;
+  char *orig_data_;
+  size_t orig_size_;
+};
+
 /** A structure to represent Hermes request */
 struct FsAsyncTask {
   std::vector<FullPtr<PutBlobTask>> put_tasks_;
-  std::vector<FullPtr<GetBlobTask>> get_tasks_;
+  std::vector<GetBlobAsyncTask> get_tasks_;
   IoStatus io_status_;
   FsIoOptions opts_;
 };
@@ -142,12 +147,8 @@ struct File {
 
   /** Default constructor */
   File()
-      : type_(AdapterType::kNone),
-        filename_(),
-        hermes_fd_(-1),
-        hermes_fh_(nullptr),
-        hermes_mpi_fh_(nullptr),
-        status_(true),
+      : type_(AdapterType::kNone), filename_(), hermes_fd_(-1),
+        hermes_fh_(nullptr), hermes_mpi_fh_(nullptr), status_(true),
         mpi_status_(MPI_SUCCESS) {}
 
   /** file constructor that copies \a old file */
@@ -217,20 +218,9 @@ struct AdapterStat {
 
   /** Default constructor */
   AdapterStat()
-      : flags_(0),
-        hflags_(),
-        st_mode_(),
-        st_ptr_(0),
-        file_size_(0),
-        st_atim_(),
-        st_mtim_(),
-        st_ctim_(),
-        adapter_mode_(AdapterMode::kNone),
-        fd_(-1),
-        fh_(nullptr),
-        mpi_fh_(nullptr),
-        amode_(0),
-        comm_(MPI_COMM_SELF),
+      : flags_(0), hflags_(), st_mode_(), st_ptr_(0), file_size_(0), st_atim_(),
+        st_mtim_(), st_ctim_(), adapter_mode_(AdapterMode::kNone), fd_(-1),
+        fh_(nullptr), mpi_fh_(nullptr), amode_(0), comm_(MPI_COMM_SELF),
         atomicity_(false) {}
 
   /** Update to the current time */
@@ -256,7 +246,7 @@ struct FsIoClientMetadata {
 
   /** Default constructor */
   FsIoClientMetadata() {
-    hermes_fd_min_ = 8192;  // TODO(llogan): don't assume 8192
+    hermes_fd_min_ = 8192; // TODO(llogan): don't assume 8192
     hermes_fd_cur_ = hermes_fd_min_;
     hermes_fd_max_ = std::numeric_limits<int>::max();
   }
@@ -299,7 +289,7 @@ struct FilesystemIoClientState {
  * base class.
  * */
 class FilesystemIoClient {
- public:
+public:
   /** virtual destructor */
   virtual ~FilesystemIoClient() = default;
 
@@ -347,17 +337,16 @@ class FilesystemIoClient {
   virtual void UpdateIoStatus(const FsIoOptions &opts, IoStatus &status) = 0;
 };
 
-}  // namespace hermes::adapter
+} // namespace hermes::adapter
 
 namespace std {
 /** A structure to represent hash */
-template <>
-struct hash<::hermes::adapter::File> {
+template <> struct hash<::hermes::adapter::File> {
   /** hash creator functor */
   std::size_t operator()(const hermes::adapter::File &key) const {
     return key.hash();
   }
 };
-}  // namespace std
+} // namespace std
 
-#endif  // HERMES_ADAPTER_FILESYSTEM_FILESYSTEM_IO_CLIENT_H_
+#endif // HERMES_ADAPTER_FILESYSTEM_FILESYSTEM_IO_CLIENT_H_

@@ -13,7 +13,7 @@
 #ifndef HRUN_TASKS_HERMES_INCLUDE_HERMES_HERMES_TYPES_H_
 #define HRUN_TASKS_HERMES_INCLUDE_HERMES_HERMES_TYPES_H_
 
-#include "bdev/bdev.h"
+#include "bdev/bdev_client.h"
 #include "chimaera/chimaera_types.h"
 #include "status.h"
 #include "statuses.h"
@@ -46,11 +46,27 @@ typedef PoolId TargetId;
 struct TargetInfo {
   TargetId id_;
   chi::bdev::Client client_;
+  DomainQuery dom_query_;
   FullPtr<chi::bdev::PollStatsTask> poll_stats_;
   chi::BdevStats *stats_;
-  float score_ = 0;  // TODO(llogan): Calculate score
+  float score_ = 0; // TODO(llogan): Calculate score
 
   size_t GetRemCap() { return stats_->free_; }
+};
+
+/** Basic target statistics summary */
+struct TargetStats {
+  TargetId tgt_id_;
+  chi::NodeId node_id_;
+  ssize_t rem_cap_;
+  ssize_t max_cap_;
+  float bandwidth_;
+  float latency_;
+  float score_;
+
+  template <typename Ar> void serialize(Ar &ar) {
+    ar(tgt_id_, node_id_, rem_cap_, max_cap_, bandwidth_, latency_, score_);
+  }
 };
 
 /** Represents a trait */
@@ -60,11 +76,159 @@ typedef PoolId TraitId;
 enum class TraitType { kStagingTrait, kProducerOpTrait };
 
 /** Represents a blob */
-class Blob : public chi::charwrap {
- public:
-  template <typename... Args>
-  Blob(Args &&...args)
-      : chi::charwrap(CHI_CLIENT->data_alloc_, std::forward<Args>(args)...) {}
+class Blob {
+public:
+  hipc::FullPtr<char> data_ = hipc::FullPtr<char>::GetNull();
+  size_t size_ = 0;
+  size_t max_size_ = 0;
+  bool owned_ = true;
+
+public:
+  /** Default constructor */
+  HSHM_INLINE_CROSS_FUN
+  Blob() = default;
+
+  /** Size constructor */
+  HSHM_INLINE_CROSS_FUN
+  Blob(size_t size) { resize(size); }
+
+  /** Copy string */
+  Blob(const std::string &data) { Copy(data.data(), data.size()); }
+
+  /** Copy vector */
+  template <typename T> HSHM_INLINE_CROSS_FUN Blob(const chi::vector<T> &data) {
+    Copy(data.data(), data.size() * sizeof(T));
+  }
+
+  /** Copy char *, size */
+  HSHM_INLINE_CROSS_FUN
+  Blob(const char *data, size_t size) {
+    FullPtr<char> data_full(data);
+    Copy(data_full.ptr_, size);
+  }
+
+  /** Copy shm pointer, size */
+  HSHM_INLINE_CROSS_FUN
+  Blob(const hipc::Pointer &data, size_t size) {
+    FullPtr<char> data_full(data);
+    Copy(data_full.ptr_, size);
+  }
+
+  /** Wrap shm pointer */
+  HSHM_INLINE_CROSS_FUN
+  Blob(const hipc::Pointer &data, size_t size, bool owned) {
+    FullPtr<char> data_full(data);
+    data_ = data_full;
+    size_ = size;
+    owned_ = false;
+  }
+
+  /** Copy assignment */
+  HSHM_INLINE_CROSS_FUN
+  Blob &operator=(const Blob &other) {
+    if (this != &other) {
+      Copy(other.data(), other.size());
+    }
+    return *this;
+  }
+
+  /** Copy constructor */
+  HSHM_INLINE_CROSS_FUN
+  Blob(const Blob &other) { Copy(other.data(), other.size()); }
+
+  /** Copy */
+  HSHM_CROSS_FUN
+  void Copy(const char *other, size_t other_size) {
+    if (!data_.IsNull()) {
+      HSHM_THROW_STD_ERROR("Copy to preallocated blob not supported");
+    }
+    resize(other_size);
+    memcpy(data_.ptr_, other, other_size);
+  }
+
+  /** Move constructor */
+  HSHM_CROSS_FUN
+  Blob(Blob &&other) {
+    data_ = other.data_;
+    size_ = other.size_;
+    max_size_ = other.max_size_;
+    other.Disown();
+  }
+
+  /** Move assignment */
+  HSHM_CROSS_FUN
+  Blob &operator=(Blob &&other) {
+    if (this != &other) {
+      data_ = other.data_;
+      size_ = other.size_;
+      max_size_ = other.max_size_;
+      other.Disown();
+    }
+    return *this;
+  }
+
+  /** Disown */
+  HSHM_INLINE_CROSS_FUN
+  void Disown() { owned_ = false; }
+
+  /** Destructor */
+  HSHM_CROSS_FUN
+  ~Blob() {
+    if (!data_.IsNull() && owned_) {
+      CHI_CLIENT->FreeBuffer(HSHM_MCTX, data_);
+    }
+  }
+
+  /** Resize */
+  HSHM_CROSS_FUN
+  void resize(size_t new_size) {
+    reserve(new_size);
+    size_ = new_size;
+  }
+
+  /** Reserve */
+  HSHM_CROSS_FUN
+  void reserve(size_t new_size) {
+    if (size_) {
+      HSHM_THROW_STD_ERROR("Blobs are not meant to be resized after creation");
+    } else {
+      data_ = CHI_CLIENT->AllocateBuffer(HSHM_MCTX, new_size);
+    }
+    max_size_ = new_size;
+  }
+
+  /** Get the data */
+  HSHM_INLINE_CROSS_FUN
+  char *data() { return data_.ptr_; }
+
+  /** Get the SHM pointer */
+  HSHM_INLINE_CROSS_FUN
+  hipc::Pointer &shm() { return data_.shm_; }
+
+  /** Get the SHM pointer */
+  HSHM_INLINE_CROSS_FUN
+  const hipc::Pointer &shm() const { return data_.shm_; }
+
+  /** Get the size */
+  HSHM_INLINE_CROSS_FUN
+  size_t size() const { return size_; }
+
+  /** Get the data */
+  HSHM_INLINE_CROSS_FUN
+  char *data() const { return data_.ptr_; }
+
+  /** Equality */
+  HSHM_INLINE_CROSS_FUN
+  bool operator==(const Blob &other) const {
+    if (size_ != other.size_) {
+      return false;
+    }
+    return memcmp(data_.ptr_, other.data_.ptr_, size_) == 0;
+  }
+
+  /** Inequality */
+  HSHM_INLINE_CROSS_FUN
+  bool operator!=(const Blob &other) const { return !(*this == other); }
 };
 
 /** Supported data placement policies */
@@ -77,22 +241,22 @@ enum class PlacementPolicy {
 
 /** A class to convert placement policy enum value to string */
 class PlacementPolicyConv {
- public:
+public:
   /** A function to return string representation of \a policy */
   static std::string to_str(PlacementPolicy policy) {
     switch (policy) {
-      case PlacementPolicy::kRandom: {
-        return "PlacementPolicy::kRandom";
-      }
-      case PlacementPolicy::kRoundRobin: {
-        return "PlacementPolicy::kRoundRobin";
-      }
-      case PlacementPolicy::kMinimizeIoTime: {
-        return "PlacementPolicy::kMinimizeIoTime";
-      }
-      case PlacementPolicy::kNone: {
-        return "PlacementPolicy::kNone";
-      }
+    case PlacementPolicy::kRandom: {
+      return "PlacementPolicy::kRandom";
+    }
+    case PlacementPolicy::kRoundRobin: {
+      return "PlacementPolicy::kRoundRobin";
+    }
+    case PlacementPolicy::kMinimizeIoTime: {
+      return "PlacementPolicy::kMinimizeIoTime";
+    }
+    case PlacementPolicy::kNone: {
+      return "PlacementPolicy::kNone";
+    }
     }
     return "PlacementPolicy::Invalid";
   }
@@ -114,6 +278,9 @@ class PlacementPolicyConv {
 
 /** Hermes API call context */
 struct Context {
+  /** Memory context */
+  hipc::MemContext mctx_;
+
   /** Data placement engine */
   PlacementPolicy dpe_;
 
@@ -124,12 +291,15 @@ struct Context {
   bitfield32_t flags_;
 
   /** Custom bucket parameters */
-  std::string bkt_params_;
+  chi::string bkt_params_;
 
   /** The node id the blob will be accessed from */
   u32 node_id_;
 
-  Context() : dpe_(PlacementPolicy::kNone), blob_score_(1), node_id_(0) {}
+  HSHM_CROSS_FUN
+  Context()
+      : mctx_(HSHM_MCTX), dpe_(PlacementPolicy::kNone), blob_score_(1),
+        node_id_(0) {}
 };
 
 /**
@@ -174,7 +344,7 @@ enum class FlushingMode { kSync, kAsync };
 
 /** Convert flushing modes to strings */
 class FlushingModeConv {
- public:
+public:
   static FlushingMode GetEnum(const std::string &str) {
     if (str == "kSync") {
       return FlushingMode::kSync;
@@ -189,7 +359,7 @@ class FlushingModeConv {
 /** A class with static constants */
 #define CONST_T static inline const
 class Constant {
- public:
+public:
   /** Hermes server environment variable */
   CONST_T char *kHermesServerConf = "HERMES_CONF";
 
@@ -214,10 +384,7 @@ struct BufferInfo : public chi::Block {
   TargetId tid_; /**< The destination target */
 
   /** Serialization */
-  template <typename Ar>
-  void serialize(Ar &ar) {
-    ar(tid_, off_, size_);
-  }
+  template <typename Ar> void serialize(Ar &ar) { ar(tid_, off_, size_); }
 
   /** Default constructor */
   BufferInfo() = default;
@@ -238,18 +405,19 @@ struct BlobInfo {
   size_t max_blob_size_; /**< The amount of space current buffers support */
   float score_;          /**< The priority of this blob */
   float user_score_;     /**< The user-defined priority of this blob */
-  std::atomic<u32> access_freq_;  /**< Number of times blob accessed in epoch */
+  hipc::atomic<u32> access_freq_; /**< Number of times blob accessed in epoch */
   hshm::Timepoint last_access_;   /**< Last time blob accessed */
-  std::atomic<size_t> mod_count_; /**< The number of times blob modified */
-  std::atomic<size_t> last_flush_; /**< The last mod that was flushed */
-  bitfield32_t flags_;             /**< Flags */
+  hipc::atomic<hshm::big_uint>
+      mod_count_; /**< The number of times blob modified */
+  hipc::atomic<hshm::big_uint>
+      last_flush_;     /**< The last mod that was flushed */
+  bitfield32_t flags_; /**< Flags */
 #ifdef CHIMAERA_RUNTIME
   chi::CoRwLock lock_; /**< Lock */
 #endif
 
   /** Serialization */
-  template <typename Ar>
-  void serialize(Ar &ar) {
+  template <typename Ar> void serialize(Ar &ar) {
     ar(tag_id_, blob_id_, name_, buffers_, tags_, blob_size_, max_blob_size_,
        score_, access_freq_, mod_count_, last_flush_);
   }
@@ -300,6 +468,9 @@ struct BlobInfo {
   chi::string GetBlobNameWithBucket() {
     return GetBlobNameWithBucket(tag_id_, name_);
   }
+
+  /** Get std::string of name */
+  std::string GetName() { return name_.str(); }
 };
 
 /** Data structure used to store Bucket information */
@@ -315,8 +486,7 @@ struct TagInfo {
   // chi::CoRwLock lock_;
 
   /** Serialization */
-  template <typename Ar>
-  void serialize(Ar &ar) {
+  template <typename Ar> void serialize(Ar &ar) {
     ar(tag_id_, name_, internal_size_, page_size_, owner_, flags_);
   }
 
@@ -330,7 +500,7 @@ struct TagInfo {
 
 /** The mode used to update size */
 class UpdateSizeMode {
- public:
+public:
   TASK_METHOD_T kAdd = 0;
   TASK_METHOD_T kCap = 1;
 };
@@ -345,9 +515,16 @@ struct IoStat {
   TagId tag_id_;
   size_t blob_size_;
   int rank_;
+  hshm::qtok_id id_;
 
   /** Default constructor */
   IoStat() = default;
+
+  /** Emplace constructor */
+  IoStat(IoType type, const BlobId &blob_id, const TagId &tag_id,
+         size_t blob_size, int rank)
+      : type_(type), blob_id_(blob_id), tag_id_(tag_id), blob_size_(blob_size),
+        rank_(rank) {}
 
   /** Copy constructor */
   IoStat(const IoStat &other) { Copy(other); }
@@ -378,24 +555,12 @@ struct IoStat {
     tag_id_ = other.tag_id_;
     blob_size_ = other.blob_size_;
     rank_ = other.rank_;
+    id_ = other.id_;
   }
 
-  /** Serialize */
-  template <class Archive>
-  void save(Archive &ar) const {
-    int type = static_cast<int>(type_);
-    u64 ids[2] = {blob_id_.unique_, tag_id_.unique_};
-    u32 nodes[2] = {blob_id_.node_id_, tag_id_.node_id_};
-    ar(type, ids[0], nodes[0], ids[1], nodes[1], blob_size_, rank_);
-  }
-
-  /** Deserialize */
-  template <class Archive>
-  void load(Archive &ar) {
-    int type;
-    ar(type, blob_id_.unique_, blob_id_.node_id_, tag_id_.unique_,
-       tag_id_.node_id_, blob_size_, rank_);
-    type_ = static_cast<IoType>(type);
+  /** Serialize  */
+  template <typename Ar> void serialize(Ar &ar) {
+    ar(type_, blob_id_, tag_id_, blob_size_, rank_, id_);
   }
 };
 
@@ -448,6 +613,6 @@ enum LockOwners {
   kMDM_ClearIoStats = 47
 };
 
-}  // namespace hermes
+} // namespace hermes
 
-#endif  // HRUN_TASKS_HERMES_INCLUDE_HERMES_HERMES_TYPES_H_
+#endif // HRUN_TASKS_HERMES_INCLUDE_HERMES_HERMES_TYPES_H_

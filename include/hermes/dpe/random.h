@@ -13,9 +13,10 @@
 #ifndef HERMES_SRC_DPE_RANDOM_H_
 #define HERMES_SRC_DPE_RANDOM_H_
 
-#include "dpe.h"
 #include <cstdlib>
 #include <ctime>
+
+#include "dpe.h"
 
 namespace hermes {
 
@@ -30,8 +31,7 @@ class Random : public Dpe {
   }
   ~Random() = default;
   Status Placement(const std::vector<size_t> &blob_sizes,
-                   std::vector<TargetInfo> &targets,
-                   Context &ctx,
+                   std::vector<TargetInfo> &targets, Context &ctx,
                    std::vector<PlacementSchema> &output) override {
     for (size_t blob_size : blob_sizes) {
       // Initialize blob's size, score, and schema
@@ -42,10 +42,11 @@ class Random : public Dpe {
       // Choose RR target and iterate
       size_t target_id = std::rand() % targets.size();
       for (size_t tgt_idx = 0; tgt_idx < targets.size(); ++tgt_idx) {
-        if (rem_blob_size == 0) {
-          break;
-        }
         TargetInfo &target = targets[(target_id + tgt_idx) % targets.size()];
+        if (rem_blob_size == 0) {
+          blob_schema.plcmnts_.emplace_back(rem_blob_size, target.id_);
+          continue;
+        }
         size_t rem_cap = target.GetRemCap();
 
         // NOTE(llogan): We skip targets that can't fit the ENTIRE blob
@@ -57,8 +58,7 @@ class Random : public Dpe {
         }
 
         // Place the blob on this target
-        blob_schema.plcmnts_.emplace_back(rem_blob_size,
-                                          target.id_);
+        blob_schema.plcmnts_.emplace_back(rem_blob_size, target.id_);
         rem_blob_size = 0;
         break;
       }

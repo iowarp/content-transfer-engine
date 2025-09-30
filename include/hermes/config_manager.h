@@ -13,22 +13,22 @@
 #ifndef HRUN_TASKS_HERMES_INCLUDE_hermes_H_
 #define HRUN_TASKS_HERMES_INCLUDE_hermes_H_
 
-#include "chimaera_admin/chimaera_admin.h"
+#include "chimaera_admin/chimaera_admin_client.h"
 #include "hermes/config_client.h"
 #include "hermes/config_server.h"
 #include "hermes/hermes_types.h"
-#include "hermes_core/hermes_core.h"
+#include "hermes_core/hermes_core_client.h"
 
 namespace hermes {
 
 class ConfigurationManager {
- public:
+public:
   hermes::Client mdm_;
   ServerConfig server_config_;
   ClientConfig client_config_;
   bool is_initialized_ = false;
 
- public:
+public:
   ConfigurationManager() = default;
 
   void ClientInit() {
@@ -40,7 +40,7 @@ class ConfigurationManager {
     LoadClientConfig(config_path);
     LoadServerConfig(config_path);
     mdm_.Create(
-        HSHM_DEFAULT_MEM_CTX,
+        HSHM_MCTX,
         chi::DomainQuery::GetDirectHash(chi::SubDomainId::kGlobalContainers, 0),
         chi::DomainQuery::GetGlobalBcast(), "hermes_core");
     is_initialized_ = true;
@@ -67,10 +67,9 @@ class ConfigurationManager {
   }
 };
 
-}  // namespace hermes
-
-#define HERMES_CONF \
-  hshm::Singleton<::hermes::ConfigurationManager>::GetInstance()
+HSHM_DEFINE_GLOBAL_PTR_VAR_H((hermes::ConfigurationManager), hermes_conf)
+#define HERMES_CONF                                                            \
+  HSHM_GET_GLOBAL_PTR_VAR((hermes::ConfigurationManager), hermes::hermes_conf)
 #define HERMES_CLIENT_CONF HERMES_CONF->client_config_
 #define HERMES_SERVER_CONF HERMES_CONF->server_config_
 
@@ -83,4 +82,12 @@ static inline bool TRANSPARENT_HERMES() {
   return false;
 }
 
-#endif  // HRUN_TASKS_HERMES_INCLUDE_hermes_H_
+/** Wrapper for client-side hermes init */
+static inline bool HERMES_INIT() { return TRANSPARENT_HERMES(); }
+
+} // namespace hermes
+
+using hermes::HERMES_INIT;
+using hermes::TRANSPARENT_HERMES;
+
+#endif // HRUN_TASKS_HERMES_INCLUDE_hermes_H_

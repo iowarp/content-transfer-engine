@@ -30,18 +30,21 @@ kGetBlobScore: 35
 kGetBlobBuffers: 36
 kPutBlob: 37
 kGetBlob: 38
-kTruncateBlob: 39
-kDestroyBlob: 40
-kTagBlob: 41
-kBlobHasTag: 42
-kReorganizeBlob: 43
-kFlushBlob: 44
-kFlushData: 45
+kAppendBlob: 39
+kTruncateBlob: 40
+kDestroyBlob: 41
+kTagBlob: 42
+kBlobHasTag: 43
+kReorganizeBlob: 44
+kReorganizeNode: 45
+kFlushBlob: 46
+kFlushData: 47
 
 # Metadata Methods
 kPollBlobMetadata: 50
 kPollTargetMetadata: 51
 kPollTagMetadata: 52
+kPollAccessPattern: 53
 
 # Staging Methods
 kRegisterStager: 60

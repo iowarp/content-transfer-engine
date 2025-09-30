@@ -12,6 +12,9 @@ endif()
 if (HERMES_ENABLE_VFD)
     add_subdirectory(vfd)
 endif()
+if (HERMES_ENABLE_NVIDIA_GDS_ADAPTER)
+    add_subdirectory(nvidia_gds)
+endif()
 
 #-----------------------------------------------------------------------------
 # Install adapter headers

@@ -50,6 +50,12 @@ class HermesApi(Interceptor):
                 'type': bool,
                 'default': False
             },
+            {
+                'name': 'nvidia_gds',
+                'msg': 'Intercept NVIDIA GDS I/O',
+                'type': bool,
+                'default': False
+            },
         ]
 
     def _configure(self, **kwargs):
@@ -89,6 +95,13 @@ class HermesApi(Interceptor):
             self.env['HERMES_ROOT'] = str(pathlib.Path(self.env['HERMES_VFD']).parent.parent)
             print(f'Found libhdf5_hermes_vfd.so at {self.env["HERMES_VFD"]}')
             has_one = True
+        if self.config['nvidia_gds']:
+            self.env['HERMES_NVIDIA_GDS'] = self.find_library('hermes_nvidia_gds')
+            if self.env['HERMES_NVIDIA_GDS'] is None:
+                raise Exception('Could not find hermes_nvidia_gds')
+            self.env['HERMES_ROOT'] = str(pathlib.Path(self.env['HERMES_NVIDIA_GDS']).parent.parent)
+            print(f'Found libhermes_nvidia_gds.so at {self.env["HERMES_NVIDIA_GDS"]}')
+            has_one = True
         if not has_one:
             raise Exception('Hermes API not selected')
 
@@ -109,3 +122,5 @@ class HermesApi(Interceptor):
                 str(pathlib.Path(self.env['HERMES_VFD']).parent))
             self.setenv('HDF5_PLUGIN_PATH', plugin_path_parent)
             self.setenv('HDF5_DRIVER', 'hdf5_hermes_vfd')
+        if self.config['nvidia_gds']:
+            self.append_env('LD_PRELOAD', self.env['HERMES_NVIDIA_GDS'])

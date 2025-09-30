@@ -12,52 +12,90 @@
 
 #ifndef HERMES_ADAPTER_MPIIO_H
 #define HERMES_ADAPTER_MPIIO_H
-#include <string>
 #include <dlfcn.h>
-#include <iostream>
-#include "hermes_shm/util/logging.h"
 #include <mpi.h>
+
+#include <iostream>
+#include <string>
+
+#include "hermes_shm/util/logging.h"
 #ifdef HERMES_MPICH
 #include <mpio.h>
 #endif
-#include "hermes_adapters/real_api.h"
+#include "hermes_shm/util/real_api.h"
 
 #ifndef MPI_MODE_TRUNCATE
 #define MPI_MODE_TRUNCATE 0
 #endif
 
 extern "C" {
-typedef int (*MPI_Init_t)(int * argc, char *** argv);
-typedef int (*MPI_Finalize_t)( void);
-typedef int (*MPI_Wait_t)(MPI_Request * req, MPI_Status * status);
-typedef int (*MPI_Waitall_t)(int count, MPI_Request * req, MPI_Status * status);
-typedef int (*MPI_File_open_t)(MPI_Comm comm, const char * filename, int amode, MPI_Info info, MPI_File * fh);
-typedef int (*MPI_File_close_t)(MPI_File * fh);
-typedef int (*MPI_File_seek_shared_t)(MPI_File fh, MPI_Offset offset, int whence);
+typedef int (*MPI_Init_t)(int* argc, char*** argv);
+typedef int (*MPI_Finalize_t)(void);
+typedef int (*MPI_Wait_t)(MPI_Request* req, MPI_Status* status);
+typedef int (*MPI_Waitall_t)(int count, MPI_Request* req, MPI_Status* status);
+typedef int (*MPI_File_open_t)(MPI_Comm comm, const char* filename, int amode,
+                               MPI_Info info, MPI_File* fh);
+typedef int (*MPI_File_close_t)(MPI_File* fh);
+typedef int (*MPI_File_seek_shared_t)(MPI_File fh, MPI_Offset offset,
+                                      int whence);
 typedef int (*MPI_File_seek_t)(MPI_File fh, MPI_Offset offset, int whence);
-typedef int (*MPI_File_get_position_t)(MPI_File fh, MPI_Offset * offset);
-typedef int (*MPI_File_read_all_t)(MPI_File fh, void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_read_at_all_t)(MPI_File fh, MPI_Offset offset, void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_read_at_t)(MPI_File fh, MPI_Offset offset, void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_read_t)(MPI_File fh, void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_read_ordered_t)(MPI_File fh, void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_read_shared_t)(MPI_File fh, void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_write_all_t)(MPI_File fh, const void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_write_at_all_t)(MPI_File fh, MPI_Offset offset, const void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_write_at_t)(MPI_File fh, MPI_Offset offset, const void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_write_t)(MPI_File fh, const void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_write_ordered_t)(MPI_File fh, const void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_write_shared_t)(MPI_File fh, const void * buf, int count, MPI_Datatype datatype, MPI_Status * status);
-typedef int (*MPI_File_iread_at_t)(MPI_File fh, MPI_Offset offset, void * buf, int count, MPI_Datatype datatype, MPI_Request * request);
-typedef int (*MPI_File_iread_t)(MPI_File fh, void * buf, int count, MPI_Datatype datatype, MPI_Request * request);
-typedef int (*MPI_File_iread_shared_t)(MPI_File fh, void * buf, int count, MPI_Datatype datatype, MPI_Request * request);
-typedef int (*MPI_File_iwrite_at_t)(MPI_File fh, MPI_Offset offset, const void * buf, int count, MPI_Datatype datatype, MPI_Request * request);
-typedef int (*MPI_File_iwrite_t)(MPI_File fh, const void * buf, int count, MPI_Datatype datatype, MPI_Request * request);
-typedef int (*MPI_File_iwrite_shared_t)(MPI_File fh, const void * buf, int count, MPI_Datatype datatype, MPI_Request * request);
+typedef int (*MPI_File_get_position_t)(MPI_File fh, MPI_Offset* offset);
+typedef int (*MPI_File_read_all_t)(MPI_File fh, void* buf, int count,
+                                   MPI_Datatype datatype, MPI_Status* status);
+typedef int (*MPI_File_read_at_all_t)(MPI_File fh, MPI_Offset offset, void* buf,
+                                      int count, MPI_Datatype datatype,
+                                      MPI_Status* status);
+typedef int (*MPI_File_read_at_t)(MPI_File fh, MPI_Offset offset, void* buf,
+                                  int count, MPI_Datatype datatype,
+                                  MPI_Status* status);
+typedef int (*MPI_File_read_t)(MPI_File fh, void* buf, int count,
+                               MPI_Datatype datatype, MPI_Status* status);
+typedef int (*MPI_File_read_ordered_t)(MPI_File fh, void* buf, int count,
+                                       MPI_Datatype datatype,
+                                       MPI_Status* status);
+typedef int (*MPI_File_read_shared_t)(MPI_File fh, void* buf, int count,
+                                      MPI_Datatype datatype,
+                                      MPI_Status* status);
+typedef int (*MPI_File_write_all_t)(MPI_File fh, const void* buf, int count,
+                                    MPI_Datatype datatype, MPI_Status* status);
+typedef int (*MPI_File_write_at_all_t)(MPI_File fh, MPI_Offset offset,
+                                       const void* buf, int count,
+                                       MPI_Datatype datatype,
+                                       MPI_Status* status);
+typedef int (*MPI_File_write_at_t)(MPI_File fh, MPI_Offset offset,
+                                   const void* buf, int count,
+                                   MPI_Datatype datatype, MPI_Status* status);
+typedef int (*MPI_File_write_t)(MPI_File fh, const void* buf, int count,
+                                MPI_Datatype datatype, MPI_Status* status);
+typedef int (*MPI_File_write_ordered_t)(MPI_File fh, const void* buf, int count,
+                                        MPI_Datatype datatype,
+                                        MPI_Status* status);
+typedef int (*MPI_File_write_shared_t)(MPI_File fh, const void* buf, int count,
+                                       MPI_Datatype datatype,
+                                       MPI_Status* status);
+typedef int (*MPI_File_iread_at_t)(MPI_File fh, MPI_Offset offset, void* buf,
+                                   int count, MPI_Datatype datatype,
+                                   MPI_Request* request);
+typedef int (*MPI_File_iread_t)(MPI_File fh, void* buf, int count,
+                                MPI_Datatype datatype, MPI_Request* request);
+typedef int (*MPI_File_iread_shared_t)(MPI_File fh, void* buf, int count,
+                                       MPI_Datatype datatype,
+                                       MPI_Request* request);
+typedef int (*MPI_File_iwrite_at_t)(MPI_File fh, MPI_Offset offset,
+                                    const void* buf, int count,
+                                    MPI_Datatype datatype,
+                                    MPI_Request* request);
+typedef int (*MPI_File_iwrite_t)(MPI_File fh, const void* buf, int count,
+                                 MPI_Datatype datatype, MPI_Request* request);
+typedef int (*MPI_File_iwrite_shared_t)(MPI_File fh, const void* buf, int count,
+                                        MPI_Datatype datatype,
+                                        MPI_Request* request);
 typedef int (*MPI_File_sync_t)(MPI_File fh);
 }
 
 namespace hermes::adapter {
+
+using hshm::RealApi;
 
 /** Pointers to the real mpiio API */
 class MpiioApi : public RealApi {
@@ -132,53 +170,68 @@ class MpiioApi : public RealApi {
     REQUIRE_API(MPI_File_open)
     MPI_File_close = (MPI_File_close_t)dlsym(real_lib_, "MPI_File_close");
     REQUIRE_API(MPI_File_close)
-    MPI_File_seek_shared = (MPI_File_seek_shared_t)dlsym(real_lib_, "MPI_File_seek_shared");
+    MPI_File_seek_shared =
+        (MPI_File_seek_shared_t)dlsym(real_lib_, "MPI_File_seek_shared");
     REQUIRE_API(MPI_File_seek_shared)
     MPI_File_seek = (MPI_File_seek_t)dlsym(real_lib_, "MPI_File_seek");
     REQUIRE_API(MPI_File_seek)
-    MPI_File_get_position = (MPI_File_get_position_t)dlsym(real_lib_, "MPI_File_get_position");
+    MPI_File_get_position =
+        (MPI_File_get_position_t)dlsym(real_lib_, "MPI_File_get_position");
     REQUIRE_API(MPI_File_get_position)
-    MPI_File_read_all = (MPI_File_read_all_t)dlsym(real_lib_, "MPI_File_read_all");
+    MPI_File_read_all =
+        (MPI_File_read_all_t)dlsym(real_lib_, "MPI_File_read_all");
     REQUIRE_API(MPI_File_read_all)
-    MPI_File_read_at_all = (MPI_File_read_at_all_t)dlsym(real_lib_, "MPI_File_read_at_all");
+    MPI_File_read_at_all =
+        (MPI_File_read_at_all_t)dlsym(real_lib_, "MPI_File_read_at_all");
     REQUIRE_API(MPI_File_read_at_all)
     MPI_File_read_at = (MPI_File_read_at_t)dlsym(real_lib_, "MPI_File_read_at");
     REQUIRE_API(MPI_File_read_at)
     MPI_File_read = (MPI_File_read_t)dlsym(real_lib_, "MPI_File_read");
     REQUIRE_API(MPI_File_read)
-    MPI_File_read_ordered = (MPI_File_read_ordered_t)dlsym(real_lib_, "MPI_File_read_ordered");
+    MPI_File_read_ordered =
+        (MPI_File_read_ordered_t)dlsym(real_lib_, "MPI_File_read_ordered");
     REQUIRE_API(MPI_File_read_ordered)
-    MPI_File_read_shared = (MPI_File_read_shared_t)dlsym(real_lib_, "MPI_File_read_shared");
+    MPI_File_read_shared =
+        (MPI_File_read_shared_t)dlsym(real_lib_, "MPI_File_read_shared");
     REQUIRE_API(MPI_File_read_shared)
-    MPI_File_write_all = (MPI_File_write_all_t)dlsym(real_lib_, "MPI_File_write_all");
+    MPI_File_write_all =
+        (MPI_File_write_all_t)dlsym(real_lib_, "MPI_File_write_all");
     REQUIRE_API(MPI_File_write_all)
-    MPI_File_write_at_all = (MPI_File_write_at_all_t)dlsym(real_lib_, "MPI_File_write_at_all");
+    MPI_File_write_at_all =
+        (MPI_File_write_at_all_t)dlsym(real_lib_, "MPI_File_write_at_all");
     REQUIRE_API(MPI_File_write_at_all)
-    MPI_File_write_at = (MPI_File_write_at_t)dlsym(real_lib_, "MPI_File_write_at");
+    MPI_File_write_at =
+        (MPI_File_write_at_t)dlsym(real_lib_, "MPI_File_write_at");
     REQUIRE_API(MPI_File_write_at)
     MPI_File_write = (MPI_File_write_t)dlsym(real_lib_, "MPI_File_write");
     REQUIRE_API(MPI_File_write)
-    MPI_File_write_ordered = (MPI_File_write_ordered_t)dlsym(real_lib_, "MPI_File_write_ordered");
+    MPI_File_write_ordered =
+        (MPI_File_write_ordered_t)dlsym(real_lib_, "MPI_File_write_ordered");
     REQUIRE_API(MPI_File_write_ordered)
-    MPI_File_write_shared = (MPI_File_write_shared_t)dlsym(real_lib_, "MPI_File_write_shared");
+    MPI_File_write_shared =
+        (MPI_File_write_shared_t)dlsym(real_lib_, "MPI_File_write_shared");
     REQUIRE_API(MPI_File_write_shared)
-    MPI_File_iread_at = (MPI_File_iread_at_t)dlsym(real_lib_, "MPI_File_iread_at");
+    MPI_File_iread_at =
+        (MPI_File_iread_at_t)dlsym(real_lib_, "MPI_File_iread_at");
     REQUIRE_API(MPI_File_iread_at)
     MPI_File_iread = (MPI_File_iread_t)dlsym(real_lib_, "MPI_File_iread");
     REQUIRE_API(MPI_File_iread)
-    MPI_File_iread_shared = (MPI_File_iread_shared_t)dlsym(real_lib_, "MPI_File_iread_shared");
+    MPI_File_iread_shared =
+        (MPI_File_iread_shared_t)dlsym(real_lib_, "MPI_File_iread_shared");
     REQUIRE_API(MPI_File_iread_shared)
-    MPI_File_iwrite_at = (MPI_File_iwrite_at_t)dlsym(real_lib_, "MPI_File_iwrite_at");
+    MPI_File_iwrite_at =
+        (MPI_File_iwrite_at_t)dlsym(real_lib_, "MPI_File_iwrite_at");
     REQUIRE_API(MPI_File_iwrite_at)
     MPI_File_iwrite = (MPI_File_iwrite_t)dlsym(real_lib_, "MPI_File_iwrite");
     REQUIRE_API(MPI_File_iwrite)
-    MPI_File_iwrite_shared = (MPI_File_iwrite_shared_t)dlsym(real_lib_, "MPI_File_iwrite_shared");
+    MPI_File_iwrite_shared =
+        (MPI_File_iwrite_shared_t)dlsym(real_lib_, "MPI_File_iwrite_shared");
     REQUIRE_API(MPI_File_iwrite_shared)
     MPI_File_sync = (MPI_File_sync_t)dlsym(real_lib_, "MPI_File_sync");
     REQUIRE_API(MPI_File_sync)
   }
 };
-}  // namespace hermes::adapter::mpiio
+}  // namespace hermes::adapter
 
 #include "hermes_shm/util/singleton.h"
 

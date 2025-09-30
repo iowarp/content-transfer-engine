@@ -23,25 +23,25 @@ namespace hermes::adapter {
 
 /** A class to represent MPI IO seek mode conversion */
 class MpiioSeekModeConv {
- public:
+public:
   /** normalize \a mpi_seek MPI seek mode */
   static SeekMode Normalize(int mpi_seek) {
     switch (mpi_seek) {
-      case MPI_SEEK_SET:
-        return SeekMode::kSet;
-      case MPI_SEEK_CUR:
-        return SeekMode::kCurrent;
-      case MPI_SEEK_END:
-        return SeekMode::kEnd;
-      default:
-        return SeekMode::kNone;
+    case MPI_SEEK_SET:
+      return SeekMode::kSet;
+    case MPI_SEEK_CUR:
+      return SeekMode::kCurrent;
+    case MPI_SEEK_END:
+      return SeekMode::kEnd;
+    default:
+      return SeekMode::kNone;
     }
   }
 };
 
 /** A class to represent POSIX IO file system */
 class MpiioFs : public Filesystem {
- public:
+public:
   HERMES_MPIIO_API_T real_api_; /**< pointer to real APIs */
 
   MpiioFs() : Filesystem(AdapterType::kMpiio) { real_api_ = HERMES_MPIIO_API; }
@@ -232,14 +232,12 @@ class MpiioFs : public Filesystem {
                   stat.comm_);
     MPI_Allreduce(&whence, &sum_whence, 1, MPI_INT, MPI_SUM, stat.comm_);
     if (sum_offset / comm_participators != offset) {
-      HELOG(kError,
-            "Same offset should be passed "
-            "across the opened file communicator.");
+      HELOG(kError, "Same offset should be passed "
+                    "across the opened file communicator.");
     }
     if (sum_whence / comm_participators != whence) {
-      HELOG(kError,
-            "Same whence should be passed "
-            "across the opened file communicator.");
+      HELOG(kError, "Same whence should be passed "
+                    "across the opened file communicator.");
     }
     Seek(f, stat, offset, whence);
     return 0;
@@ -500,7 +498,7 @@ class MpiioFs : public Filesystem {
     return SeekShared(f, *stat, offset, whence);
   }
 
- public:
+public:
   /** Allocate an fd for the file f */
   void RealOpen(File &f, AdapterStat &stat, const std::string &path) override {
     if (stat.amode_ & MPI_MODE_CREATE) {
@@ -510,14 +508,27 @@ class MpiioFs : public Filesystem {
     if (stat.amode_ & MPI_MODE_APPEND) {
       stat.hflags_.SetBits(HERMES_FS_APPEND);
     }
+    // Check MPI access modes
+    if (stat.amode_ & MPI_MODE_RDONLY) {
+      stat.hflags_.SetBits(HERMES_FS_READ);
+    }
+    if (stat.amode_ & MPI_MODE_WRONLY) {
+      stat.hflags_.SetBits(HERMES_FS_WRITE);
+    }
+    if (stat.amode_ & MPI_MODE_RDWR) {
+      stat.hflags_.SetBits(HERMES_FS_READ | HERMES_FS_WRITE);
+    }
 
     // NOTE(llogan): Allowing scratch mode to create empty files for MPI to
     // satisfy IOR.
+    HILOG(kDebug, "Beginning real MPI open: {}",
+          (void *)real_api_->MPI_File_open);
     f.mpi_status_ = real_api_->MPI_File_open(
         stat.comm_, path.c_str(), stat.amode_, stat.info_, &stat.mpi_fh_);
     if (f.mpi_status_ != MPI_SUCCESS) {
       f.status_ = false;
     }
+    HILOG(kDebug, "Finished real MPI open");
 
     /*if (stat.hflags_.Any(HERMES_FS_CREATE)) {
       if (stat.adapter_mode_ != AdapterMode::kScratch) {
@@ -688,11 +699,11 @@ class MpiioFs : public Filesystem {
   }
 };
 
-}  // namespace hermes::adapter
+} // namespace hermes::adapter
 
 /** Simplify access to the stateless StdioFs Singleton */
-#define HERMES_MPIIO_FS \
+#define HERMES_MPIIO_FS                                                        \
   hshm::Singleton<::hermes::adapter::MpiioFs>::GetInstance()
 #define HERMES_STDIO_FS_T hermes::adapter::MpiioFs *
 
-#endif  // HERMES_ADAPTER_MPIIO_MPIIO_FS_API_H_
+#endif // HERMES_ADAPTER_MPIIO_MPIIO_FS_API_H_
