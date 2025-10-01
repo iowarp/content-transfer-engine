@@ -7,8 +7,7 @@ namespace wrp_cte::core {
 Tag::Tag(const std::string &tag_name) : tag_name_(tag_name) {
   // Call the WRP_CTE client GetOrCreateTag function
   auto *cte_client = WRP_CTE_CLIENT;
-  TagInfo tag_info = cte_client->GetOrCreateTag(hipc::MemContext(), tag_name);
-  tag_id_ = tag_info.tag_id_;
+  tag_id_ = cte_client->GetOrCreateTag(hipc::MemContext(), tag_name);
 }
 
 Tag::Tag(const TagId &tag_id) : tag_id_(tag_id), tag_name_("") {}

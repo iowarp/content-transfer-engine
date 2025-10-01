@@ -15,9 +15,51 @@ namespace wrp_cte::core {
 
 // No more static member definitions - using instance-based locking
 
+chi::u64 Runtime::ParseCapacityToBytes(const std::string& capacity_str) {
+  if (capacity_str.empty()) {
+    return 0;
+  }
+
+  // Parse numeric part
+  double value = 0.0;
+  size_t pos = 0;
+  try {
+    value = std::stod(capacity_str, &pos);
+  } catch (const std::exception&) {
+    HILOG(kWarning, "Invalid capacity format: {}", capacity_str);
+    return 0;
+  }
+
+  // Parse suffix (case-insensitive)
+  std::string suffix = capacity_str.substr(pos);
+  // Remove whitespace
+  suffix.erase(std::remove_if(suffix.begin(), suffix.end(), ::isspace), suffix.end());
+
+  // Convert to uppercase for case-insensitive comparison
+  std::transform(suffix.begin(), suffix.end(), suffix.begin(), ::toupper);
+
+  chi::u64 multiplier = 1;
+  if (suffix.empty() || suffix == "B" || suffix == "BYTES") {
+    multiplier = 1;
+  } else if (suffix == "KB" || suffix == "K") {
+    multiplier = 1024ULL;
+  } else if (suffix == "MB" || suffix == "M") {
+    multiplier = 1024ULL * 1024ULL;
+  } else if (suffix == "GB" || suffix == "G") {
+    multiplier = 1024ULL * 1024ULL * 1024ULL;
+  } else if (suffix == "TB" || suffix == "T") {
+    multiplier = 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+  } else {
+    HILOG(kWarning, "Unknown capacity suffix: {}", suffix);
+    return static_cast<chi::u64>(value);
+  }
+
+  return static_cast<chi::u64>(value * multiplier);
+}
+
 void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
-  // Initialize the container with pool information and domain query
-  chi::Container::Init(task->pool_id_, task->pool_query_);
+  // Initialize the container with pool information and pool name
+  chi::Container::Init(task->new_pool_id_, task->pool_name_.str());
 
   // Initialize lock vectors for concurrent access
   target_locks_.reserve(kMaxLocks);
@@ -58,8 +100,8 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   // Store storage configuration in runtime
   storage_devices_ = config.storage_.devices_;
 
-  // Initialize the client so we can use the CTE client API
-  InitClient(pool_id_);
+  // Initialize the client with the pool ID
+  client_.Init(task->new_pool_id_);
 
   // Register targets for each configured storage device during initialization
   if (!storage_devices_.empty()) {
@@ -67,22 +109,29 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
     for (size_t i = 0; i < storage_devices_.size(); ++i) {
       const auto &device = storage_devices_[i];
-      std::string target_name = "storage_device_" + std::to_string(i);
 
-      // TODO: Implement target registration when bdev module is available
-      // For now, simulate successful target registration
-      chi::u32 result = 0; // Success
+      // Append hermes_data.bin to the device path
+      std::string target_path = device.path_;
+      
+      // Capacity is already in bytes
+      chi::u64 capacity_bytes = device.capacity_limit_;
 
-      // Store device information for later use
-      (void)device; // Suppress unused variable warning
+      // Determine bdev type enum
+      chimaera::bdev::BdevType bdev_type = chimaera::bdev::BdevType::kFile;
+      if (device.bdev_type_ == "ram") {
+        bdev_type = chimaera::bdev::BdevType::kRam;
+      }
+
+      // Call RegisterTarget using client member variable
+      chi::u32 result = client_.RegisterTarget(hipc::MemContext(), target_path,
+                                               bdev_type, capacity_bytes);
 
       if (result == 0) {
-        HILOG(kInfo, "  - Registered target '{}': {} ({}, {} bytes)",
-              target_name, device.path_, device.bdev_type_,
-              device.capacity_limit_);
+        HILOG(kInfo, "  - Registered target: {} ({}, {} bytes)",
+              target_path, device.bdev_type_, capacity_bytes);
       } else {
-        HILOG(kInfo, "  - Failed to register target '{}' (error code: {})",
-              target_name, result);
+        HILOG(kWarning, "  - Failed to register target {} (error code: {})",
+              target_path, result);
       }
     }
   } else {
@@ -108,7 +157,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
   HILOG(kInfo,
         "CTE Core container created and initialized for pool: {} (ID: {})",
-        pool_name_, task->pool_id_);
+        pool_name_, task->new_pool_id_);
 
   HILOG(kInfo, "Configuration: worker_count={}, max_targets={}",
         config.worker_count_, config.targets_.max_targets_);
@@ -330,7 +379,7 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
       return;
     }
 
-    chi::PoolId target_id = name_it->second;
+    const chi::PoolId &target_id = name_it->second;
 
     // Check if target exists and remove it (don't destroy bdev container)
     size_t lock_index = GetTargetLockIndex(target_id);
@@ -379,19 +428,19 @@ void Runtime::MonitorUnregisterTarget(chi::MonitorModeId mode,
 void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
                           chi::RunContext &ctx) {
   try {
-    // Clear the output vector and populate with current targets
-    task->targets_.clear();
+    // Clear the output vector and populate with current target names
+    task->target_names_.clear();
 
     // Use a single lock based on hash of operation type for listing
     size_t lock_index =
         std::hash<std::string>{}("list_targets") % target_locks_.size();
     chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
 
-    // Populate target list while lock is held
-    task->targets_.reserve(registered_targets_.size());
+    // Populate target name list while lock is held
+    task->target_names_.reserve(registered_targets_.size());
     for (const auto &pair : registered_targets_) {
       const TargetInfo &target_info = pair.second;
-      task->targets_.emplace_back(target_info);
+      task->target_names_.emplace_back(target_info.target_name_.c_str());
     }
 
     task->result_code_ = 0; // Success
@@ -480,20 +529,20 @@ void Runtime::GetOrCreateTag(
     TagId tag_id = GetOrAssignTagId(tag_name, preferred_id);
     task->tag_id_ = tag_id;
 
-    // Populate tag info and update timestamps
+    // Update timestamp and log telemetry
     size_t tag_lock_index = GetTagLockIndex(tag_name);
     auto now = std::chrono::steady_clock::now();
     {
       chi::ScopedCoRwReadLock read_lock(*tag_locks_[tag_lock_index]);
       auto it = tag_id_to_info_.find(tag_id);
       if (it != tag_id_to_info_.end()) {
-        // Update read timestamp and get info for telemetry
-        const_cast<TagInfo &>(it->second).last_read_ = now;
-        task->tag_info_ = it->second;
+        TagInfo &tag_info = const_cast<TagInfo &>(it->second);
+        // Update read timestamp
+        tag_info.last_read_ = now;
 
         // Log telemetry for GetOrCreateTag operation
         LogTelemetry(CteOp::kGetOrCreateTag, 0, 0, BlobId::GetNull(), tag_id,
-                     it->second.last_modified_, now);
+                     tag_info.last_modified_, now);
       }
     }
 
@@ -630,13 +679,17 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Success - log operation details
     task->result_code_ = 0;
+    size_t tag_total_size = 0;
+    if (tag_info_it != tag_id_to_info_.end()) {
+      const TagInfo &tag_info = tag_info_it->second;
+      tag_total_size = tag_info.total_size_;
+    }
     HILOG(kInfo,
           "PutBlob successful: blob_id={},{}, name={}, offset={}, size={}, "
           "score={}, blocks={}, tag_total_size={}",
           found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size,
           blob_score, blob_info_ptr->blocks_.size(),
-          tag_info_it != tag_id_to_info_.end() ? tag_info_it->second.total_size_
-                                               : 0);
+          tag_total_size);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
@@ -1101,7 +1154,8 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
         task->result_code_ = 1; // Tag not found by name
         return;
       }
-      tag_id = name_to_id_it->second;
+      const TagId &found_tag_id = name_to_id_it->second;
+      tag_id = found_tag_id;
       task->tag_id_ = tag_id; // Update task with resolved tag ID
     } else if (tag_id.IsNull() && tag_name.empty()) {
       task->result_code_ = 1; // Neither tag ID nor tag name provided
@@ -1142,9 +1196,10 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
         // Find blob info to get blob name
         auto blob_info_it = blob_id_to_info_.find(blob_id);
         if (blob_info_it != blob_id_to_info_.end()) {
+          const BlobInfo &blob_info = blob_info_it->second;
           // Call AsyncDelBlob from client
           auto async_task = cte_client->AsyncDelBlob(
-              hipc::MemContext(), tag_id, blob_info_it->second.blob_name_,
+              hipc::MemContext(), tag_id, blob_info.blob_name_,
               blob_id);
           async_tasks.push_back(async_task);
           ++batch_count;
@@ -1176,7 +1231,8 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
                              std::to_string(tag_id.minor_) + ".";
     auto name_it = tag_blob_name_to_id_.begin();
     while (name_it != tag_blob_name_to_id_.end()) {
-      if (name_it->first.compare(0, tag_prefix.length(), tag_prefix) == 0) {
+      const std::string &compound_key = name_it->first;
+      if (compound_key.compare(0, tag_prefix.length(), tag_prefix) == 0) {
         name_it = tag_blob_name_to_id_.erase(name_it);
       } else {
         ++name_it;
@@ -1359,7 +1415,8 @@ TagId Runtime::GetOrAssignTagId(const std::string &tag_name,
   // Check if tag already exists
   auto name_it = tag_name_to_id_.find(tag_name);
   if (name_it != tag_name_to_id_.end()) {
-    return name_it->second;
+    const TagId &existing_tag_id = name_it->second;
+    return existing_tag_id;
   }
 
   // Assign new tag ID
@@ -1577,7 +1634,8 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
       if (target_it == registered_targets_.end()) {
         continue; // Try next target
       }
-      target_info = &target_it->second;
+      TargetInfo &target_info_ref = target_it->second;
+      target_info = &target_info_ref;
 
       // Calculate how much we can allocate from this target
       chi::u64 allocate_size =
@@ -1826,7 +1884,9 @@ chi::u32 Runtime::FreeAllBlobBlocks(BlobInfo &blob_info) {
   }
 
   // Call FreeBlocks once per PoolId
-  for (const auto &[pool_id, blocks] : blocks_by_pool) {
+  for (const auto &pool_entry : blocks_by_pool) {
+    const chi::PoolId &pool_id = pool_entry.first;
+    const std::vector<chimaera::bdev::Block> &blocks = pool_entry.second;
     // Get bdev client for this pool from first blob block
     chimaera::bdev::Client bdev_client(pool_id);
     chi::u32 free_result = bdev_client.FreeBlocks(hipc::MemContext(), blocks);
@@ -2101,7 +2161,7 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
       task->result_code_ = 1; // Tag not found
       return;
     }
-    auto &tag_info = tag_it->second;
+    TagInfo &tag_info = tag_it->second;
 
     // Iterate through all blobs in this tag
     for (const auto &blob_pair : tag_info.blob_ids_) {

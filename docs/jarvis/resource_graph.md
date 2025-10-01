@@ -20,7 +20,7 @@ The Resource Graph provides:
 
 - **Automatic Discovery**: Identifies all accessible storage devices across cluster nodes
 - **Performance Metrics**: Benchmarks storage performance (4K random write, 1M sequential write)
-- **Common Storage Analysis**: Finds storage mount points available across multiple nodes
+- **Common Storage Analysis**: Finds storage mount points available across multiple nodes (or all mounts for single-node clusters)
 - **Device Classification**: Categorizes storage by type (SSD, HDD, etc.) and filesystem
 - **Programmatic Access**: Query storage resources from packages and applications
 - **Persistent Storage**: Save and load resource graphs for reuse
@@ -29,7 +29,6 @@ The Resource Graph provides:
 
 - **ResourceGraphManager**: Coordinates resource collection across the cluster
 - **ResourceGraph**: Manages storage resource data and provides query methods
-- **StorageDevice**: Represents individual storage devices with metadata and performance
 - **CLI Commands**: User-friendly commands for building and querying the resource graph
 
 ## Building the Resource Graph
@@ -73,7 +72,7 @@ localhost
 3. **Device Analysis**: Determines device type, model, and capacity
 4. **Performance Benchmarking**: Measures I/O performance (optional)
 5. **Common Storage Analysis**: Identifies shared mount points across nodes
-6. **Persistent Storage**: Saves results to `~/.jarvis/resource_graph.yaml`
+6. **Persistent Storage**: Saves results to `~/.ppi-jarvis/resource_graph.yaml`
 
 ## Querying Storage Devices
 
@@ -83,12 +82,12 @@ localhost
 from jarvis_cd.core.resource_graph import ResourceGraphManager
 from jarvis_cd.core.config import JarvisConfig
 
-# Initialize
+# Initialize (automatically loads resource graph if it exists)
 jarvis_config = JarvisConfig()
 rg_manager = ResourceGraphManager(jarvis_config)
 
-# Load existing resource graph
-rg_manager.load_resource_graph()
+# Or explicitly load resource graph from a specific file
+rg_manager.load('/path/to/resource_graph.yaml')
 
 # Get all nodes
 nodes = rg_manager.resource_graph.get_all_nodes()
@@ -97,7 +96,7 @@ print(f"Cluster nodes: {nodes}")
 # Get storage for specific node
 storage_devices = rg_manager.resource_graph.get_node_storage('node1')
 for device in storage_devices:
-    print(f"{device.mount}: {device.avail} ({device.dev_type})")
+    print(f"{device['mount']}: {device['avail']} ({device['dev_type']})")
 ```
 
 ### Filter by Device Type
@@ -108,7 +107,7 @@ ssd_devices = rg_manager.resource_graph.filter_by_type('ssd')
 for hostname, devices in ssd_devices.items():
     print(f"\n{hostname} SSDs:")
     for device in devices:
-        print(f"  {device.mount}: {device.avail}")
+        print(f"  {device['mount']}: {device['avail']}")
 
 # Get HDD devices
 hdd_devices = rg_manager.resource_graph.filter_by_type('hdd')
@@ -118,11 +117,12 @@ hdd_devices = rg_manager.resource_graph.filter_by_type('hdd')
 
 ```python
 # Find storage mount points available on multiple nodes
+# Note: For single-node clusters, all mount points are considered "common"
 common_storage = rg_manager.resource_graph.get_common_storage()
 for mount_point, devices in common_storage.items():
     print(f"\nMount {mount_point} available on {len(devices)} nodes:")
     for device in devices:
-        print(f"  {device.hostname}: {device.avail}")
+        print(f"  {device['hostname']}: {device['avail']}")
 ```
 
 ### Filter by Mount Pattern
@@ -169,6 +169,9 @@ jarvis rg node hostname1
 jarvis rg filter ssd
 jarvis rg filter hdd
 jarvis rg filter nvme
+
+# Show resource graph file path (output only the path)
+jarvis rg path
 ```
 
 ### Management Commands
@@ -177,7 +180,14 @@ jarvis rg filter nvme
 # Load resource graph from custom file
 jarvis rg load /path/to/custom_resource_graph.yaml
 
-# Resource graph is automatically saved to ~/.jarvis/resource_graph.yaml
+# Show path to current resource graph file (prints only the path)
+jarvis rg path
+
+# Use in shell command substitution
+cd $(dirname $(jarvis rg path))  # Navigate to resource graph directory
+ls -la $(jarvis rg path)         # List resource graph file details
+
+# Resource graph is automatically saved to ~/.ppi-jarvis/resource_graph.yaml
 # after building
 ```
 
@@ -234,28 +244,33 @@ tmp_mounts = rg.filter_by_mount_pattern('/tmp')
 common = rg.get_common_storage()
 ```
 
-### StorageDevice Properties
+### Device Dictionary Structure
+
+Storage devices are represented as dictionaries with the following fields:
 
 ```python
-device = devices[0]  # Get first device
+device = devices[0]  # Get first device (dict)
 
 # Basic properties
-print(f"Device: {device.device}")           # /dev/sda1
-print(f"Mount: {device.mount}")             # /home
-print(f"Type: {device.dev_type}")           # ssd
-print(f"Filesystem: {device.fs_type}")      # ext4
-print(f"Available: {device.avail}")         # 100GB
-print(f"Model: {device.model}")             # Samsung SSD 970
-print(f"Shared: {device.shared}")           # True if on multiple nodes
+print(f"Device: {device['device']}")           # /dev/sda1
+print(f"Mount: {device['mount']}")             # /home
+print(f"Type: {device['dev_type']}")           # ssd
+print(f"Filesystem: {device['fs_type']}")      # ext4
+print(f"Available: {device['avail']}")         # 100GB
+print(f"Hostname: {device['hostname']}")       # node1
 
-# Performance metrics
-print(f"4K Random Write: {device.randwrite_4k_bw}")   # 50MB/s
-print(f"1M Sequential: {device.seqwrite_1m_bw}")      # 500MB/s
+# Optional properties (use .get() with defaults)
+print(f"Model: {device.get('model', 'unknown')}")        # Samsung SSD 970
+print(f"Shared: {device.get('shared', False)}")          # True if on multiple nodes
 
-# System properties  
-print(f"UUID: {device.uuid}")               # Filesystem UUID
-print(f"Parent: {device.parent}")           # Parent device
-print(f"Needs Root: {device.needs_root}")   # Requires root access
+# Performance metrics (optional, present if benchmarking was performed)
+print(f"4K Random Write: {device.get('4k_randwrite_bw', 'unknown')}")  # 50MB/s
+print(f"1M Sequential: {device.get('1m_seqwrite_bw', 'unknown')}")     # 500MB/s
+
+# System properties (optional)
+print(f"UUID: {device.get('uuid', 'unknown')}")               # Filesystem UUID
+print(f"Parent: {device.get('parent', 'unknown')}")           # Parent device
+print(f"Needs Root: {device.get('needs_root', False)}")       # Requires root access
 ```
 
 ## Storage Device Information
@@ -313,10 +328,10 @@ jarvis rg build duration=60
 ```python
 # Access performance data
 for device in devices:
-    if device.randwrite_4k_bw != 'unknown':
-        print(f"4K Random Write: {device.randwrite_4k_bw}")
-    if device.seqwrite_1m_bw != 'unknown':
-        print(f"1M Sequential: {device.seqwrite_1m_bw}")
+    if device.get('4k_randwrite_bw', 'unknown') != 'unknown':
+        print(f"4K Random Write: {device['4k_randwrite_bw']}")
+    if device.get('1m_seqwrite_bw', 'unknown') != 'unknown':
+        print(f"1M Sequential: {device['1m_seqwrite_bw']}")
 ```
 
 ### Performance Considerations
@@ -339,7 +354,8 @@ for hostname, devices in ssd_devices.items():
     good_devices = []
     for device in devices:
         # Parse bandwidth (simplified)
-        if '1m_seqwrite_bw' in device.to_dict() and 'GB/s' in device.seqwrite_1m_bw:
+        seq_bw = device.get('1m_seqwrite_bw', '')
+        if seq_bw and 'GB/s' in seq_bw:
             good_devices.append(device)
     if good_devices:
         high_perf_storage[hostname] = good_devices
@@ -367,18 +383,17 @@ for mount, devices in scratch_spaces.items():
 class MyApp(Application):
     def _configure(self, **kwargs):
         # Configuration automatically updated
-        
-        # Get resource graph
+
+        # Get resource graph (automatically loaded on init)
         from jarvis_cd.core.resource_graph import ResourceGraphManager
         rg_manager = ResourceGraphManager(self.jarvis.jarvis_config)
-        rg_manager.load_resource_graph()
-        
+
         # Find fast storage for output
         ssd_storage = rg_manager.resource_graph.filter_by_type('ssd')
         if ssd_storage:
             # Use first available SSD
             hostname, devices = next(iter(ssd_storage.items()))
-            output_dir = devices[0].mount + '/my_app_output'
+            output_dir = devices[0]['mount'] + '/my_app_output'
             self.setenv('OUTPUT_DIR', output_dir)
             print(f"Using fast storage: {output_dir}")
 ```
@@ -398,7 +413,7 @@ for hostname in rg.get_all_nodes():
     devices = rg.get_node_storage(hostname)
     for device in devices:
         # Parse capacity (simplified - actual parsing would be more robust)
-        if 'TB' in device.avail:
+        if 'TB' in device['avail']:
             if hostname not in large_storage_nodes:
                 large_storage_nodes[hostname] = []
             large_storage_nodes[hostname].append(device)
@@ -415,7 +430,7 @@ available_mounts = set()
 
 for hostname in rg.get_all_nodes():
     devices = rg.get_node_storage(hostname)
-    node_mounts = {device.mount for device in devices}
+    node_mounts = {device['mount'] for device in devices}
     available_mounts.update(node_mounts)
 
 missing_mounts = set(required_mounts) - available_mounts
@@ -477,8 +492,34 @@ rg.load_from_file(Path('resource_graph.json'))
 jarvis rg load /shared/cluster_storage.yaml
 
 # Default location (automatically loaded)
-# ~/.jarvis/resource_graph.yaml
+# ~/.ppi-jarvis/resource_graph.yaml
 ```
+
+### Shell Integration
+
+The `jarvis rg path` command outputs only the file path, making it perfect for shell command substitution:
+
+```bash
+# Navigate to the resource graph directory
+cd $(dirname $(jarvis rg path))
+
+# Edit the resource graph file
+vim $(jarvis rg path)
+
+# Copy resource graph to another location
+cp $(jarvis rg path) /backup/
+
+# Check file details
+ls -la $(jarvis rg path)
+
+# View resource graph contents
+cat $(jarvis rg path)
+
+# Backup resource graph with timestamp
+cp $(jarvis rg path) $(jarvis rg path).backup.$(date +%Y%m%d)
+```
+
+**Error Handling**: If no resource graph exists, the command will exit with status code 1 and print error messages to stderr, ensuring command substitution fails gracefully.
 
 ### Integration with Packages
 
@@ -487,34 +528,32 @@ jarvis rg load /shared/cluster_storage.yaml
 class StorageAwareApp(Application):
     def _configure(self, **kwargs):
         # Configuration automatically updated
-        
-        # Load resource graph
-        rg_manager = ResourceGraphManager(self.jarvis.jarvis_config) 
-        try:
-            rg_manager.load_resource_graph()
-        except FileNotFoundError:
+
+        # Get resource graph (automatically loaded on init if it exists)
+        rg_manager = ResourceGraphManager(self.jarvis.jarvis_config)
+        if not rg_manager.resource_graph.get_all_nodes():
             print("No resource graph found. Run 'jarvis rg build' first.")
             return
-            
+
         # Find optimal storage for this application
         storage_choice = self._select_storage(rg_manager.resource_graph)
         self.setenv('APP_STORAGE_PATH', storage_choice)
-        
+
     def _select_storage(self, rg):
         """Select optimal storage based on requirements"""
         # Example: prefer SSDs for output
         ssd_storage = rg.filter_by_type('ssd')
         if ssd_storage:
             hostname, devices = next(iter(ssd_storage.items()))
-            return devices[0].mount + '/app_output'
-        
+            return devices[0]['mount'] + '/app_output'
+
         # Fallback to any available storage
         all_nodes = rg.get_all_nodes()
         if all_nodes:
             devices = rg.get_node_storage(all_nodes[0])
             if devices:
-                return devices[0].mount + '/app_output'
-                
+                return devices[0]['mount'] + '/app_output'
+
         return '/tmp/app_output'  # Final fallback
 ```
 

@@ -70,21 +70,28 @@ Examples: `"1M"`, `"512K"`, `"2G"`, `"1.5T"`
 
 If no devices are specified, the package attempts to auto-detect storage from the resource graph:
 
-1. Queries `ResourceGraphManager` for common storage across cluster nodes
-2. Appends `cte_target.bin` to mount points for bdev temporary file creation
-3. Calculates performance scores based on storage type
-4. Falls back to default devices if resource graph is unavailable
+1. Initializes `ResourceGraphManager()` (automatically loads existing resource graph)
+2. Queries resource graph for common storage across cluster nodes
+3. Extracts device properties: mount point, available space, device type
+4. Applies 0.5x safety factor to available space (to prevent filesystem full errors)
+5. Appends `hermes_data.bin` to mount points for bdev file creation
+6. Calculates performance scores based on device type and benchmark data
+7. Falls back to default devices if resource graph is unavailable
 
 ### Auto-detected Storage Scoring
 
-| Storage Type | Base Score |
-|--------------|------------|
-| RAM/RAMdisk/tmpfs | 1.0 |
-| NVMe | 0.9 |
-| SSD | 0.7 |
-| HDD | 0.4 |
-| Network | 0.3 |
-| Unknown | 0.5 |
+| Storage Type | Base Score | Performance Boost |
+|--------------|------------|-------------------|
+| RAM/RAMdisk/tmpfs | 1.0 | - |
+| NVMe | 0.9 | +0.1-0.2 if benchmarked |
+| SSD | 0.7 | +0.1-0.2 if benchmarked |
+| HDD | 0.4 | +0.1 if benchmarked |
+| Network | 0.3 | - |
+| Unknown | 0.5 | - |
+
+**Performance Benchmarks**: If the resource graph was built with benchmarking enabled (`jarvis rg build`), scores are adjusted based on actual measured performance:
+- **Sequential bandwidth** (`1m_seqwrite_bw`): +0.1 for >500MB/s, +0.2 for >1GB/s
+- **Random write bandwidth** (`4k_randwrite_bw`): +0.1 for >50MB/s
 
 ## Generated Configuration
 
@@ -155,11 +162,11 @@ This package is designed to work with:
 
 ## Dependencies
 
-- `jarvis_cd.basic.pkg.Service`
+- `jarvis_cd.core.pkg.Service`
 - `jarvis_cd.util.SizeType`
 - `jarvis_cd.shell.process.Rm`
 - `jarvis_cd.shell.PsshExecInfo`
-- `jarvis_cd.core.resource_graph.ResourceGraphManager` (optional)
+- `jarvis_cd.core.resource_graph.ResourceGraphManager` (optional, for automatic storage discovery)
 
 ## Best Practices
 

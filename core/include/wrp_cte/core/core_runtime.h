@@ -30,13 +30,6 @@ class Runtime : public chi::Container {
   ~Runtime() override = default;
 
   /**
-   * Initialize client for this container (REQUIRED)
-   */
-  void InitClient(const chi::PoolId& pool_id) override {
-    client_ = Client(pool_id);
-  }
-
-  /**
    * Create the container (Method::kCreate)
    * This method both creates and initializes the container
    */
@@ -397,6 +390,13 @@ class Runtime : public chi::Container {
    */
   size_t GetTelemetryQueueSize();
   
+  /**
+   * Parse capacity string to bytes
+   * @param capacity_str Capacity string (e.g., "1TB", "500GB", "100MB")
+   * @return Capacity in bytes
+   */
+  chi::u64 ParseCapacityToBytes(const std::string& capacity_str);
+
   /**
    * Retrieve telemetry entries for analysis (non-destructive peek)
    * @param entries Vector to store retrieved entries

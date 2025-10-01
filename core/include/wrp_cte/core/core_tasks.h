@@ -22,7 +22,7 @@ using Timestamp = std::chrono::time_point<std::chrono::steady_clock>;
  */
 struct CreateParams {
   // CTE-specific parameters
-  chi::string config_file_path_; // YAML config file path
+  hipc::string config_file_path_; // YAML config file path
   chi::u32 worker_count_;        // Number of worker threads
 
   // Required: chimod library name for module manager
@@ -105,7 +105,7 @@ struct TargetInfo {
  */
 struct RegisterTargetTask : public chi::Task {
   // Task-specific data using HSHM macros
-  IN chi::string target_name_; // Name and file path of the target to register
+  IN hipc::string target_name_; // Name and file path of the target to register
   IN chimaera::bdev::BdevType bdev_type_; // Block device type enum
   IN chi::u64 total_size_;                // Total size for allocation
   OUT chi::u32 result_code_;              // Output result (0 = success)
@@ -141,7 +141,7 @@ struct RegisterTargetTask : public chi::Task {
  * container)
  */
 struct UnregisterTargetTask : public chi::Task {
-  IN chi::string target_name_; // Name of the target to unregister
+  IN hipc::string target_name_; // Name of the target to unregister
   OUT chi::u32 result_code_;   // Output result (0 = success)
 
   // SHM constructor
@@ -166,15 +166,15 @@ struct UnregisterTargetTask : public chi::Task {
 };
 
 /**
- * ListTargets task - Return set of registered targets on this node
+ * ListTargets task - Return set of registered target names on this node
  */
 struct ListTargetsTask : public chi::Task {
-  OUT chi::vector<TargetInfo> targets_; // List of registered targets
-  OUT chi::u32 result_code_;            // Output result (0 = success)
+  OUT hipc::vector<hipc::string> target_names_; // List of registered target names
+  OUT chi::u32 result_code_;                  // Output result (0 = success)
 
   // SHM constructor
   explicit ListTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), targets_(alloc), result_code_(0) {}
+      : chi::Task(alloc), target_names_(alloc), result_code_(0) {}
 
   // Emplace constructor
   explicit ListTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -182,7 +182,7 @@ struct ListTargetsTask : public chi::Task {
                            const chi::PoolId &pool_id,
                            const chi::PoolQuery &pool_query)
       : chi::Task(alloc, task_node, pool_id, pool_query, Method::kListTargets),
-        targets_(alloc), result_code_(0) {
+        target_names_(alloc), result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
     method_ = Method::kListTargets;
@@ -379,15 +379,14 @@ struct CteTelemetry {
  */
 template <typename CreateParamsT = CreateParams>
 struct GetOrCreateTagTask : public chi::Task {
-  IN chi::string tag_name_;  // Tag name (required)
+  IN hipc::string tag_name_;  // Tag name (required)
   INOUT TagId tag_id_;       // Tag unique ID (default null, output on creation)
-  OUT TagInfo tag_info_;     // Complete tag information
   OUT chi::u32 result_code_; // Output result (0 = success)
 
   // SHM constructor
   explicit GetOrCreateTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_name_(alloc), tag_id_(TagId::GetNull()),
-        tag_info_(alloc), result_code_(0) {}
+        result_code_(0) {}
 
   // Emplace constructor
   explicit GetOrCreateTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -398,7 +397,7 @@ struct GetOrCreateTagTask : public chi::Task {
                               const TagId &tag_id = TagId::GetNull())
       : chi::Task(alloc, task_node, pool_id, pool_query,
                   Method::kGetOrCreateTag),
-        tag_name_(alloc, tag_name), tag_id_(tag_id), tag_info_(alloc),
+        tag_name_(alloc, tag_name), tag_id_(tag_id),
         result_code_(0) {
     task_node_ = task_node;
     pool_id_ = pool_id;
@@ -413,7 +412,7 @@ struct GetOrCreateTagTask : public chi::Task {
  */
 struct PutBlobTask : public chi::Task {
   IN TagId tag_id_;             // Tag ID for blob grouping
-  INOUT chi::string blob_name_; // Blob name (optional, generated if empty)
+  INOUT hipc::string blob_name_; // Blob name (optional, generated if empty)
   INOUT BlobId blob_id_;        // Blob ID (optional, generated if null)
   IN chi::u64 offset_;          // Offset within blob
   IN chi::u64 size_;            // Size of blob data
@@ -454,7 +453,7 @@ struct PutBlobTask : public chi::Task {
  */
 struct GetBlobTask : public chi::Task {
   IN TagId tag_id_;             // Tag ID for blob lookup
-  INOUT chi::string blob_name_; // Blob name (optional)
+  INOUT hipc::string blob_name_; // Blob name (optional)
   INOUT BlobId blob_id_;        // Blob ID (optional)
   IN chi::u64 offset_;          // Offset within blob
   IN chi::u64 size_;            // Size of data to retrieve
@@ -522,7 +521,7 @@ struct ReorganizeBlobsTask : public chi::Task {
     task_flags_.Clear();
     pool_query_ = pool_query;
 
-    // Convert std::vector to chi::vector
+    // Convert std::vector to hipc::vector
     for (const auto &name : blob_names) {
       blob_names_.emplace_back(name.c_str());
     }
@@ -537,7 +536,7 @@ struct ReorganizeBlobsTask : public chi::Task {
  */
 struct DelBlobTask : public chi::Task {
   IN TagId tag_id_;          // Tag ID for blob lookup
-  IN chi::string blob_name_; // Blob name (optional)
+  IN hipc::string blob_name_; // Blob name (optional)
   IN BlobId blob_id_;        // Blob ID (optional)
   OUT chi::u32 result_code_; // Output result (0 = success)
 
@@ -569,7 +568,7 @@ struct DelBlobTask : public chi::Task {
  */
 struct DelTagTask : public chi::Task {
   INOUT TagId tag_id_;       // Tag ID to delete (input or lookup result)
-  IN chi::string tag_name_;  // Tag name for lookup (optional)
+  IN hipc::string tag_name_;  // Tag name for lookup (optional)
   OUT chi::u32 result_code_; // Output result (0 = success)
 
   // SHM constructor
@@ -672,7 +671,7 @@ struct PollTelemetryLogTask : public chi::Task {
  */
 struct GetBlobScoreTask : public chi::Task {
   IN TagId tag_id_;          // Tag ID for blob lookup
-  IN chi::string blob_name_; // Blob name (required)
+  IN hipc::string blob_name_; // Blob name (required)
   IN BlobId blob_id_;        // Blob ID (optional)
   OUT float score_;          // Blob score (0-1)
   OUT chi::u32 result_code_; // Output result (0 = success)
@@ -705,7 +704,7 @@ struct GetBlobScoreTask : public chi::Task {
  */
 struct GetBlobSizeTask : public chi::Task {
   IN TagId tag_id_;          // Tag ID for blob lookup
-  IN chi::string blob_name_; // Blob name (required)
+  IN hipc::string blob_name_; // Blob name (required)
   IN BlobId blob_id_;        // Blob ID (optional)
   OUT chi::u64 size_;        // Blob size in bytes
   OUT chi::u32 result_code_; // Output result (0 = success)

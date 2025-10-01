@@ -456,13 +456,10 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
     REQUIRE(!targets.empty());
 
     bool target_found = false;
-    for (const auto &target : targets) {
-      if (target.target_name_ == target_name) {
+    for (const auto &target_name_found : targets) {
+      if (target_name_found == target_name) {
         target_found = true;
-        INFO("SUCCESS: Found registered target with score: "
-             << target.target_score_);
-        INFO("Target stats: reads=" << target.ops_read_
-                                    << ", writes=" << target.ops_written_);
+        INFO("SUCCESS: Found registered target: " << target_name);
         break;
       }
     }
@@ -550,9 +547,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
   // Create a test tag for blob grouping
   const std::string tag_name = "putblob_test_tag";
-  auto tag_info = core_client_->GetOrCreateTag(mctx_, tag_name);
-  REQUIRE(!tag_info.tag_name_.empty());
-  wrp_cte::core::TagId tag_id = tag_info.tag_id_;
+  wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, tag_name);
+  REQUIRE(!tag_id.IsNull());
 
   SECTION("FUNCTIONAL - Basic blob storage with data integrity") {
     INFO("=== Testing REAL PutBlob with data integrity ===\n");
@@ -853,8 +849,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
   REQUIRE(reg_result == 0);
 
-  auto tag_info = core_client_->GetOrCreateTag(mctx_, "getblob_test_tag");
-  wrp_cte::core::TagId tag_id = tag_info.tag_id_;
+  wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, "getblob_test_tag");
 
   SECTION("FUNCTIONAL - Basic store and retrieve with data integrity") {
     INFO("=== Testing REAL GetBlob with data integrity ===\n");
@@ -1273,8 +1268,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   REQUIRE(reg_result == 0);
 
   // Create test tag for integration testing
-  auto tag_info = core_client_->GetOrCreateTag(mctx_, "integration_test_tag");
-  wrp_cte::core::TagId tag_id = tag_info.tag_id_;
+  wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, "integration_test_tag");
 
   SECTION("FUNCTIONAL - Basic Put-Get cycle with data integrity") {
     INFO("=== Testing REAL Put-Get cycle with data integrity ===\n");
@@ -1483,10 +1477,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL cross-tag isolation ===\n");
 
     // Create two separate tags
-    auto tag1_info = core_client_->GetOrCreateTag(mctx_, "isolation_tag_1");
-    auto tag2_info = core_client_->GetOrCreateTag(mctx_, "isolation_tag_2");
-    wrp_cte::core::TagId tag1_id = tag1_info.tag_id_;
-    wrp_cte::core::TagId tag2_id = tag2_info.tag_id_;
+    wrp_cte::core::TagId tag1_id = core_client_->GetOrCreateTag(mctx_, "isolation_tag_1");
+    wrp_cte::core::TagId tag2_id = core_client_->GetOrCreateTag(mctx_, "isolation_tag_2");
 
     const std::string blob_name = "isolation_test_blob";
     const wrp_cte::core::BlobId blob_id = wrp_cte::core::BlobId::GetNull(); // Use null ID for PutBlob
@@ -1829,8 +1821,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   INFO("✓ Target registered successfully");
 
   INFO("Step 3: Creating test tag...");
-  auto tag_info = core_client_->GetOrCreateTag(mctx_, "comprehensive_test_tag");
-  wrp_cte::core::TagId tag_id = tag_info.tag_id_;
+  wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, "comprehensive_test_tag");
   REQUIRE((tag_id.major_ != 0 || tag_id.minor_ != 0));
   INFO("✓ Test tag created with ID: " << tag_id);
 
@@ -2007,8 +1998,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
   REQUIRE(reg_result == 0);
 
-  auto tag_info = core_client_->GetOrCreateTag(mctx_, "reorganize_test_tag");
-  wrp_cte::core::TagId tag_id = tag_info.tag_id_;
+  wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, "reorganize_test_tag");
   REQUIRE((tag_id.major_ != 0 || tag_id.minor_ != 0));
   INFO("✓ Environment setup completed");
 
@@ -2276,9 +2266,9 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow",
   std::vector<wrp_cte::core::TagId> tag_ids;
 
   for (const auto &tag_name : tag_names) {
-    auto tag_info = core_client_->GetOrCreateTag(mctx_, tag_name);
-    REQUIRE(!tag_info.tag_name_.empty());
-    tag_ids.push_back(tag_info.tag_id_);
+    wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, tag_name);
+    REQUIRE(!tag_id.IsNull());
+    tag_ids.push_back(tag_id);
   }
   INFO("Step 3 completed: Tags created for organization");
 

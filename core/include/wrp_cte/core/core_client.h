@@ -46,7 +46,7 @@ public:
         chi::kAdminPoolId, // Always use admin pool for CreateTask
         pool_query,
         "wrp_cte_core",                   // ChiMod name
-        std::to_string(pool_id_.ToU64()), // Pool name as string
+        "wrp_cte_core",                   // Pool name as string
         pool_id_,                         // Target pool ID
         params);                          // CreateParams with configuration
 
@@ -118,15 +118,15 @@ public:
   /**
    * Synchronous target listing - waits for completion
    */
-  std::vector<TargetInfo> ListTargets(const hipc::MemContext &mctx) {
+  std::vector<std::string> ListTargets(const hipc::MemContext &mctx) {
     auto task = AsyncListTargets(mctx);
     task->Wait();
 
     // Convert HSHM vector to standard vector for client use
-    std::vector<TargetInfo> result;
-    result.reserve(task->targets_.size());
-    for (const auto &target : task->targets_) {
-      result.push_back(target);
+    std::vector<std::string> result;
+    result.reserve(task->target_names_.size());
+    for (const auto &target_name : task->target_names_) {
+      result.push_back(target_name.str());
     }
 
     CHI_IPC->DelTask(task);
@@ -177,13 +177,13 @@ public:
   /**
    * Synchronous get or create tag - waits for completion
    */
-  TagInfo GetOrCreateTag(const hipc::MemContext &mctx,
-                         const std::string &tag_name,
-                         const TagId &tag_id = TagId::GetNull()) {
+  TagId GetOrCreateTag(const hipc::MemContext &mctx,
+                       const std::string &tag_name,
+                       const TagId &tag_id = TagId::GetNull()) {
     auto task = AsyncGetOrCreateTag(mctx, tag_name, tag_id);
     task->Wait();
 
-    TagInfo result = task->tag_info_;
+    TagId result = task->tag_id_;
     CHI_IPC->DelTask(task);
     return result;
   }

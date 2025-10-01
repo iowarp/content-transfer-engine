@@ -138,55 +138,95 @@ class WrpCte(Service):
     def _get_devices_from_resource_graph(self):
         """
         Extract device information from the resource graph.
-        
+
         Returns:
             List[Tuple[str, str, float]]: List of device tuples (path, capacity, score).
         """
         try:
             from jarvis_cd.core.resource_graph import ResourceGraphManager
-            
+
+            # Initialize ResourceGraphManager (gets Jarvis singleton internally)
             rg_manager = ResourceGraphManager()
-            if not hasattr(rg_manager, 'resource_graph'):
-                print("Warning: Resource graph not available")
+
+            if not rg_manager.resource_graph.get_all_nodes():
+                print("Warning: Resource graph is empty. Run 'jarvis rg build' first.")
                 return []
-            
+
+            # Get common storage - returns dict mapping mount points to device lists
             common_storage = rg_manager.resource_graph.get_common_storage()
             if not common_storage:
                 print("Warning: No common storage found in resource graph")
                 return []
-            
+
             devices = []
-            for storage in common_storage:
-                # Convert storage info to device tuple
-                base_path = storage.get('path', '/tmp/cte_storage')
-                # Append cte_target.bin for bdev temporary file creation
-                path = os.path.join(base_path, 'cte_target.bin')
-                capacity = storage.get('capacity', '100GB')
-                
-                # Calculate score based on storage type and characteristics
-                storage_type = storage.get('type', 'unknown').lower()
-                score = self._calculate_device_score(storage_type, storage)
-                
-                devices.append((path, capacity, score))
-                print(f"Found storage device: {path} ({capacity}, score: {score})")
-            
+            # Iterate over common storage mount points
+            for mount_point, device_list in common_storage.items():
+                # Process each device at this mount point
+                for device in device_list:
+                    # Use mount point as base path
+                    base_path = device.get('mount', '/tmp/cte_storage')
+                    # Append hermes_data.bin for bdev file creation
+                    path = os.path.join(base_path, 'hermes_data.bin')
+
+                    # Get available space and multiply by 0.5 for safety margin
+                    available_space = device.get('avail', '100GB')
+                    capacity = self._adjust_capacity(available_space, 0.5)
+
+                    # Calculate score based on device type
+                    device_type = device.get('dev_type', 'unknown').lower()
+                    score = self._calculate_device_score(device_type, device)
+
+                    devices.append((path, capacity, score))
+                    print(f"Found storage device: {path} (available: {available_space}, using: {capacity}, score: {score}, type: {device_type})")
+
             return devices
-            
-        except ImportError:
-            print("Warning: ResourceGraphManager not available")
+
+        except ImportError as e:
+            print(f"Warning: ResourceGraphManager not available: {e}")
             return []
         except Exception as e:
             print(f"Warning: Error accessing resource graph: {e}")
             return []
 
+    def _adjust_capacity(self, capacity_str, factor):
+        """
+        Adjust capacity by a factor (e.g., multiply by 0.5 for safety margin).
+
+        Args:
+            capacity_str (str): Capacity string (e.g., "100GB", "1TB")
+            factor (float): Multiplication factor
+
+        Returns:
+            str: Adjusted capacity string in same format
+        """
+        import re
+
+        # Parse capacity string
+        match = re.match(r'([\d.]+)\s*([KMGT]?B?)', capacity_str.upper().strip())
+        if not match:
+            # If parsing fails, return original
+            return capacity_str
+
+        value = float(match.group(1))
+        suffix = match.group(2)
+
+        # Apply factor
+        adjusted_value = value * factor
+
+        # Format back to string with 2 decimal places if needed
+        if adjusted_value == int(adjusted_value):
+            return f"{int(adjusted_value)}{suffix}"
+        else:
+            return f"{adjusted_value:.2f}{suffix}"
+
     def _calculate_device_score(self, storage_type, storage_info):
         """
         Calculate a performance score for a storage device.
-        
+
         Args:
             storage_type (str): Type of storage (nvme, ssd, hdd, ram, etc.)
-            storage_info (dict): Additional storage information.
-            
+            storage_info (dict): Additional storage information from resource graph.
+
         Returns:
             float: Score between 0.0 and 1.0.
         """
@@ -201,22 +241,38 @@ class WrpCte(Service):
             'network': 0.3,
             'unknown': 0.5
         }
-        
+
         base_score = type_scores.get(storage_type, 0.5)
-        
-        # Adjust based on additional characteristics
-        if 'bandwidth' in storage_info:
-            # Higher bandwidth increases score
-            bandwidth = storage_info['bandwidth']
-            if isinstance(bandwidth, (int, float)) and bandwidth > 1000:  # MB/s
-                base_score = min(1.0, base_score + 0.1)
-        
-        if 'latency' in storage_info:
-            # Lower latency increases score
-            latency = storage_info['latency']
-            if isinstance(latency, (int, float)) and latency < 1:  # ms
-                base_score = min(1.0, base_score + 0.1)
-        
+
+        # Adjust based on performance benchmarks from resource graph
+        # Resource graph provides '4k_randwrite_bw' and '1m_seqwrite_bw' if benchmarked
+        seq_bw = storage_info.get('1m_seqwrite_bw', 'unknown')
+        rand_bw = storage_info.get('4k_randwrite_bw', 'unknown')
+
+        # Boost score for high sequential bandwidth
+        if seq_bw != 'unknown' and isinstance(seq_bw, str):
+            try:
+                # Parse bandwidth strings like "500MB/s" or "1.5GB/s"
+                if 'GB/s' in seq_bw:
+                    bw_value = float(seq_bw.replace('GB/s', '').strip())
+                    base_score = min(1.0, base_score + 0.2)  # High performance boost
+                elif 'MB/s' in seq_bw:
+                    bw_value = float(seq_bw.replace('MB/s', '').strip())
+                    if bw_value > 500:  # Over 500 MB/s is good
+                        base_score = min(1.0, base_score + 0.1)
+            except (ValueError, AttributeError):
+                pass
+
+        # Boost score for high random write performance
+        if rand_bw != 'unknown' and isinstance(rand_bw, str):
+            try:
+                if 'MB/s' in rand_bw:
+                    bw_value = float(rand_bw.replace('MB/s', '').strip())
+                    if bw_value > 50:  # Over 50 MB/s for 4K random is excellent
+                        base_score = min(1.0, base_score + 0.1)
+            except (ValueError, AttributeError):
+                pass
+
         return round(base_score, 2)
 
     def _get_default_devices(self):

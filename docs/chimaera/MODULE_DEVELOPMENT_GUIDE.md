@@ -379,14 +379,6 @@ class Container : public chi::Container {
   ~Container() override = default;
 
   /**
-   * Initialize client for this container (REQUIRED)
-   */
-  void InitClient(const chi::PoolId& pool_id) {
-    // Initialize the client for this ChiMod
-    client_ = Client(pool_id);
-  }
-
-  /**
    * Create the container (Method::kCreate)
    * This method both creates and initializes the container
    */
