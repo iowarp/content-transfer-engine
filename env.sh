@@ -1,5 +1,5 @@
-spack load iowarp
+spack load iowarp-base
 module load content-transfer-engine
 chi_refresh_repo .
-scspkg build profile m=cmake path=.env.cmake
-scspkg build profile m=dotenv path=.env
+jarvis mod profile m=cmake path=.env.cmake
+jarvis mod profile m=dotenv path=.env
