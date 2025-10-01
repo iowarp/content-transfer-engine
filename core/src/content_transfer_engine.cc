@@ -17,6 +17,7 @@ bool ContentTransferEngine::ClientInit() {
   if (is_initializing_) {
     return true;
   }
+  HILOG(kInfo, "HERE?");
   auto *chimaera_manager = CHI_CHIMAERA_MANAGER;
   if (chimaera_manager->IsInitializing()) {
     return true;

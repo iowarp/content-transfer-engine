@@ -14,9 +14,9 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_INSTALL_PREFIX": "IOWARP_PREFIX",
-                "HERMES_ENABLE_CUDA": "OFF",
-                "HERMES_ENABLE_ROCM": "OFF",
-                "HERMES_ENABLE_CMAKE_DOTENV": "ON"
+                "CTE_ENABLE_CUDA": "OFF",
+                "CTE_ENABLE_ROCM": "OFF",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON"
             }
         },
         {
@@ -27,9 +27,9 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_INSTALL_PREFIX": "IOWARP_PREFIX",
-                "HERMES_ENABLE_CUDA": "ON",
-                "HERMES_ENABLE_ROCM": "OFF",
-                "HERMES_ENABLE_CMAKE_DOTENV": "ON",
+                "CTE_ENABLE_CUDA": "ON",
+                "CTE_ENABLE_ROCM": "OFF",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON",
                 "CMAKE_CUDA_ARCHITECTURES": "86"
             }
         },
@@ -41,9 +41,9 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_INSTALL_PREFIX": "IOWARP_PREFIX",
-                "HERMES_ENABLE_CUDA": "OFF",
-                "HERMES_ENABLE_ROCM": "ON",
-                "HERMES_ENABLE_CMAKE_DOTENV": "ON"
+                "CTE_ENABLE_CUDA": "OFF",
+                "CTE_ENABLE_ROCM": "ON",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON"
             }
         },
         {
@@ -54,9 +54,9 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_INSTALL_PREFIX": "IOWARP_PREFIX",
-                "HERMES_ENABLE_CUDA": "OFF",
-                "HERMES_ENABLE_ROCM": "OFF",
-                "HERMES_ENABLE_CMAKE_DOTENV": "ON"
+                "CTE_ENABLE_CUDA": "OFF",
+                "CTE_ENABLE_ROCM": "OFF",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON"
             }
         }
     ]

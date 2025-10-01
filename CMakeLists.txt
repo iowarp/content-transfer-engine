@@ -35,10 +35,10 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/bin)
 endforeach()
 
-# Optional: Load .env.cmake if it exists (controlled by CTE_ENABLE_DOTENV option)
-option(CTE_ENABLE_DOTENV "Enable loading .env.cmake file if it exists" ON)
+# Optional: Load .env.cmake if it exists (controlled by CTE_ENABLE_CMAKE_DOTENV option)
+option(CTE_ENABLE_CMAKE_DOTENV "Enable loading .env.cmake file if it exists" OFF)
 
-if(CTE_ENABLE_DOTENV AND EXISTS "${CMAKE_SOURCE_DIR}/.env.cmake")
+if(CTE_ENABLE_CMAKE_DOTENV AND EXISTS "${CMAKE_SOURCE_DIR}/.env.cmake")
     message(STATUS "Loading .env.cmake configuration")
     include("${CMAKE_SOURCE_DIR}/.env.cmake")
     
@@ -87,3 +87,5 @@ add_subdirectory(test)
 add_subdirectory(wrapper)
 
 message(STATUS "CTE Core and Bdev ChiMods configured for compilation")
+
+jarvis_repo_add(${CMAKE_SOURCE_DIR}/test/jarvis_wrp_cte "")
