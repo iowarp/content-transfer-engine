@@ -48,11 +48,13 @@ name: my_pipeline
 interceptors:
   - pkg_type: wrp_adapters
     pkg_name: cte_adapters
-    posix: true          # Enable POSIX interception
-    mpiio: false         # Disable MPI-IO
-    stdio: false         # Disable STDIO
-    vfd: false          # Disable HDF5 VFD
-    nvidia_gds: false   # Disable NVIDIA GDS
+    posix: true                    # Enable POSIX interception
+    mpiio: false                   # Disable MPI-IO
+    stdio: false                   # Disable STDIO
+    vfd: false                     # Disable HDF5 VFD
+    nvidia_gds: false              # Disable NVIDIA GDS
+    include: []                    # Paths to track (empty = track all)
+    adapter_page_size: "1M"        # Page size for adapter operations
 
 pkgs:
   - pkg_type: my_application
@@ -60,6 +62,43 @@ pkgs:
     interceptors: ["cte_adapters"]  # Apply the interceptor
     # ... other application configuration
 ```
+
+### Path-Based Interception
+
+Use the `include` parameter to specify which paths to intercept:
+
+```yaml
+interceptors:
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    posix: true
+    include: ["/data", "/mnt/storage", "/scratch"]  # Only intercept these paths
+    adapter_page_size: "4K"                          # 4KB page size
+```
+
+**Path Matching Behavior:**
+- Empty `include` list (default): Intercepts **all** paths
+- Non-empty list: Only intercepts paths that match the specified prefixes
+- Matching uses prefix comparison (e.g., "/data" matches "/data/file.txt")
+
+**Environment Variable Expansion:**
+
+Paths in the `include` list support environment variable expansion:
+
+```yaml
+interceptors:
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    posix: true
+    include:
+      - "$HOME/data"                # Expands to /home/user/data
+      - "${SCRATCH_DIR}/storage"    # Expands using SCRATCH_DIR env var
+      - "~/projects"                # Expands ~ to user home directory
+      - "/mnt/nvme"                 # Literal path (no expansion)
+    adapter_page_size: "1M"
+```
+
+Both `$VAR` and `${VAR}` syntax are supported, along with `~` for home directory expansion.
 
 ### Multiple Adapters
 
@@ -69,9 +108,11 @@ You can enable multiple adapters simultaneously:
 interceptors:
   - pkg_type: wrp_adapters
     pkg_name: cte_adapters
-    posix: true      # For general file I/O
-    mpiio: true      # For MPI-IO operations
-    stdio: true      # For buffered I/O
+    posix: true                          # For general file I/O
+    mpiio: true                          # For MPI-IO operations
+    stdio: true                          # For buffered I/O
+    include: ["/data", "/scratch"]       # Track specific paths
+    adapter_page_size: "1M"              # 1MB page size
 ```
 
 ### Complete Example Pipeline
@@ -79,6 +120,12 @@ interceptors:
 ```yaml
 name: ior_with_cte
 interceptors:
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    mpiio: true      # IOR uses MPI-IO
+
+pkgs:
+  # CTE runtime service - generates configuration
   - pkg_type: wrp_cte
     pkg_name: cte_runtime
     devices:
@@ -86,11 +133,7 @@ interceptors:
       - ["/tmp/ram_cache", "8GB", 1.0]
     worker_count: 4
 
-  - pkg_type: wrp_adapters
-    pkg_name: cte_adapters
-    mpiio: true      # IOR uses MPI-IO
-
-pkgs:
+  # Application with CTE adapters
   - pkg_type: builtin.ior
     pkg_name: benchmark
     interceptors: ["cte_adapters"]
@@ -231,25 +274,26 @@ To enable specific adapters, use these CMake options:
 
 The `wrp_adapters` interceptor should be used together with the `wrp_cte` service package:
 
-1. **wrp_cte**: Configures CTE runtime (devices, workers, policies)
-2. **wrp_adapters**: Enables I/O interception for applications
+1. **wrp_cte** (Service): Configures CTE runtime (devices, workers, policies) - goes in `pkgs` section
+2. **wrp_adapters** (Interceptor): Enables I/O interception for applications - goes in `interceptors` section
 
 ```yaml
 interceptors:
-  # Configure CTE runtime first
-  - pkg_type: wrp_cte
-    pkg_name: cte_runtime
-    devices: [...]
-
-  # Then enable adapters
+  # Adapter interceptor for I/O interception
   - pkg_type: wrp_adapters
     pkg_name: cte_adapters
     posix: true
 
 pkgs:
+  # CTE runtime service - generates configuration
+  - pkg_type: wrp_cte
+    pkg_name: cte_runtime
+    devices: [...]
+
+  # Your application with adapters
   - pkg_type: my_app
     pkg_name: app
-    interceptors: ["cte_adapters"]  # Only reference the adapter interceptor
+    interceptors: ["cte_adapters"]  # Reference the adapter interceptor
 ```
 
 ## See Also

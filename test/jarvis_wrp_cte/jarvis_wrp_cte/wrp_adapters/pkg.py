@@ -5,8 +5,10 @@ MPI-IO, STDIO, HDF5 VFD, NVIDIA GDS) and routes them to the Content Transfer
 Engine for intelligent data placement and transfer.
 """
 from jarvis_cd.core.pkg import Interceptor
+from jarvis_cd.util import SizeType
 import pathlib
 import os
+import yaml
 
 
 class WrpAdapters(Interceptor):
@@ -29,7 +31,7 @@ class WrpAdapters(Interceptor):
         This method is called during package instantiation.
         No configuration is available yet at this stage.
         """
-        pass
+        self.cae_config_path = None
 
     def _configure_menu(self):
         """
@@ -74,14 +76,28 @@ class WrpAdapters(Interceptor):
                 'default': False,
                 'help': 'Intercepts NVIDIA GPUDirect Storage operations'
             },
+            {
+                'name': 'include',
+                'msg': 'Paths to track for adapter interception (list)',
+                'type': list,
+                'default': [],
+                'help': 'List of path prefixes to intercept. Empty list means intercept all paths. Supports env var expansion ($HOME, ${VAR}, ~). Example: ["/data", "$HOME/scratch", "~/projects"]'
+            },
+            {
+                'name': 'adapter_page_size',
+                'msg': 'Adapter page size for I/O operations',
+                'type': str,
+                'default': '1M',
+                'help': 'Page size for adapter operations. Supports SizeType format (e.g., "4K", "1M", "4096")'
+            },
         ]
 
     def _configure(self, **kwargs):
         """
         Configure the WRP adapters interceptor.
 
-        This method finds the adapter libraries and stores their paths
-        in the environment for use during modify_env().
+        This method finds the adapter libraries, stores their paths
+        in the environment, and generates the CAE configuration file.
 
         Args:
             **kwargs: Configuration parameters (automatically updated to self.config)
@@ -140,6 +156,9 @@ class WrpAdapters(Interceptor):
         if not has_one:
             raise Exception('No WRP CTE adapter selected. Please enable at least one adapter (posix, mpiio, stdio, vfd, or nvidia_gds).')
 
+        # Generate CAE configuration
+        self._generate_cae_config()
+
     def modify_env(self):
         """
         Modify the environment to enable WRP CTE adapter interception.
@@ -151,19 +170,24 @@ class WrpAdapters(Interceptor):
         The mod_env is shared between the interceptor and the target package,
         so changes made here directly affect the package's execution environment.
         """
+        # Set CAE configuration environment variable
+        if self.cae_config_path and os.path.exists(self.cae_config_path):
+            self.setenv('WRP_CAE_CONF', self.cae_config_path)
+            self.log(f"Set WRP_CAE_CONF to {self.cae_config_path}")
+
         # Add POSIX adapter to LD_PRELOAD
         if self.config['posix']:
-            self._add_to_preload(self.env['WRP_CTE_POSIX'])
+            self.prepend_env('LD_PRELOAD', self.env['WRP_CTE_POSIX'])
             self.log(f"Added POSIX adapter to LD_PRELOAD")
 
         # Add MPI-IO adapter to LD_PRELOAD
         if self.config['mpiio']:
-            self._add_to_preload(self.env['WRP_CTE_MPIIO'])
+            self.prepend_env('LD_PRELOAD', self.env['WRP_CTE_MPIIO'])
             self.log(f"Added MPI-IO adapter to LD_PRELOAD")
 
         # Add STDIO adapter to LD_PRELOAD
         if self.config['stdio']:
-            self._add_to_preload(self.env['WRP_CTE_STDIO'])
+            self.prepend_env('LD_PRELOAD', self.env['WRP_CTE_STDIO'])
             self.log(f"Added STDIO adapter to LD_PRELOAD")
 
         # Configure HDF5 VFD (uses plugin path instead of LD_PRELOAD)
@@ -175,38 +199,70 @@ class WrpAdapters(Interceptor):
 
         # Add NVIDIA GDS adapter to LD_PRELOAD
         if self.config['nvidia_gds']:
-            self._add_to_preload(self.env['WRP_CTE_NVIDIA_GDS'])
+            self.prepend_env('LD_PRELOAD', self.env['WRP_CTE_NVIDIA_GDS'])
             self.log(f"Added NVIDIA GDS adapter to LD_PRELOAD")
 
-    def _add_to_preload(self, library_path):
+    def _generate_cae_config(self):
         """
-        Helper method to add a library to LD_PRELOAD safely.
+        Generate the Content Adapter Engine (CAE) configuration file.
 
-        This method checks if the library is already in LD_PRELOAD before adding
-        it, and properly handles the case where LD_PRELOAD is empty.
+        This creates a YAML configuration file that specifies:
+        - paths: List of path prefixes to track for interception
+        - adapter_page_size: Page size for adapter I/O operations
 
-        Args:
-            library_path (str): Path to the library to add to LD_PRELOAD
+        The configuration file is saved to the shared directory and its path
+        is stored in self.cae_config_path for use in modify_env().
         """
-        current_preload = self.mod_env.get('LD_PRELOAD', '')
+        # Parse adapter page size using SizeType
+        page_size_bytes = SizeType(self.config['adapter_page_size']).bytes
 
-        # Check if library is already in preload to avoid duplicates
-        if library_path in current_preload.split(':'):
-            return
+        # Get tracked paths from configuration and expand environment variables
+        tracked_paths = self.config.get('include', [])
+        expanded_paths = []
+        for path in tracked_paths:
+            # Expand environment variables (e.g., $HOME, ${SCRATCH_DIR})
+            expanded_path = os.path.expandvars(path)
+            # Also expand user home directory (e.g., ~)
+            expanded_path = os.path.expanduser(expanded_path)
+            expanded_paths.append(expanded_path)
 
-        # Add to existing LD_PRELOAD or create new one
-        if current_preload:
-            new_preload = f"{library_path}:{current_preload}"
-        else:
-            new_preload = library_path
+            # Log if path was expanded
+            if expanded_path != path:
+                self.log(f"Expanded path: {path} -> {expanded_path}")
 
-        self.setenv('LD_PRELOAD', new_preload)
+        # Build CAE configuration
+        cae_config = {
+            'paths': expanded_paths,
+            'adapter_page_size': page_size_bytes
+        }
+
+        # Save configuration to shared directory
+        self.cae_config_path = os.path.join(self.shared_dir, 'cae_config.yaml')
+
+        try:
+            with open(self.cae_config_path, 'w') as f:
+                yaml.dump(cae_config, f, default_flow_style=False, indent=2)
+
+            self.log(f"CAE configuration written to: {self.cae_config_path}")
+
+            # Log configuration details
+            if expanded_paths:
+                self.log(f"Tracking {len(expanded_paths)} paths: {', '.join(expanded_paths)}")
+            else:
+                self.log("Tracking all paths (no include filter specified)")
+
+            self.log(f"Adapter page size: {SizeType(page_size_bytes).to_human_readable()}")
+
+        except Exception as e:
+            self.log(f"Error writing CAE configuration: {e}")
+            raise
 
     def clean(self):
         """
         Clean up interceptor data.
 
-        WRP adapters typically don't create persistent data, but this method
-        can be extended if needed for cleanup operations.
+        WRP adapters typically don't create persistent data that needs cleanup.
+        The CAE configuration file is left in place as it may be useful for
+        debugging or reuse.
         """
         pass

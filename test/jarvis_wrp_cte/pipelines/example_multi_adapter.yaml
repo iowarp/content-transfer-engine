@@ -3,7 +3,20 @@ description: Example pipeline demonstrating multiple WRP CTE adapters simultaneo
 
 # Define interceptors at pipeline level
 interceptors:
-  # Configure CTE runtime with tiered storage
+  # Configure multiple adapters
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    posix: true                          # For general file I/O
+    mpiio: true                          # For MPI-IO operations
+    stdio: true                          # For buffered I/O
+    vfd: false                           # HDF5 not needed
+    nvidia_gds: false
+    include: ["/data", "/scratch"]       # Track specific paths
+    adapter_page_size: "1M"              # 1MB page size
+
+# Define packages
+pkgs:
+  # Configure CTE runtime first (Service, not Interceptor)
   - pkg_type: wrp_cte
     pkg_name: cte_runtime
     devices:
@@ -16,21 +29,9 @@ interceptors:
     enable_prefetching: true
     prefetch_distance: "100MB"
 
-  # Configure multiple adapters
-  - pkg_type: wrp_adapters
-    pkg_name: cte_adapters
-    posix: true      # For general file I/O
-    mpiio: true      # For MPI-IO operations
-    stdio: true      # For buffered I/O
-    vfd: false       # HDF5 not needed
-    nvidia_gds: false
-
-# Define packages
-pkgs:
   # Initialization message
   - pkg_type: echo
     pkg_name: init
-    interceptors: []
     msg: "Starting multi-adapter CTE test"
 
   # Example: Application using mixed I/O patterns
