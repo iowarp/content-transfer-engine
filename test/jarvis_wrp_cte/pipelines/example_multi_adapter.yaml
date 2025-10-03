@@ -1,0 +1,56 @@
+name: cte_multi_adapter_example
+description: Example pipeline demonstrating multiple WRP CTE adapters simultaneously
+
+# Define interceptors at pipeline level
+interceptors:
+  # Configure CTE runtime with tiered storage
+  - pkg_type: wrp_cte
+    pkg_name: cte_runtime
+    devices:
+      - ["/tmp/ram_cache", "4GB", 1.0]      # Fastest tier (RAM)
+      - ["/mnt/nvme", "1TB", 0.9]           # Fast tier (NVMe)
+      - ["/mnt/ssd", "2TB", 0.7]            # Medium tier (SATA SSD)
+      - ["/mnt/hdd", "10TB", 0.4]           # Slow tier (HDD)
+    worker_count: 16
+    dpe_type: "weighted_round_robin"
+    enable_prefetching: true
+    prefetch_distance: "100MB"
+
+  # Configure multiple adapters
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    posix: true      # For general file I/O
+    mpiio: true      # For MPI-IO operations
+    stdio: true      # For buffered I/O
+    vfd: false       # HDF5 not needed
+    nvidia_gds: false
+
+# Define packages
+pkgs:
+  # Initialization message
+  - pkg_type: echo
+    pkg_name: init
+    interceptors: []
+    msg: "Starting multi-adapter CTE test"
+
+  # Example: Application using mixed I/O patterns
+  # - pkg_type: my_mixed_io_app
+  #   pkg_name: mixed_app
+  #   interceptors: ["cte_adapters"]
+  #   # This app might use both POSIX and MPI-IO
+  #   # CTE will intercept both API calls
+
+  # Example: Scientific workflow
+  # - pkg_type: scientific_simulation
+  #   pkg_name: simulation
+  #   interceptors: ["cte_adapters"]
+  #   nprocs: 16
+  #   # Uses MPI-IO for parallel output
+  #   # Uses POSIX for metadata files
+  #   # Uses STDIO for logging
+
+  # Cleanup message
+  - pkg_type: echo
+    pkg_name: complete
+    interceptors: []
+    msg: "Multi-adapter test complete"

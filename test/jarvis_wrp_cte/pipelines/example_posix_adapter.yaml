@@ -1,0 +1,36 @@
+name: cte_posix_example
+description: Example pipeline demonstrating WRP CTE POSIX adapter interception
+
+# Define interceptors at pipeline level
+interceptors:
+  # Configure CTE runtime first
+  - pkg_type: wrp_cte
+    pkg_name: cte_runtime
+    devices:
+      - ["/tmp/cte_cache", "1GB", 1.0]
+      - ["/mnt/nvme", "500GB", 0.8]
+    worker_count: 4
+    dpe_type: "round_robin"
+
+  # Configure WRP adapters interceptor
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    posix: true      # Enable POSIX interception
+    mpiio: false
+    stdio: false
+    vfd: false
+    nvidia_gds: false
+
+# Define packages
+pkgs:
+  # Example application with CTE POSIX adapter
+  - pkg_type: echo
+    pkg_name: setup
+    interceptors: []  # No interceptors for setup
+    msg: "Starting CTE POSIX adapter test"
+
+  # Add your application here with the adapter interceptor
+  # - pkg_type: your_application
+  #   pkg_name: your_app
+  #   interceptors: ["cte_adapters"]
+  #   # ... application configuration

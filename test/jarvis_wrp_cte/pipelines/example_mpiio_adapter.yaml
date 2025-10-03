@@ -1,0 +1,38 @@
+name: cte_mpiio_example
+description: Example pipeline demonstrating WRP CTE MPI-IO adapter with IOR benchmark
+
+# Define interceptors at pipeline level
+interceptors:
+  # Configure CTE runtime
+  - pkg_type: wrp_cte
+    pkg_name: cte_runtime
+    devices:
+      - ["/tmp/cte_cache", "2GB", 1.0]      # Fast RAM cache
+      - ["/mnt/nvme0", "1TB", 0.9]          # NVMe SSD
+      - ["/mnt/hdd", "10TB", 0.5]           # HDD storage
+    worker_count: 8
+    dpe_type: "round_robin"
+    enable_prefetching: true
+
+  # Configure WRP adapters for MPI-IO
+  - pkg_type: wrp_adapters
+    pkg_name: cte_adapters
+    posix: false
+    mpiio: true      # Enable MPI-IO interception
+    stdio: false
+    vfd: false
+    nvidia_gds: false
+
+# Define packages
+pkgs:
+  # IOR benchmark with MPI-IO
+  - pkg_type: builtin.ior
+    pkg_name: ior_benchmark
+    interceptors: ["cte_adapters"]  # Apply CTE adapters
+    nprocs: 4
+    ppn: 2
+    api: "MPIIO"
+    transfer: "1M"
+    block: "1G"
+    file_per_proc: false
+    collective: true
