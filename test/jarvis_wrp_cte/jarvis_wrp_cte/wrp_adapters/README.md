@@ -83,7 +83,10 @@ interceptors:
 
 **Environment Variable Expansion:**
 
-Paths in the `include` list support environment variable expansion:
+Paths in the `include` and `exclude` lists support environment variable expansion at both levels:
+
+1. **Python (Jarvis)**: Expands variables when generating the CAE configuration file
+2. **C++ (Runtime)**: Uses `hshm::ConfigParse::ExpandPath` to normalize paths when loading the configuration
 
 ```yaml
 interceptors:
@@ -91,14 +94,17 @@ interceptors:
     pkg_name: cte_adapters
     posix: true
     include:
-      - "$HOME/data"                # Expands to /home/user/data
-      - "${SCRATCH_DIR}/storage"    # Expands using SCRATCH_DIR env var
-      - "~/projects"                # Expands ~ to user home directory
-      - "/mnt/nvme"                 # Literal path (no expansion)
+      - "$HOME/data.*"              # Expands to /home/user/data.*
+      - "${SCRATCH_DIR}/storage.*"  # Expands using SCRATCH_DIR env var
+      - "~/projects.*"              # Expands ~ to user home directory
+      - "/mnt/nvme.*"               # Literal path (no expansion)
+    exclude:
+      - "$HOME/data/exclude.*"      # Expands to /home/user/data/exclude.*
     adapter_page_size: "1M"
 ```
 
 Both `$VAR` and `${VAR}` syntax are supported, along with `~` for home directory expansion.
+Environment variables are expanded at both configuration generation time (Python) and runtime (C++).
 
 ### Multiple Adapters
 

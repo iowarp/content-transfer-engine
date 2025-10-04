@@ -11,8 +11,9 @@ interceptors:
     stdio: false
     vfd: false
     nvidia_gds: false
-    include: ["/data", "/tmp/cte_cache"] # Only intercept these paths
-    adapter_page_size: "1M"              # 1MB page size
+    include: ["/data.*", "/tmp/cte_cache.*"]  # Regex patterns to include
+    exclude: ["/data/exclude.*"]              # Exclude specific subdirectories
+    adapter_page_size: "1M"                   # 1MB page size
 
 # Define packages
 pkgs:

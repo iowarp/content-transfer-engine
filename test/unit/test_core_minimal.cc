@@ -54,9 +54,9 @@ public:
   
   CTECoreTestFixture() {
     // Setup test storage path in home directory
-    const char* home_dir = std::getenv("HOME");
-    REQUIRE(home_dir != nullptr);
-    test_storage_path_ = std::string(home_dir) + "/cte_unit_test.dat";
+    std::string home_dir = hshm::SystemInfo::Getenv("HOME");
+    REQUIRE(!home_dir.empty());
+    test_storage_path_ = home_dir + "/cte_unit_test.dat";
     
     // Clean up any existing test file
     if (fs::exists(test_storage_path_)) {

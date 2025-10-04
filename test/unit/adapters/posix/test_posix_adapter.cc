@@ -56,7 +56,7 @@ bool initializeRuntime() {
   INFO("Disabling interception during initialization...");
 
   // Disable interception during initialization
-  auto *cae_config = WRP_CAE_CONFIG;
+  auto *cae_config = WRP_CAE_CONF;
   if (cae_config != nullptr) {
     cae_config->DisableInterception();
     INFO("✓ Interception disabled");

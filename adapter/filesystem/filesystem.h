@@ -29,11 +29,11 @@
 #include "adapter/cae_config.h"
 #include "adapter/mapper/mapper_factory.h"
 #include "chimaera/chimaera.h"
+#include "filesystem_io_client.h"
+#include "filesystem_mdm.h"
 #include "wrp_cte/core/content_transfer_engine.h"
 #include "wrp_cte/core/core_client.h"
 #include "wrp_cte/core/core_tasks.h"
-#include "filesystem_io_client.h"
-#include "filesystem_mdm.h"
 
 namespace wrp::cae {
 
@@ -95,7 +95,8 @@ public:
       // Initialize CTE core client and get or create tag
       // Use singleton client that should be configured globally
 
-      // Create Tag object for this file - Tag constructor handles GetOrCreateTag
+      // Create Tag object for this file - Tag constructor handles
+      // GetOrCreateTag
       wrp_cte::core::Tag file_tag(stat.path_);
       stat.tag_id_ = file_tag.GetTagId();
 
@@ -191,7 +192,7 @@ public:
       size_t bytes_written = 0;
       size_t current_offset = off;
       const char *data_ptr = static_cast<const char *>(ptr);
-      
+
       // Create Tag object from stored TagId
       wrp_cte::core::Tag file_tag(stat.tag_id_);
 
@@ -207,27 +208,16 @@ public:
         size_t bytes_to_write =
             std::min(remaining_page_space, total_size - bytes_written);
 
-        // Allocate buffer for this page write
-        hipc::FullPtr<void> page_blob_data =
-            CHI_IPC->AllocateBuffer<void>(bytes_to_write);
-        if (page_blob_data.IsNull()) {
-          HILOG(kError, "Failed to allocate buffer for page write operation");
-          io_status.success_ = false;
-          return bytes_written;
-        }
-
-        // Copy data for this page to shared memory buffer
-        memcpy(page_blob_data.ptr_, data_ptr + bytes_written, bytes_to_write);
-
         // Generate blob name using stringified page index
         std::string blob_name = std::to_string(page_index);
 
-        // Use Tag API PutBlob for this page (SHM version for better performance)
+        // Use Tag API PutBlob with raw char* (handles SHM allocation internally)
         try {
-          file_tag.PutBlob(blob_name, page_blob_data.shm_, bytes_to_write, 
-                          page_offset, 0.5f);
+          file_tag.PutBlob(blob_name, data_ptr + bytes_written, bytes_to_write,
+                           page_offset);
         } catch (const std::exception &e) {
-          HILOG(kError, "Tag PutBlob failed for page {}: {}", page_index, e.what());
+          HILOG(kError, "Tag PutBlob failed for page {}: {}", page_index,
+                e.what());
           io_status.success_ = false;
           return bytes_written;
         }
@@ -315,7 +305,7 @@ public:
     size_t bytes_read = 0;
     size_t current_offset = off;
     char *data_ptr = static_cast<char *>(ptr);
-    
+
     // Create Tag object from stored TagId
     wrp_cte::core::Tag file_tag(stat.tag_id_);
 
@@ -330,29 +320,19 @@ public:
       size_t bytes_to_read =
           std::min(remaining_page_space, total_size - bytes_read);
 
-      // Allocate buffer for this page read
-      hipc::FullPtr<void> page_read_buffer =
-          CHI_IPC->AllocateBuffer<void>(bytes_to_read);
-      if (page_read_buffer.IsNull()) {
-        HILOG(kError, "Failed to allocate buffer for page read operation");
-        io_status.success_ = false;
-        return bytes_read;
-      }
-
       // Generate blob name using stringified page index
       std::string blob_name = std::to_string(page_index);
 
-      // Use Tag API GetBlob for this page
+      // Use Tag API GetBlob with raw char* (handles SHM allocation internally)
       try {
-        file_tag.GetBlob(blob_name, page_read_buffer.shm_, bytes_to_read, page_offset);
+        file_tag.GetBlob(blob_name, data_ptr + bytes_read, bytes_to_read,
+                         page_offset);
       } catch (const std::exception &e) {
-        HILOG(kError, "Tag GetBlob failed for page {}: {}", page_index, e.what());
+        HILOG(kError, "Tag GetBlob failed for page {}: {}", page_index,
+              e.what());
         io_status.success_ = false;
         return bytes_read;
       }
-
-      // Copy data from shared memory buffer to user buffer
-      memcpy(data_ptr + bytes_read, page_read_buffer.ptr_, bytes_to_read);
 
       // Update counters for next iteration
       bytes_read += bytes_to_read;
@@ -545,7 +525,8 @@ public:
     // CTE tag cleanup - delete the tag associated with this file using
     // canonical path as tag name
     std::string canon_path = stdfs::absolute(pathname).string();
-    // Note: Tag API doesn't provide delete functionality yet, so we use core client directly
+    // Note: Tag API doesn't provide delete functionality yet, so we use core
+    // client directly
     auto *cte_client = WRP_CTE_CLIENT;
     bool tag_deleted = cte_client->DelTag(hipc::MemContext(), canon_path);
     if (tag_deleted) {
@@ -809,7 +790,7 @@ public:
   /** Whether or not \a path PATH is tracked by Hermes */
   static bool IsPathTracked(const std::string &path) {
     // Check if the CAE config singleton is available
-    auto *cae_config = WRP_CAE_CONFIG;
+    auto *cae_config = WRP_CAE_CONF;
     if (cae_config == nullptr) {
       return false;
     }

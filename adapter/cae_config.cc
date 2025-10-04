@@ -11,11 +11,13 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "adapter/cae_config.h"
-#include "wrp_cte/core/content_transfer_engine.h"
+#include "hermes_shm/util/config_parse.h"
 #include "hermes_shm/util/logging.h"
+#include "wrp_cte/core/content_transfer_engine.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <regex>
 
 namespace wrp::cae {
 
@@ -60,24 +62,68 @@ bool CaeConfig::LoadFromString(const std::string &yaml_content) {
 
 bool CaeConfig::LoadFromYaml(const YAML::Node &config) {
   try {
-    // Load tracked paths
-    if (config["paths"]) {
-      paths_.clear();
-      const auto &paths_node = config["paths"];
-      if (paths_node.IsSequence()) {
-        for (const auto &path_node : paths_node) {
-          if (path_node.IsScalar()) {
-            std::string path = path_node.as<std::string>();
-            if (!path.empty()) {
-              paths_.push_back(path);
+    patterns_.clear();
+
+    // Load include patterns
+    if (config["include"]) {
+      const auto &include_node = config["include"];
+      if (include_node.IsSequence()) {
+        for (const auto &pattern_node : include_node) {
+          if (pattern_node.IsScalar()) {
+            std::string pattern = pattern_node.as<std::string>();
+            if (!pattern.empty()) {
+              // Expand environment variables in the pattern
+              std::string expanded_pattern =
+                  hshm::ConfigParse::ExpandPath(pattern);
+              patterns_.emplace_back(expanded_pattern, true); // true = include
+
+              // Log if pattern was expanded
+              if (expanded_pattern != pattern) {
+                HILOG(kDebug, "Expanded include pattern: {} -> {}", pattern,
+                      expanded_pattern);
+              }
             }
           }
         }
       } else {
-        HELOG(kError, "CAE config 'paths' must be a sequence");
+        HELOG(kError, "CAE config 'include' must be a sequence");
         return false;
       }
     }
+
+    // Load exclude patterns
+    if (config["exclude"]) {
+      const auto &exclude_node = config["exclude"];
+      if (exclude_node.IsSequence()) {
+        for (const auto &pattern_node : exclude_node) {
+          if (pattern_node.IsScalar()) {
+            std::string pattern = pattern_node.as<std::string>();
+            if (!pattern.empty()) {
+              // Expand environment variables in the pattern
+              std::string expanded_pattern =
+                  hshm::ConfigParse::ExpandPath(pattern);
+              patterns_.emplace_back(expanded_pattern,
+                                     false); // false = exclude
+
+              // Log if pattern was expanded
+              if (expanded_pattern != pattern) {
+                HILOG(kDebug, "Expanded exclude pattern: {} -> {}", pattern,
+                      expanded_pattern);
+              }
+            }
+          }
+        }
+      } else {
+        HELOG(kError, "CAE config 'exclude' must be a sequence");
+        return false;
+      }
+    }
+
+    // Sort patterns by length in descending order (most specific first)
+    std::sort(patterns_.begin(), patterns_.end(),
+              [](const PathPattern &a, const PathPattern &b) {
+                return a.pattern.length() > b.pattern.length();
+              });
 
     // Load adapter page size
     if (config["adapter_page_size"]) {
@@ -88,15 +134,20 @@ bool CaeConfig::LoadFromYaml(const YAML::Node &config) {
       }
     }
 
-    // Load interception enabled setting
+    // Load interception enabled setting (optional, defaults to true)
     if (config["interception_enabled"]) {
       interception_enabled_ = config["interception_enabled"].as<bool>();
     }
 
+    size_t include_count =
+        std::count_if(patterns_.begin(), patterns_.end(),
+                      [](const PathPattern &p) { return p.include; });
+    size_t exclude_count = patterns_.size() - include_count;
+
     HILOG(kInfo,
-          "CAE config loaded: {} tracked paths, page size {} bytes, "
-          "interception {}",
-          paths_.size(), adapter_page_size_,
+          "CAE config loaded: {} include patterns, {} exclude patterns, "
+          "page size {} bytes, interception {}",
+          include_count, exclude_count, adapter_page_size_,
           interception_enabled_ ? "enabled" : "disabled");
     return true;
 
@@ -142,8 +193,20 @@ bool CaeConfig::SaveToFile(const std::string &config_path) const {
 std::string CaeConfig::ToYamlString() const {
   YAML::Node config;
 
-  // Add tracked paths
-  config["paths"] = paths_;
+  // Separate include and exclude patterns
+  YAML::Node include_list;
+  YAML::Node exclude_list;
+
+  for (const auto &pattern : patterns_) {
+    if (pattern.include) {
+      include_list.push_back(pattern.pattern);
+    } else {
+      exclude_list.push_back(pattern.pattern);
+    }
+  }
+
+  config["include"] = include_list;
+  config["exclude"] = exclude_list;
 
   // Add adapter page size
   config["adapter_page_size"] = adapter_page_size_;
@@ -158,69 +221,97 @@ std::string CaeConfig::ToYamlString() const {
 }
 
 bool CaeConfig::IsPathTracked(const std::string &path) const {
+  // Check global interception flag first
+  if (!interception_enabled_) {
+    return false;
+  }
+
   // Check if CTE is not initialized yet
   auto *cte_manager = CTE_MANAGER;
   if (cte_manager != nullptr && !cte_manager->IsInitialized()) {
     return false;
   }
 
-  if (paths_.empty()) {
-    // If no paths are configured, track everything
-    return true;
+  // If no patterns configured, exclude by default
+  if (patterns_.empty()) {
+    return false;
   }
 
-  for (const auto &tracked_path : paths_) {
-    // Simple prefix matching for now
-    // Could be extended to support glob patterns or regex
-    if (path.find(tracked_path) == 0) {
-      return true;
+  // Check patterns in order of specificity (already sorted by length
+  // descending)
+  for (const auto &pattern_entry : patterns_) {
+    try {
+      std::regex pattern_regex(pattern_entry.pattern);
+      if (std::regex_search(path, pattern_regex)) {
+        // First match determines result
+        return pattern_entry.include;
+      }
+    } catch (const std::regex_error &e) {
+      HELOG(kWarning, "Invalid regex pattern '{}': {}", pattern_entry.pattern,
+            e.what());
+      continue;
     }
   }
 
+  // No pattern matched - exclude by default
   return false;
 }
 
-void CaeConfig::AddTrackedPath(const std::string &path) {
-  if (path.empty()) {
+void CaeConfig::AddIncludePattern(const std::string &pattern) {
+  if (pattern.empty()) {
     return;
   }
 
-  // Check if path already exists
-  auto it = std::find(paths_.begin(), paths_.end(), path);
-  if (it == paths_.end()) {
-    paths_.push_back(path);
-    HILOG(kDebug, "Added tracked path: {}", path);
-  }
+  patterns_.emplace_back(pattern, true);
+
+  // Re-sort by length (descending) to maintain specificity order
+  std::sort(patterns_.begin(), patterns_.end(),
+            [](const PathPattern &a, const PathPattern &b) {
+              return a.pattern.length() > b.pattern.length();
+            });
+
+  HILOG(kDebug, "Added include pattern: {}", pattern);
 }
 
-void CaeConfig::RemoveTrackedPath(const std::string &path) {
-  auto it = std::find(paths_.begin(), paths_.end(), path);
-  if (it != paths_.end()) {
-    paths_.erase(it);
-    HILOG(kDebug, "Removed tracked path: {}", path);
+void CaeConfig::AddExcludePattern(const std::string &pattern) {
+  if (pattern.empty()) {
+    return;
   }
+
+  patterns_.emplace_back(pattern, false);
+
+  // Re-sort by length (descending) to maintain specificity order
+  std::sort(patterns_.begin(), patterns_.end(),
+            [](const PathPattern &a, const PathPattern &b) {
+              return a.pattern.length() > b.pattern.length();
+            });
+
+  HILOG(kDebug, "Added exclude pattern: {}", pattern);
 }
 
-void CaeConfig::ClearTrackedPaths() {
-  paths_.clear();
-  HILOG(kDebug, "Cleared all tracked paths");
+void CaeConfig::ClearPatterns() {
+  patterns_.clear();
+  HILOG(kDebug, "Cleared all patterns");
 }
 
 bool WRP_CAE_CONFIG_INIT(const std::string &config_path) {
-  // Get the global configuration instance (creates it if needed)
-  auto *config = WRP_CAE_CONFIG;
+  // Check if CTE is still initializing
+  auto *cte_manager = CTE_MANAGER;
+  if (cte_manager != nullptr && !cte_manager->IsInitialized()) {
+    return false;
+  }
 
-  // Load configuration from file if provided
-  if (!config_path.empty()) {
-    if (!config->LoadFromFile(config_path)) {
-      HILOG(kWarning, "Failed to load CAE config from {}, using defaults",
-            config_path);
-    }
-  } else {
-    // Set some reasonable defaults if no config file is provided
-    config->SetAdapterPageSize(hshm::Unit<size_t>::Megabytes(1));
-    config->AddTrackedPath("/tmp"); // Default to tracking /tmp directory
-    HILOG(kInfo, "CAE config initialized with defaults");
+  auto *config = WRP_CAE_CONF;
+
+  // Determine config path: use provided path, fallback to environment variable
+  std::string actual_config_path = config_path;
+  if (actual_config_path.empty()) {
+    actual_config_path = hshm::SystemInfo::Getenv("WRP_CAE_CONF");
+  }
+
+  // Load from file if path is available
+  if (!actual_config_path.empty()) {
+    config->LoadFromFile(actual_config_path);
   }
 
   return true;

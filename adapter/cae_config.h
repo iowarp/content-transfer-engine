@@ -15,21 +15,33 @@
 
 #include <string>
 #include <vector>
+#include <regex>
 #include <yaml-cpp/yaml.h>
 #include <hermes_shm/util/singleton.h>
 
 namespace wrp::cae {
 
 /**
+ * Represents a path pattern with include/exclude flag
+ * Used for regex-based path matching with specificity ordering
+ */
+struct PathPattern {
+  std::string pattern;  // Regex pattern
+  bool include;         // true = include, false = exclude
+
+  PathPattern(const std::string& p, bool inc) : pattern(p), include(inc) {}
+};
+
+/**
  * Configuration structure for Content Adapter Engine (CAE)
- * Contains paths to track and adapter-specific settings
+ * Contains include/exclude patterns and adapter-specific settings
  */
 struct CaeConfig {
 public:
-  std::vector<std::string> paths_;        // Paths to track for adapter interception
+  std::vector<PathPattern> patterns_;     // Include/exclude patterns sorted by specificity
   size_t adapter_page_size_;              // Page size for adapter operations (bytes)
-  bool interception_enabled_;             // Enable/disable interception
-  
+  bool interception_enabled_;             // Global enable/disable for interception
+
   // Default constructor
   CaeConfig() : adapter_page_size_(4096), interception_enabled_(true) {}
   
@@ -61,60 +73,62 @@ public:
   std::string ToYamlString() const;
   
   /**
-   * Check if a path should be tracked by adapters
+   * Check if a path should be tracked by adapters using regex matching
+   * Patterns are checked in order of specificity (longest first)
+   * First matching pattern determines the result
    * @param path Path to check
-   * @return true if path matches any tracked pattern, false otherwise
+   * @return true if path matches an include pattern, false if excluded or no match
    */
   bool IsPathTracked(const std::string& path) const;
-  
+
   /**
-   * Add a path to track
-   * @param path Path pattern to add
+   * Add an include pattern
+   * @param pattern Regex pattern to include
    */
-  void AddTrackedPath(const std::string& path);
-  
+  void AddIncludePattern(const std::string& pattern);
+
   /**
-   * Remove a path from tracking
-   * @param path Path pattern to remove
+   * Add an exclude pattern
+   * @param pattern Regex pattern to exclude
    */
-  void RemoveTrackedPath(const std::string& path);
-  
+  void AddExcludePattern(const std::string& pattern);
+
   /**
-   * Clear all tracked paths
+   * Clear all patterns
    */
-  void ClearTrackedPaths();
-  
+  void ClearPatterns();
+
   /**
    * Get the adapter page size
    * @return Page size in bytes
    */
   size_t GetAdapterPageSize() const { return adapter_page_size_; }
-  
+
   /**
    * Set the adapter page size
    * @param page_size Page size in bytes
    */
   void SetAdapterPageSize(size_t page_size) { adapter_page_size_ = page_size; }
-  
+
   /**
-   * Get list of tracked paths
-   * @return Vector of tracked path patterns
+   * Get list of all patterns
+   * @return Vector of path patterns
    */
-  const std::vector<std::string>& GetTrackedPaths() const { return paths_; }
-  
+  const std::vector<PathPattern>& GetPatterns() const { return patterns_; }
+
   /**
-   * Check if interception is enabled
+   * Check if interception is globally enabled
    * @return true if interception is enabled, false otherwise
    */
   bool IsInterceptionEnabled() const { return interception_enabled_; }
-  
+
   /**
-   * Enable interception
+   * Enable global interception
    */
   void EnableInterception() { interception_enabled_ = true; }
-  
+
   /**
-   * Disable interception
+   * Disable global interception
    */
   void DisableInterception() { interception_enabled_ = false; }
 
@@ -140,6 +154,6 @@ bool WRP_CAE_CONFIG_INIT(const std::string& config_path = "");
 }  // namespace wrp::cae
 
 // Global singleton macro for easy access
-#define WRP_CAE_CONFIG (HSHM_GET_GLOBAL_PTR_VAR(wrp::cae::CaeConfig, wrp::cae::g_cae_config))
+#define WRP_CAE_CONF (HSHM_GET_GLOBAL_PTR_VAR(wrp::cae::CaeConfig, wrp::cae::g_cae_config))
 
 #endif  // WRP_CAE_CONFIG_H_

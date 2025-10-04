@@ -18,9 +18,16 @@
 
 #include "filesystem_io_client.h"
 #include "hermes_shm/thread/lock.h"
-#include "adapter/cte_config.h"
+#include "adapter/cae_config.h"
 
 namespace wrp::cae {
+
+// MDM operation constants for lock priority
+const int kMDM_Create = 1;
+const int kMDM_Update = 2;
+const int kMDM_Delete = 3;
+const int kMDM_Find = 4;
+const int kMDM_Find2 = 5;
 
 /**
  * Metadata manager for POSIX adapter
@@ -44,19 +51,25 @@ public:
   /** Get the current adapter mode */
   AdapterMode GetBaseAdapterMode() {
     hshm::ScopedRwReadLock md_lock(lock_, 1);
-    return WRP_CTE_CLIENT_CONF.GetBaseAdapterMode();
+    return AdapterMode::kDefault;
   }
 
   /** Get the adapter mode for a particular file */
   AdapterMode GetAdapterMode(const std::string &path) {
+    (void)path;
     hshm::ScopedRwReadLock md_lock(lock_, 2);
-    return WRP_CTE_CLIENT_CONF.GetAdapterConfig(path).mode_;
+    return AdapterMode::kDefault;
   }
 
   /** Get the adapter page size for a particular file */
   size_t GetAdapterPageSize(const std::string &path) {
+    (void)path;
     hshm::ScopedRwReadLock md_lock(lock_, 3);
-    return WRP_CTE_CLIENT_CONF.GetAdapterConfig(path).page_size_;
+    auto *cae_config = WRP_CAE_CONF;
+    if (cae_config) {
+      return cae_config->GetAdapterPageSize();
+    }
+    return 4096; // Default fallback
   }
 
   /**

@@ -6,13 +6,14 @@ interceptors:
   # Configure multiple adapters
   - pkg_type: wrp_adapters
     pkg_name: cte_adapters
-    posix: true                          # For general file I/O
-    mpiio: true                          # For MPI-IO operations
-    stdio: true                          # For buffered I/O
-    vfd: false                           # HDF5 not needed
+    posix: true                               # For general file I/O
+    mpiio: true                               # For MPI-IO operations
+    stdio: true                               # For buffered I/O
+    vfd: false                                # HDF5 not needed
     nvidia_gds: false
-    include: ["/data", "/scratch"]       # Track specific paths
-    adapter_page_size: "1M"              # 1MB page size
+    include: ["/data.*", "/scratch.*"]        # Regex patterns to include
+    exclude: ["/data/private.*", "/scratch/tmp.*"]  # Exclude specific subdirs
+    adapter_page_size: "1M"                   # 1MB page size
 
 # Define packages
 pkgs:

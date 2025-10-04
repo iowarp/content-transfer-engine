@@ -11,13 +11,16 @@ interceptors:
     stdio: false
     vfd: false
     nvidia_gds: false
-    # Paths with environment variable expansion
+    # Paths with environment variable expansion and regex patterns
     # These will be expanded at configuration time
     include:
-      - "$HOME/data"                    # Expands to /home/username/data
-      - "${SCRATCH_DIR}/workloads"      # Uses SCRATCH_DIR environment variable
-      - "~/projects/ior_tests"          # Expands ~ to home directory
-      - "/mnt/shared/datasets"          # Literal path (no expansion needed)
+      - "$HOME/data.*"                  # Expands to /home/username/data.*
+      - "${SCRATCH_DIR}/workloads.*"    # Uses SCRATCH_DIR environment variable
+      - "~/projects/ior_tests.*"        # Expands ~ to home directory
+      - "/mnt/shared/datasets.*"        # Literal path with regex
+    exclude:
+      - "$HOME/data/exclude.*"          # Exclude specific subdirectories
+      - "/tmp.*"                        # Exclude all /tmp files
     adapter_page_size: "1M"
 
 # Define packages

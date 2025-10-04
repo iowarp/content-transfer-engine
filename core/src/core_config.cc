@@ -53,13 +53,13 @@ bool Config::LoadFromFile(const std::string &config_file_path) {
 }
 
 bool Config::LoadFromEnvironment() {
-  const char *env_path = std::getenv(config_env_var_.c_str());
-  if (env_path == nullptr) {
+  std::string env_path = hshm::SystemInfo::Getenv(config_env_var_);
+  if (env_path.empty()) {
     HILOG(kInfo, "Config info: Environment variable {} not set, using default configuration", config_env_var_);
     return true; // Not an error, use defaults
   }
-  
-  return LoadFromFile(std::string(env_path));
+
+  return LoadFromFile(env_path);
 }
 
 bool Config::SaveToFile(const std::string &config_file_path) const {
@@ -418,7 +418,8 @@ bool Config::ParseStorageConfig(const YAML::Node &node) {
       HELOG(kError, "Config error: Storage device missing required 'path' field");
       return false;
     }
-    device_config.path_ = device_node["path"].as<std::string>();
+    std::string path = device_node["path"].as<std::string>();
+    device_config.path_ = hshm::ConfigParse::ExpandPath(path);
     
     // Parse bdev_type (required)
     if (!device_node["bdev_type"]) {

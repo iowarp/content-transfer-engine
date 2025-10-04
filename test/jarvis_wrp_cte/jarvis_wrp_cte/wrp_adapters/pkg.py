@@ -78,10 +78,17 @@ class WrpAdapters(Interceptor):
             },
             {
                 'name': 'include',
-                'msg': 'Paths to track for adapter interception (list)',
+                'msg': 'Path patterns to include for interception (list)',
+                'type': list,
+                'default': ['.*test_hermes.*'],
+                'help': 'List of regex patterns for paths to intercept. Supports env var expansion ($HOME, ${VAR}, ~). Example: [".*test_hermes.*", "/data/.*", "$HOME/scratch/.*"]'
+            },
+            {
+                'name': 'exclude',
+                'msg': 'Path patterns to exclude from interception (list)',
                 'type': list,
                 'default': [],
-                'help': 'List of path prefixes to intercept. Empty list means intercept all paths. Supports env var expansion ($HOME, ${VAR}, ~). Example: ["/data", "$HOME/scratch", "~/projects"]'
+                'help': 'List of regex patterns for paths to exclude from interception. Takes precedence based on specificity (longer paths checked first). Example: ["/tmp/.*", "/dev/.*"]'
             },
             {
                 'name': 'adapter_page_size',
@@ -207,8 +214,14 @@ class WrpAdapters(Interceptor):
         Generate the Content Adapter Engine (CAE) configuration file.
 
         This creates a YAML configuration file that specifies:
-        - paths: List of path prefixes to track for interception
+        - include: List of regex patterns for paths to include
+        - exclude: List of regex patterns for paths to exclude
         - adapter_page_size: Page size for adapter I/O operations
+
+        Paths are checked in order of specificity (longest path first).
+        If a path matches an include pattern, it's intercepted.
+        If it matches an exclude pattern, it's not intercepted.
+        If no patterns match, the path is excluded by default.
 
         The configuration file is saved to the shared directory and its path
         is stored in self.cae_config_path for use in modify_env().
@@ -216,23 +229,38 @@ class WrpAdapters(Interceptor):
         # Parse adapter page size using SizeType
         page_size_bytes = SizeType(self.config['adapter_page_size']).bytes
 
-        # Get tracked paths from configuration and expand environment variables
-        tracked_paths = self.config.get('include', [])
-        expanded_paths = []
-        for path in tracked_paths:
+        # Get include paths from configuration and expand environment variables
+        include_patterns = self.config.get('include', ['.*test_hermes.*'])
+        expanded_includes = []
+        for pattern in include_patterns:
             # Expand environment variables (e.g., $HOME, ${SCRATCH_DIR})
-            expanded_path = os.path.expandvars(path)
+            expanded_pattern = os.path.expandvars(pattern)
             # Also expand user home directory (e.g., ~)
-            expanded_path = os.path.expanduser(expanded_path)
-            expanded_paths.append(expanded_path)
+            expanded_pattern = os.path.expanduser(expanded_pattern)
+            expanded_includes.append(expanded_pattern)
 
-            # Log if path was expanded
-            if expanded_path != path:
-                self.log(f"Expanded path: {path} -> {expanded_path}")
+            # Log if pattern was expanded
+            if expanded_pattern != pattern:
+                self.log(f"Expanded include pattern: {pattern} -> {expanded_pattern}")
+
+        # Get exclude paths from configuration and expand environment variables
+        exclude_patterns = self.config.get('exclude', [])
+        expanded_excludes = []
+        for pattern in exclude_patterns:
+            # Expand environment variables
+            expanded_pattern = os.path.expandvars(pattern)
+            # Also expand user home directory
+            expanded_pattern = os.path.expanduser(expanded_pattern)
+            expanded_excludes.append(expanded_pattern)
+
+            # Log if pattern was expanded
+            if expanded_pattern != pattern:
+                self.log(f"Expanded exclude pattern: {pattern} -> {expanded_pattern}")
 
         # Build CAE configuration
         cae_config = {
-            'paths': expanded_paths,
+            'include': expanded_includes,
+            'exclude': expanded_excludes,
             'adapter_page_size': page_size_bytes
         }
 
@@ -243,15 +271,25 @@ class WrpAdapters(Interceptor):
             with open(self.cae_config_path, 'w') as f:
                 yaml.dump(cae_config, f, default_flow_style=False, indent=2)
 
+            # Set environment variable immediately after creating config file
+            self.env['WRP_CAE_CONF'] = self.cae_config_path
+
             self.log(f"CAE configuration written to: {self.cae_config_path}")
+            self.log(f"Set WRP_CAE_CONF={self.cae_config_path}")
 
             # Log configuration details
-            if expanded_paths:
-                self.log(f"Tracking {len(expanded_paths)} paths: {', '.join(expanded_paths)}")
+            if expanded_includes:
+                self.log(f"Include patterns ({len(expanded_includes)}): {', '.join(expanded_includes)}")
             else:
-                self.log("Tracking all paths (no include filter specified)")
+                self.log("No include patterns specified - using default: .*test_hermes.*")
+
+            if expanded_excludes:
+                self.log(f"Exclude patterns ({len(expanded_excludes)}): {', '.join(expanded_excludes)}")
+            else:
+                self.log("No exclude patterns specified")
 
             self.log(f"Adapter page size: {SizeType(page_size_bytes).to_human_readable()}")
+            self.log("Path matching: Most specific pattern wins, default is exclude")
 
         except Exception as e:
             self.log(f"Error writing CAE configuration: {e}")

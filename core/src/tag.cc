@@ -16,21 +16,22 @@ void Tag::PutBlob(const std::string &blob_name, const char *data, size_t data_si
   // Allocate shared memory for the data
   auto *ipc_manager = CHI_IPC;
   hipc::FullPtr<void> shm_fullptr = ipc_manager->AllocateBuffer<void>(data_size);
-  
+
   if (shm_fullptr.IsNull()) {
     throw std::runtime_error("Failed to allocate shared memory for PutBlob");
   }
-  
+
   // Copy data to shared memory
   memcpy(shm_fullptr.ptr_, data, data_size);
-  
+
   // Convert to hipc::Pointer for API call
   hipc::Pointer shm_ptr = shm_fullptr.shm_;
-  
+
   // Call SHM version with default score of 1.0
   PutBlob(blob_name, shm_ptr, data_size, off, 1.0f);
-  
-  // Note: shm_fullptr will be automatically freed when it goes out of scope (RAII)
+
+  // Explicitly free shared memory buffer
+  ipc_manager->FreeBuffer(shm_fullptr);
 }
 
 void Tag::PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_t data_size, 
@@ -62,29 +63,30 @@ void Tag::GetBlob(const std::string &blob_name, char *data, size_t data_size, si
   if (data_size == 0) {
     throw std::invalid_argument("data_size must be specified for GetBlob");
   }
-  
+
   if (data == nullptr) {
     throw std::invalid_argument("data buffer must be pre-allocated by caller");
   }
-  
+
   // Allocate shared memory for the data
   auto *ipc_manager = CHI_IPC;
   hipc::FullPtr<void> shm_fullptr = ipc_manager->AllocateBuffer<void>(data_size);
-  
+
   if (shm_fullptr.IsNull()) {
     throw std::runtime_error("Failed to allocate shared memory for GetBlob");
   }
-  
+
   // Convert to hipc::Pointer for API call
   hipc::Pointer shm_ptr = shm_fullptr.shm_;
-  
+
   // Call SHM version
   GetBlob(blob_name, shm_ptr, data_size, off);
-  
+
   // Copy data from shared memory to output buffer
   memcpy(data, shm_fullptr.ptr_, data_size);
-  
-  // Note: shm_fullptr will be automatically freed when it goes out of scope (RAII)
+
+  // Explicitly free shared memory buffer
+  ipc_manager->FreeBuffer(shm_fullptr);
 }
 
 void Tag::GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_size, size_t off) {

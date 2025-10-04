@@ -7,12 +7,13 @@ interceptors:
   - pkg_type: wrp_adapters
     pkg_name: cte_adapters
     posix: false
-    mpiio: true                          # Enable MPI-IO interception
+    mpiio: true                                # Enable MPI-IO interception
     stdio: false
     vfd: false
     nvidia_gds: false
-    include: []                          # Intercept all paths
-    adapter_page_size: "4M"              # 4MB page size for large I/O
+    include: [".*test_hermes.*", "/scratch.*"] # Regex patterns to include
+    exclude: ["/tmp.*"]                        # Exclude temporary files
+    adapter_page_size: "4M"                    # 4MB page size for large I/O
 
 # Define packages
 pkgs:

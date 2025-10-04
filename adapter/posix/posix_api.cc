@@ -44,11 +44,6 @@ int fxstat_to_fstat(int fd, struct stat *stbuf) {
 }
 } // namespace wrp::cae
 
-#include "adapter/cte_config.h"
-
-// Define the global configuration objects
-MockConfig g_hermes_conf;
-MockConfig g_hermes_client_conf;
 
 using wrp::cae::AdapterStat;
 using wrp::cae::File;
