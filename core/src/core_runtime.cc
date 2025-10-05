@@ -69,8 +69,12 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
     tag_locks_.emplace_back(std::make_unique<chi::CoRwLock>());
   }
 
+  // Get main allocator from IPC manager
+  auto *ipc_manager = CHI_IPC;
+  auto *main_allocator = ipc_manager->GetMainAllocator();
+
   // Initialize telemetry ring buffer
-  telemetry_log_ = hipc::circular_mpsc_queue<CteTelemetry>(main_allocator_,
+  telemetry_log_ = hipc::circular_mpsc_queue<CteTelemetry>(main_allocator,
                                                            kTelemetryRingSize);
 
   // Initialize atomic counters
@@ -80,10 +84,10 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
   // Initialize configuration manager with allocator
   auto *config_manager = &ConfigManager::GetInstance();
-  config_manager->Initialize(main_allocator_);
+  config_manager->Initialize(main_allocator);
 
   // Load configuration from file if provided
-  auto params = task->GetParams(main_allocator_);
+  auto params = task->GetParams(main_allocator);
   std::string config_path = params.config_file_path_.str();
 
   bool config_loaded = false;
@@ -138,18 +142,9 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
     HILOG(kInfo, "Warning: No storage devices configured");
   }
 
-  // Create local queues using configuration settings
-  CreateLocalQueue(kTargetManagementQueue,
-                   config.target_management_queue_.lane_count_,
-                   config.target_management_queue_.priority_);
-  CreateLocalQueue(kTagManagementQueue,
-                   config.tag_management_queue_.lane_count_,
-                   config.tag_management_queue_.priority_);
-  CreateLocalQueue(kBlobOperationsQueue,
-                   config.blob_operations_queue_.lane_count_,
-                   config.blob_operations_queue_.priority_);
-  CreateLocalQueue(kStatsQueue, config.stats_queue_.lane_count_,
-                   config.stats_queue_.priority_);
+  // Queue management has been removed - queues are now managed by Chimaera runtime
+  // Local queues (kTargetManagementQueue, kTagManagementQueue, kBlobOperationsQueue, kStatsQueue)
+  // are no longer created explicitly
 
   // Initialize atomic counters
   next_tag_id_minor_.store(1);  // Start tag ID minors from 1
@@ -177,14 +172,6 @@ void Runtime::MonitorCreate(chi::MonitorModeId mode,
                             hipc::FullPtr<CreateTask> task,
                             chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to target management queue for container initialization
-    auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule: {
     // Optional: Global coordination for distributed setup
     break;
@@ -232,14 +219,6 @@ void Runtime::MonitorDestroy(chi::MonitorModeId mode,
                              hipc::FullPtr<DestroyTask> task,
                              chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to target management queue for container cleanup
-    auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule: {
     // Optional: Global coordination for distributed cleanup
     break;
@@ -294,7 +273,9 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
         bdev_client.GetStats(hipc::MemContext(), remaining_size);
 
     // Create target info with bdev client and performance stats
-    TargetInfo target_info(main_allocator_);
+    auto *ipc_manager = CHI_IPC;
+    auto *main_allocator = ipc_manager->GetMainAllocator();
+    TargetInfo target_info(main_allocator);
     target_info.target_name_ = target_name;
     target_info.bdev_pool_name_ = bdev_pool_name;
     target_info.bdev_client_ = std::move(bdev_client);
@@ -349,14 +330,6 @@ void Runtime::MonitorRegisterTarget(chi::MonitorModeId mode,
                                     hipc::FullPtr<RegisterTargetTask> task,
                                     chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to target management queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     // Global coordination for distributed target registration
     break;
@@ -407,14 +380,6 @@ void Runtime::MonitorUnregisterTarget(chi::MonitorModeId mode,
                                       hipc::FullPtr<UnregisterTargetTask> task,
                                       chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to target management queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     // Global coordination for distributed target management
     break;
@@ -454,14 +419,6 @@ void Runtime::MonitorListTargets(chi::MonitorModeId mode,
                                  hipc::FullPtr<ListTargetsTask> task,
                                  chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to target management queue (any lane is fine for read operations)
-    auto lane_ptr = GetLaneFullPtr(kTargetManagementQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     // Global coordination for distributed target listing
     break;
@@ -499,14 +456,6 @@ void Runtime::MonitorStatTargets(chi::MonitorModeId mode,
                                  hipc::FullPtr<StatTargetsTask> task,
                                  chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to stats queue for performance monitoring
-    auto lane_ptr = GetLaneFullPtr(kStatsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     // Global coordination for distributed stats collection
     break;
@@ -559,14 +508,6 @@ void Runtime::MonitorGetOrCreateTag(
     hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task,
     chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to tag management queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kTagManagementQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     // Global coordination for distributed tag management
     break;
@@ -623,6 +564,10 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       }
       task->blob_id_ = found_blob_id;
     }
+
+    // Acquire write lock for modifying blob data and tag info
+    size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
+    chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
 
     // Step 2.5: Track blob size before modification for tag total_size_
     // accounting
@@ -700,14 +645,6 @@ void Runtime::MonitorPutBlob(chi::MonitorModeId mode,
                              hipc::FullPtr<PutBlobTask> task,
                              chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -764,6 +701,10 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
       return;
     }
 
+    // Acquire read lock for reading blob data
+    size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
+    chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
+
     // Use the pre-provided data pointer from the task
     hipc::Pointer blob_data_ptr = task->blob_data_;
 
@@ -801,14 +742,6 @@ void Runtime::MonitorGetBlob(chi::MonitorModeId mode,
                              hipc::FullPtr<GetBlobTask> task,
                              chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -1023,14 +956,6 @@ void Runtime::MonitorReorganizeBlobs(chi::MonitorModeId mode,
                                      hipc::FullPtr<ReorganizeBlobsTask> task,
                                      chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -1124,14 +1049,6 @@ void Runtime::MonitorDelBlob(chi::MonitorModeId mode,
                              hipc::FullPtr<DelBlobTask> task,
                              chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -1270,14 +1187,6 @@ void Runtime::MonitorDelTag(chi::MonitorModeId mode,
                             hipc::FullPtr<DelTagTask> task,
                             chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -1325,14 +1234,6 @@ void Runtime::MonitorGetTagSize(chi::MonitorModeId mode,
                                 hipc::FullPtr<GetTagSizeTask> task,
                                 chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -1429,7 +1330,9 @@ TagId Runtime::GetOrAssignTagId(const std::string &tag_name,
   }
 
   // Create tag info
-  TagInfo tag_info(main_allocator_);
+  auto *ipc_manager = CHI_IPC;
+  auto *main_allocator = ipc_manager->GetMainAllocator();
+  TagInfo tag_info(main_allocator);
   tag_info.tag_name_ = tag_name;
   tag_info.tag_id_ = tag_id;
 
@@ -1502,6 +1405,11 @@ template void Runtime::MonitorGetOrCreateTag<CreateParams>(
 BlobInfo *Runtime::CheckBlobExists(const BlobId &blob_id,
                                    const std::string &blob_name,
                                    const TagId &tag_id, BlobId &found_blob_id) {
+  // Acquire read lock for blob/tag data structures
+  // Use tag_id to determine which lock to use for sharding
+  size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
+  chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
+
   // Check if blob id is provided and not null
   bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
   bool blob_name_provided = !blob_name.empty();
@@ -1540,11 +1448,18 @@ BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
     return nullptr;
   }
 
+  // Acquire write lock for blob/tag data structures
+  // Use tag_id to determine which lock to use for sharding
+  size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
+  chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
+
   // Generate new blob ID
   created_blob_id = GenerateNewBlobId();
 
   // Create new blob info with empty block vector
-  BlobInfo new_blob_info(main_allocator_);
+  auto *ipc_manager = CHI_IPC;
+  auto *main_allocator = ipc_manager->GetMainAllocator();
+  BlobInfo new_blob_info(main_allocator);
   new_blob_info.blob_id_ = created_blob_id;
   new_blob_info.blob_name_ = blob_name;
   new_blob_info.score_ = blob_score;
@@ -1557,8 +1472,6 @@ BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
   auto tag_it = tag_id_to_info_.find(tag_id);
   if (tag_it != tag_id_to_info_.end()) {
     TagInfo &tag_info = tag_it->second;
-    size_t tag_lock_index = GetTagLockIndex(tag_info.tag_name_);
-    chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
 
     // Add to tag's blob set
     tag_info.blob_ids_[created_blob_id] = 1;
@@ -1985,13 +1898,6 @@ void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
                                       hipc::FullPtr<PollTelemetryLogTask> task,
                                       chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    auto lane_ptr = GetLaneFullPtr(kStatsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -2055,14 +1961,6 @@ void Runtime::MonitorGetBlobScore(chi::MonitorModeId mode,
                                   hipc::FullPtr<GetBlobScoreTask> task,
                                   chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -2123,14 +2021,6 @@ void Runtime::MonitorGetBlobSize(chi::MonitorModeId mode,
                                  hipc::FullPtr<GetBlobSizeTask> task,
                                  chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
@@ -2197,14 +2087,6 @@ void Runtime::MonitorGetContainedBlobs(
     chi::MonitorModeId mode, hipc::FullPtr<GetContainedBlobsTask> task,
     chi::RunContext &ctx) {
   switch (mode) {
-  case chi::MonitorModeId::kLocalSchedule: {
-    // Route to blob operations queue (round-robin on lanes)
-    auto lane_ptr = GetLaneFullPtr(kBlobOperationsQueue, 0);
-    if (!lane_ptr.IsNull()) {
-      ctx.route_lane_ = reinterpret_cast<chi::TaskLane *>(lane_ptr.ptr_);
-    }
-    break;
-  }
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
