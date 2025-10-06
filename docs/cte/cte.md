@@ -187,11 +187,12 @@ public:
                
   bool DelBlob(const hipc::MemContext &mctx, const TagId &tag_id,
                const std::string &blob_name, const BlobId &blob_id);
-               
-  chi::u32 ReorganizeBlob(const hipc::MemContext &mctx, 
-                          const BlobId &blob_id,
-                          float new_score);
-  
+
+  chi::u32 ReorganizeBlobs(const hipc::MemContext &mctx,
+                           const TagId &tag_id,
+                           const std::vector<std::string> &blob_names,
+                           const std::vector<float> &new_scores);
+
   // Blob score operations
   float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
                      const std::string &blob_name, 
@@ -209,6 +210,7 @@ public:
   // Async variants (all methods have Async versions)
   hipc::FullPtr<CreateTask> AsyncCreate(...);
   hipc::FullPtr<RegisterTargetTask> AsyncRegisterTarget(...);
+  hipc::FullPtr<ReorganizeBlobsTask> AsyncReorganizeBlobs(...);
   hipc::FullPtr<GetBlobScoreTask> AsyncGetBlobScore(...);
   hipc::FullPtr<GetBlobSizeTask> AsyncGetBlobSize(...);
   // ... etc
@@ -880,14 +882,28 @@ for (const auto& target : targets) {
 ### Blob Reorganization
 
 ```cpp
-// Reorganize blob based on new access patterns
+// Reorganize multiple blobs based on new access patterns
 // Higher scores (closer to 1.0) indicate hotter data
-float new_score = 0.95f;  // Very hot data
 
-chi::u32 result = cte_client.ReorganizeBlob(mctx, blob_id, new_score);
+TagId tag_id = tag_info.tag_id_;
+
+// Prepare blob names and their new scores
+std::vector<std::string> blob_names = {"blob_001", "blob_002", "blob_003"};
+std::vector<float> new_scores = {0.95f, 0.7f, 0.3f};  // Hot, warm, cold
+
+chi::u32 result = cte_client.ReorganizeBlobs(mctx, tag_id, blob_names, new_scores);
 
 if (result == 0) {
-    std::cout << "Blob reorganized successfully\n";
+    std::cout << "Blobs reorganized successfully\n";
+}
+
+// Example: Reorganize single blob by using vectors with one element
+std::vector<std::string> single_blob = {"important_blob"};
+std::vector<float> single_score = {0.95f};
+
+result = cte_client.ReorganizeBlobs(mctx, tag_id, single_blob, single_score);
+if (result == 0) {
+    std::cout << "Single blob reorganized successfully\n";
 }
 ```
 
