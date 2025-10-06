@@ -7,7 +7,7 @@
 #include <wrp_cte/core/core_config.h>
 #include <chimaera/comutex.h>
 #include <chimaera/corwlock.h>
-#include <unordered_map>
+#include <chimaera/unordered_map_ll.h>
 #include <atomic>
 #include <hermes_shm/data_structures/ipc/ring_queue.h>
 
@@ -219,15 +219,15 @@ class Runtime : public chi::Container {
   // Client for this ChiMod
   Client client_;
 
-  // Target management data structures
-  std::unordered_map<chi::PoolId, TargetInfo> registered_targets_;
-  std::unordered_map<std::string, chi::PoolId> target_name_to_id_;  // reverse lookup: target_name -> target_id
-  
-  // Tag management data structures
-  std::unordered_map<std::string, TagId> tag_name_to_id_;     // tag_name -> tag_id
-  std::unordered_map<TagId, TagInfo> tag_id_to_info_;         // tag_id -> TagInfo
-  std::unordered_map<std::string, BlobId> tag_blob_name_to_id_;  // "tag_id.blob_name" -> blob_id
-  std::unordered_map<BlobId, BlobInfo> blob_id_to_info_;      // blob_id -> BlobInfo
+  // Target management data structures (using chi::unordered_map_ll for thread-safe concurrent access)
+  chi::unordered_map_ll<chi::PoolId, TargetInfo> registered_targets_;
+  chi::unordered_map_ll<std::string, chi::PoolId> target_name_to_id_;  // reverse lookup: target_name -> target_id
+
+  // Tag management data structures (using chi::unordered_map_ll for thread-safe concurrent access)
+  chi::unordered_map_ll<std::string, TagId> tag_name_to_id_;     // tag_name -> tag_id
+  chi::unordered_map_ll<TagId, TagInfo> tag_id_to_info_;         // tag_id -> TagInfo
+  chi::unordered_map_ll<std::string, BlobId> tag_blob_name_to_id_;  // "tag_id.blob_name" -> blob_id
+  chi::unordered_map_ll<BlobId, BlobInfo> blob_id_to_info_;      // blob_id -> BlobInfo
   
   // Atomic counters for thread-safe ID generation
   std::atomic<chi::u32> next_tag_id_minor_;   // Minor counter for TagId UniqueId generation
@@ -290,7 +290,12 @@ class Runtime : public chi::Container {
    * Get tag lock index based on tag name hash
    */
   size_t GetTagLockIndex(const std::string& tag_name) const;
-  
+
+  /**
+   * Get tag lock index based on tag ID hash
+   */
+  size_t GetTagLockIndex(const TagId& tag_id) const;
+
   /**
    * Get blob lock index based on blob ID hash
    */

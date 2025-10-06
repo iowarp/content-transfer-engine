@@ -9,6 +9,8 @@ NEVER use a null pool query. If you don't know, always use local.
 
 Local QueueId should be named. NEVER use raw integers. This is the same for priorities. Please name them semantically.
 
+All timing prints MUST include units of measurement in milliseconds (ms). Always print timing values in the order of milliseconds.
+
 ## ChiMod Client Requirements
 
 ### CreateTask Pool Assignment

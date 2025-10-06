@@ -10,8 +10,13 @@
 #include <wrp_cte/core/core_config.h>
 #include <wrp_cte/core/core_dpe.h>
 #include <wrp_cte/core/core_runtime.h>
+#include "chimaera/worker.h"
 
 namespace wrp_cte::core {
+
+// Bring chi namespace items into scope for CHI_CUR_WORKER macro
+using chi::chi_cur_worker_key_;
+using chi::Worker;
 
 // No more static member definitions - using instance-based locking
 
@@ -60,6 +65,15 @@ chi::u64 Runtime::ParseCapacityToBytes(const std::string& capacity_str) {
 void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   // Initialize the container with pool information and pool name
   chi::Container::Init(task->new_pool_id_, task->pool_name_.str());
+
+  // Initialize unordered_map_ll instances with 64 buckets to match lock count
+  // This ensures each bucket can have its own lock for maximum concurrency
+  registered_targets_ = chi::unordered_map_ll<chi::PoolId, TargetInfo>(kMaxLocks);
+  target_name_to_id_ = chi::unordered_map_ll<std::string, chi::PoolId>(kMaxLocks);
+  tag_name_to_id_ = chi::unordered_map_ll<std::string, TagId>(kMaxLocks);
+  tag_id_to_info_ = chi::unordered_map_ll<TagId, TagInfo>(kMaxLocks);
+  tag_blob_name_to_id_ = chi::unordered_map_ll<std::string, BlobId>(kMaxLocks);
+  blob_id_to_info_ = chi::unordered_map_ll<BlobId, BlobInfo>(kMaxLocks);
 
   // Initialize lock vectors for concurrent access
   target_locks_.reserve(kMaxLocks);
@@ -261,7 +275,8 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     size_t lock_index = GetTargetLockIndex(target_id);
     {
       chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
-      if (registered_targets_.find(target_id) != registered_targets_.end()) {
+      TargetInfo *existing_target = registered_targets_.find(target_id);
+      if (existing_target != nullptr) {
         task->result_code_ = 1;
         return;
       }
@@ -302,8 +317,8 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     // Register the target using TargetId as key
     {
       chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
-      registered_targets_[target_id] = target_info;
-      target_name_to_id_[target_name] = target_id; // Maintain reverse lookup
+      registered_targets_.insert_or_assign(target_id, target_info);
+      target_name_to_id_.insert_or_assign(target_name, target_id); // Maintain reverse lookup
     }
 
     task->result_code_ = 0; // Success
@@ -346,25 +361,24 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
     std::string target_name = task->target_name_.str();
 
     // Look up TargetId from target_name
-    auto name_it = target_name_to_id_.find(target_name);
-    if (name_it == target_name_to_id_.end()) {
+    chi::PoolId *target_id_ptr = target_name_to_id_.find(target_name);
+    if (target_id_ptr == nullptr) {
       task->result_code_ = 1;
       return;
     }
 
-    const chi::PoolId &target_id = name_it->second;
+    const chi::PoolId &target_id = *target_id_ptr;
 
     // Check if target exists and remove it (don't destroy bdev container)
     size_t lock_index = GetTargetLockIndex(target_id);
     {
       chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
-      auto it = registered_targets_.find(target_id);
-      if (it == registered_targets_.end()) {
+      if (!registered_targets_.contains(target_id)) {
         task->result_code_ = 1;
         return;
       }
 
-      registered_targets_.erase(it);
+      registered_targets_.erase(target_id);
       target_name_to_id_.erase(target_name); // Remove reverse lookup
     }
 
@@ -403,10 +417,9 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
 
     // Populate target name list while lock is held
     task->target_names_.reserve(registered_targets_.size());
-    for (const auto &pair : registered_targets_) {
-      const TargetInfo &target_info = pair.second;
+    registered_targets_.for_each([&task](const chi::PoolId &target_id, const TargetInfo &target_info) {
       task->target_names_.emplace_back(target_info.target_name_.c_str());
-    }
+    });
 
     task->result_code_ = 0; // Success
 
@@ -436,14 +449,12 @@ void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
     // Use a single lock based on hash of operation type for stats
     size_t lock_index =
         std::hash<std::string>{}("stat_targets") % target_locks_.size();
-    chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
+    chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
 
-    // Update stats for all targets while lock is held
-    for (auto &pair : registered_targets_) {
-      const chi::PoolId &target_id = pair.first;
-      TargetInfo &target_info = pair.second;
+    // Update stats for all targets - read lock is sufficient since we're only updating values, not modifying map structure
+    registered_targets_.for_each([this](const chi::PoolId &target_id, TargetInfo &target_info) {
       UpdateTargetStats(target_id, target_info);
-    }
+    });
 
     task->result_code_ = 0; // Success
 
@@ -483,15 +494,14 @@ void Runtime::GetOrCreateTag(
     auto now = std::chrono::steady_clock::now();
     {
       chi::ScopedCoRwReadLock read_lock(*tag_locks_[tag_lock_index]);
-      auto it = tag_id_to_info_.find(tag_id);
-      if (it != tag_id_to_info_.end()) {
-        TagInfo &tag_info = const_cast<TagInfo &>(it->second);
+      TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+      if (tag_info_ptr != nullptr) {
         // Update read timestamp
-        tag_info.last_read_ = now;
+        tag_info_ptr->last_read_ = now;
 
         // Log telemetry for GetOrCreateTag operation
         LogTelemetry(CteOp::kGetOrCreateTag, 0, 0, BlobId::GetNull(), tag_id,
-                     tag_info.last_modified_, now);
+                     tag_info_ptr->last_modified_, now);
       }
     }
 
@@ -520,7 +530,10 @@ void Runtime::MonitorGetOrCreateTag(
 
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
   try {
+    auto start_total = std::chrono::high_resolution_clock::now();
+
     // Extract input parameters
+    auto start_extract = std::chrono::high_resolution_clock::now();
     TagId tag_id = task->tag_id_;
     std::string blob_name = task->blob_name_.str();
     BlobId blob_id = task->blob_id_;
@@ -532,8 +545,11 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Suppress unused variable warning for flags - may be used in future
     (void)flags;
+    auto end_extract = std::chrono::high_resolution_clock::now();
+    double extract_ms = std::chrono::duration<double, std::milli>(end_extract - start_extract).count();
 
     // Validate input parameters
+    auto start_validate = std::chrono::high_resolution_clock::now();
     if (size == 0 || blob_data.IsNull()) {
       task->result_code_ = 1;
       return;
@@ -547,14 +563,20 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       task->result_code_ = 1;
       return;
     }
+    auto end_validate = std::chrono::high_resolution_clock::now();
+    double validate_ms = std::chrono::duration<double, std::milli>(end_validate - start_validate).count();
 
     // Step 1: Check if blob exists
+    auto start_check = std::chrono::high_resolution_clock::now();
     BlobId found_blob_id;
     BlobInfo *blob_info_ptr =
         CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
     bool blob_found = (blob_info_ptr != nullptr);
+    auto end_check = std::chrono::high_resolution_clock::now();
+    double check_ms = std::chrono::duration<double, std::milli>(end_check - start_check).count();
 
     // Step 2: Create blob if it doesn't exist
+    auto start_create = std::chrono::high_resolution_clock::now();
     if (!blob_found) {
       blob_info_ptr =
           CreateNewBlob(blob_name, tag_id, blob_score, found_blob_id);
@@ -564,77 +586,95 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       }
       task->blob_id_ = found_blob_id;
     }
-
-    // Acquire write lock for modifying blob data and tag info
-    size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
-    chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
+    auto end_create = std::chrono::high_resolution_clock::now();
+    double create_ms = std::chrono::duration<double, std::milli>(end_create - start_create).count();
 
     // Step 2.5: Track blob size before modification for tag total_size_
-    // accounting
+    // accounting (no lock needed - blob_info_ptr is already obtained)
     chi::u64 old_blob_size = blob_info_ptr->GetTotalSize();
 
     // Step 3: Allocate additional space if needed for blob extension
+    // (no lock held during expensive bdev allocation)
+    auto start_alloc = std::chrono::high_resolution_clock::now();
     chi::u32 allocation_result =
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
+    auto end_alloc = std::chrono::high_resolution_clock::now();
+    double alloc_ms = std::chrono::duration<double, std::milli>(end_alloc - start_alloc).count();
+
     if (allocation_result != 0) {
       task->result_code_ = allocation_result;
       return;
     }
 
     // Step 4: Write data to blob blocks
+    // (no lock held during expensive I/O operations)
+    auto start_write = std::chrono::high_resolution_clock::now();
     chi::u32 write_result =
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
+    auto end_write = std::chrono::high_resolution_clock::now();
+    double write_ms = std::chrono::duration<double, std::milli>(end_write - start_write).count();
+
     if (write_result != 0) {
       task->result_code_ = write_result;
       return;
     }
 
-    // Step 5: Update tag total_size_ with blob size change
+    // Step 5: Calculate size change after I/O completes
     chi::u64 new_blob_size = blob_info_ptr->GetTotalSize();
     chi::i64 size_change = static_cast<chi::i64>(new_blob_size) -
                            static_cast<chi::i64>(old_blob_size);
 
-    // Step 6: Update timestamps and log telemetry
+    // Step 6: Update metadata (read lock only for map access - not modifying map structure)
+    auto start_metadata = std::chrono::high_resolution_clock::now();
     auto now = std::chrono::steady_clock::now();
+    size_t tag_lock_index = GetTagLockIndex(tag_id);
+    size_t tag_total_size = 0;
+
+    // Update blob timestamp (blob_info_ptr already obtained, no additional lock needed)
     blob_info_ptr->last_modified_ = now;
 
-    // Update tag's total_size_ and timestamps
-    auto tag_info_it = tag_id_to_info_.find(tag_id);
-    if (tag_info_it != tag_id_to_info_.end()) {
-      TagInfo &tag_info = tag_info_it->second;
-      tag_info.last_modified_ = now;
+    // Acquire read lock for tag map access and value updates
+    {
+      chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
 
-      // Use signed arithmetic to handle size decreases
-      if (size_change >= 0) {
-        tag_info.total_size_ += static_cast<size_t>(size_change);
-      } else {
-        // Prevent underflow for size decreases
-        size_t decrease = static_cast<size_t>(-size_change);
-        if (decrease <= tag_info.total_size_) {
-          tag_info.total_size_ -= decrease;
+      // Update tag's total_size_ and timestamps
+      TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+      if (tag_info_ptr != nullptr) {
+        tag_info_ptr->last_modified_ = now;
+
+        // Use signed arithmetic to handle size decreases
+        if (size_change >= 0) {
+          tag_info_ptr->total_size_ += static_cast<size_t>(size_change);
         } else {
-          tag_info.total_size_ = 0; // Clamp to 0 if we would underflow
+          // Prevent underflow for size decreases
+          size_t decrease = static_cast<size_t>(-size_change);
+          if (decrease <= tag_info_ptr->total_size_) {
+            tag_info_ptr->total_size_ -= decrease;
+          } else {
+            tag_info_ptr->total_size_ = 0; // Clamp to 0 if we would underflow
+          }
         }
+        tag_total_size = tag_info_ptr->total_size_;
       }
-    }
+    } // Release read lock
+    auto end_metadata = std::chrono::high_resolution_clock::now();
+    double metadata_ms = std::chrono::duration<double, std::milli>(end_metadata - start_metadata).count();
 
-    // Log telemetry for PutBlob operation
+    // Log telemetry and success messages
     LogTelemetry(CteOp::kPutBlob, offset, size, found_blob_id, tag_id, now,
                  blob_info_ptr->last_read_);
 
-    // Success - log operation details
+    auto end_total = std::chrono::high_resolution_clock::now();
+    double total_ms = std::chrono::duration<double, std::milli>(end_total - start_total).count();
+
     task->result_code_ = 0;
-    size_t tag_total_size = 0;
-    if (tag_info_it != tag_id_to_info_.end()) {
-      const TagInfo &tag_info = tag_info_it->second;
-      tag_total_size = tag_info.total_size_;
-    }
+
     HILOG(kInfo,
-          "PutBlob successful: blob_id={},{}, name={}, offset={}, size={}, "
-          "score={}, blocks={}, tag_total_size={}",
-          found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size,
-          blob_score, blob_info_ptr->blocks_.size(),
-          tag_total_size);
+          "PutBlob: blob_id={},{}, size={} | total={} ms, extract={} ms, validate={} ms, "
+          "check={} ms, create={} ms, alloc={} ms, write={} ms, metadata={} ms",
+          found_blob_id.major_, found_blob_id.minor_, size,
+          total_ms, extract_ms, validate_ms, check_ms, create_ms,
+          alloc_ms, write_ms, metadata_ms);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
@@ -701,15 +741,10 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
       return;
     }
 
-    // Acquire read lock for reading blob data
-    size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
-    chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
-
     // Use the pre-provided data pointer from the task
     hipc::Pointer blob_data_ptr = task->blob_data_;
 
-    // Step 2: Read data from blob blocks using the same clamping and offset
-    // calculation logic as ModifyExistingData
+    // Step 2: Read data from blob blocks (no lock held during I/O)
     chi::u32 read_result =
         ReadData(blob_info_ptr->blocks_, blob_data_ptr, size, offset);
     if (read_result != 0) {
@@ -717,21 +752,24 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
       return;
     }
 
-    // Step 3: Update timestamps and log telemetry
+    // Step 3: Update timestamp (no lock needed - just updating values, not modifying map structure)
     auto now = std::chrono::steady_clock::now();
+    size_t tag_lock_index = GetTagLockIndex(tag_id);
+    (void)tag_lock_index;  // Suppress unused variable warning
+    size_t num_blocks = 0;
     blob_info_ptr->last_read_ = now;
+    num_blocks = blob_info_ptr->blocks_.size();
 
-    // Log telemetry for GetBlob operation
+    // Log telemetry and success messages after releasing lock
     LogTelemetry(CteOp::kGetBlob, offset, size, found_blob_id, tag_id,
                  blob_info_ptr->last_modified_, now);
 
-    // Success - log operation details
     task->result_code_ = 0;
     HILOG(kInfo,
           "GetBlob successful: blob_id={},{}, name={}, offset={}, size={}, "
           "blocks={}",
           found_blob_id.major_, found_blob_id.minor_, blob_name, offset, size,
-          blob_info_ptr->blocks_.size());
+          num_blocks);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;
@@ -765,7 +803,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
     }
 
     // Validate tag exists
-    if (tag_id_to_info_.find(tag_id) == tag_id_to_info_.end()) {
+    if (!tag_id_to_info_.contains(tag_id)) {
       task->result_code_ = 1; // Tag not found
       return;
     }
@@ -1006,16 +1044,15 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
     }
 
     // Step 3: Remove blob from tag's blob set
-    auto tag_info_it = tag_id_to_info_.find(tag_id);
-    if (tag_info_it != tag_id_to_info_.end()) {
-      TagInfo &tag_info = tag_info_it->second;
-      tag_info.blob_ids_.erase(found_blob_id);
+    TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+    if (tag_info_ptr != nullptr) {
+      tag_info_ptr->blob_ids_.erase(found_blob_id);
 
       // Step 4: Decrement tag's total_size_
-      if (blob_size <= tag_info.total_size_) {
-        tag_info.total_size_ -= blob_size;
+      if (blob_size <= tag_info_ptr->total_size_) {
+        tag_info_ptr->total_size_ -= blob_size;
       } else {
-        tag_info.total_size_ = 0; // Clamp to 0 if we would underflow
+        tag_info_ptr->total_size_ = 0; // Clamp to 0 if we would underflow
       }
     }
 
@@ -1066,13 +1103,12 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     // Step 1: Resolve tag ID if tag name was provided instead
     if (tag_id.IsNull() && !tag_name.empty()) {
       // Look up tag ID by name
-      auto name_to_id_it = tag_name_to_id_.find(tag_name);
-      if (name_to_id_it == tag_name_to_id_.end()) {
+      TagId *found_tag_id_ptr = tag_name_to_id_.find(tag_name);
+      if (found_tag_id_ptr == nullptr) {
         task->result_code_ = 1; // Tag not found by name
         return;
       }
-      const TagId &found_tag_id = name_to_id_it->second;
-      tag_id = found_tag_id;
+      tag_id = *found_tag_id_ptr;
       task->tag_id_ = tag_id; // Update task with resolved tag ID
     } else if (tag_id.IsNull() && tag_name.empty()) {
       task->result_code_ = 1; // Neither tag ID nor tag name provided
@@ -1080,46 +1116,43 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     }
 
     // Step 2: Find the tag by ID
-    auto tag_info_it = tag_id_to_info_.find(tag_id);
-    if (tag_info_it == tag_id_to_info_.end()) {
+    TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+    if (tag_info_ptr == nullptr) {
       task->result_code_ = 1; // Tag not found by ID
       return;
     }
-
-    TagInfo &tag_info = tag_info_it->second;
 
     // Step 3: Delete all blobs in this tag using client AsyncDelBlob to
     // properly clean up blocks
     auto *cte_client = WRP_CTE_CLIENT;
 
+    // Collect all blob IDs first (since we'll be modifying the map during deletion)
+    std::vector<BlobId> blob_ids_to_delete;
+    for (const auto &blob_pair : tag_info_ptr->blob_ids_) {
+      blob_ids_to_delete.push_back(blob_pair.first);
+    }
+
     // Process blobs in batches to limit concurrent async tasks
     constexpr size_t kMaxConcurrentDelBlobTasks = 32;
     std::vector<hipc::FullPtr<DelBlobTask>> async_tasks;
-    async_tasks.reserve(
-        std::min(tag_info.blob_ids_.size(), kMaxConcurrentDelBlobTasks));
-
     size_t processed_blobs = 0;
-    auto blob_iter = tag_info.blob_ids_.begin();
 
-    while (blob_iter != tag_info.blob_ids_.end()) {
+    for (size_t i = 0; i < blob_ids_to_delete.size(); i += kMaxConcurrentDelBlobTasks) {
       // Create a batch of async tasks (up to kMaxConcurrentDelBlobTasks)
       async_tasks.clear();
+      size_t batch_end = std::min(i + kMaxConcurrentDelBlobTasks, blob_ids_to_delete.size());
 
-      for (size_t batch_count = 0; batch_count < kMaxConcurrentDelBlobTasks &&
-                                   blob_iter != tag_info.blob_ids_.end();
-           ++blob_iter) {
-        const auto &[blob_id, _] = *blob_iter;
+      for (size_t j = i; j < batch_end; ++j) {
+        const BlobId &blob_id = blob_ids_to_delete[j];
 
         // Find blob info to get blob name
-        auto blob_info_it = blob_id_to_info_.find(blob_id);
-        if (blob_info_it != blob_id_to_info_.end()) {
-          const BlobInfo &blob_info = blob_info_it->second;
+        BlobInfo *blob_info_ptr = blob_id_to_info_.find(blob_id);
+        if (blob_info_ptr != nullptr) {
           // Call AsyncDelBlob from client
           auto async_task = cte_client->AsyncDelBlob(
-              hipc::MemContext(), tag_id, blob_info.blob_name_,
+              hipc::MemContext(), tag_id, blob_info_ptr->blob_name_,
               blob_id);
           async_tasks.push_back(async_task);
-          ++batch_count;
         }
       }
 
@@ -1146,31 +1179,31 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     // removed them, but ensure cleanup)
     std::string tag_prefix = std::to_string(tag_id.major_) + "." +
                              std::to_string(tag_id.minor_) + ".";
-    auto name_it = tag_blob_name_to_id_.begin();
-    while (name_it != tag_blob_name_to_id_.end()) {
-      const std::string &compound_key = name_it->first;
+    std::vector<std::string> keys_to_erase;
+    tag_blob_name_to_id_.for_each([&tag_prefix, &keys_to_erase](const std::string &compound_key, const BlobId &blob_id) {
       if (compound_key.compare(0, tag_prefix.length(), tag_prefix) == 0) {
-        name_it = tag_blob_name_to_id_.erase(name_it);
-      } else {
-        ++name_it;
+        keys_to_erase.push_back(compound_key);
       }
+    });
+    for (const auto &key : keys_to_erase) {
+      tag_blob_name_to_id_.erase(key);
     }
 
     // Step 5: Remove tag name mapping if it exists
-    if (!tag_info.tag_name_.empty()) {
-      tag_name_to_id_.erase(tag_info.tag_name_);
+    if (!tag_info_ptr->tag_name_.empty()) {
+      tag_name_to_id_.erase(tag_info_ptr->tag_name_);
     }
 
     // Step 6: Log telemetry and remove tag from tag_id_to_info_ map
     size_t blob_count = processed_blobs;
-    size_t total_size = tag_info.total_size_;
+    size_t total_size = tag_info_ptr->total_size_;
 
     // Log telemetry for DelTag operation
     auto now = std::chrono::steady_clock::now();
     LogTelemetry(CteOp::kDelTag, 0, total_size, BlobId::GetNull(), tag_id, now,
                  now);
 
-    tag_id_to_info_.erase(tag_info_it);
+    tag_id_to_info_.erase(tag_id);
 
     // Success
     task->result_code_ = 0;
@@ -1202,8 +1235,8 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
     TagId tag_id = task->tag_id_;
 
     // Find the tag
-    auto tag_info_it = tag_id_to_info_.find(tag_id);
-    if (tag_info_it == tag_id_to_info_.end()) {
+    TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+    if (tag_info_ptr == nullptr) {
       task->result_code_ = 1; // Tag not found
       task->tag_size_ = 0;
       return;
@@ -1211,15 +1244,14 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
 
     // Update timestamp and return the total size
     auto now = std::chrono::steady_clock::now();
-    TagInfo &tag_info = const_cast<TagInfo &>(tag_info_it->second);
-    tag_info.last_read_ = now;
+    tag_info_ptr->last_read_ = now;
 
-    task->tag_size_ = tag_info.total_size_;
+    task->tag_size_ = tag_info_ptr->total_size_;
     task->result_code_ = 0;
 
     // Log telemetry for GetTagSize operation
-    LogTelemetry(CteOp::kGetTagSize, 0, tag_info.total_size_, BlobId::GetNull(),
-                 tag_id, tag_info.last_modified_, now);
+    LogTelemetry(CteOp::kGetTagSize, 0, tag_info_ptr->total_size_, BlobId::GetNull(),
+                 tag_id, tag_info_ptr->last_modified_, now);
 
     HILOG(kInfo, "GetTagSize successful: tag_id={},{}, total_size={}",
           tag_id.major_, tag_id.minor_, task->tag_size_);
@@ -1314,16 +1346,15 @@ TagId Runtime::GetOrAssignTagId(const std::string &tag_name,
   chi::ScopedCoRwWriteLock write_lock(*tag_locks_[tag_lock_index]);
 
   // Check if tag already exists
-  auto name_it = tag_name_to_id_.find(tag_name);
-  if (name_it != tag_name_to_id_.end()) {
-    const TagId &existing_tag_id = name_it->second;
-    return existing_tag_id;
+  TagId *existing_tag_id_ptr = tag_name_to_id_.find(tag_name);
+  if (existing_tag_id_ptr != nullptr) {
+    return *existing_tag_id_ptr;
   }
 
   // Assign new tag ID
   TagId tag_id;
   if ((preferred_id.major_ != 0 || preferred_id.minor_ != 0) &&
-      tag_id_to_info_.find(preferred_id) == tag_id_to_info_.end()) {
+      !tag_id_to_info_.contains(preferred_id)) {
     tag_id = preferred_id;
   } else {
     tag_id = GenerateNewTagId();
@@ -1337,8 +1368,8 @@ TagId Runtime::GetOrAssignTagId(const std::string &tag_name,
   tag_info.tag_id_ = tag_id;
 
   // Store mappings
-  tag_name_to_id_[tag_name] = tag_id;
-  tag_id_to_info_[tag_id] = tag_info;
+  tag_name_to_id_.insert_or_assign(tag_name, tag_id);
+  tag_id_to_info_.insert_or_assign(tag_id, tag_info);
 
   return tag_id;
 }
@@ -1358,9 +1389,16 @@ size_t Runtime::GetTargetLockIndex(const chi::PoolId &target_id) const {
 }
 
 size_t Runtime::GetTagLockIndex(const std::string &tag_name) const {
-  // Use hash of tag name to distribute locks evenly
+  // Use same hash function as chi::unordered_map_ll to ensure lock maps to same bucket
   std::hash<std::string> hasher;
   return hasher(tag_name) % tag_locks_.size();
+}
+
+size_t Runtime::GetTagLockIndex(const TagId &tag_id) const {
+  // Use same hash function as chi::unordered_map_ll for TagId keys
+  // std::hash<chi::UniqueId> is defined in types.h
+  std::hash<TagId> hasher;
+  return hasher(tag_id) % tag_locks_.size();
 }
 
 TagId Runtime::GenerateNewTagId() {
@@ -1386,11 +1424,10 @@ BlobId Runtime::GenerateNewBlobId() {
 }
 
 size_t Runtime::GetBlobLockIndex(const BlobId &blob_id) const {
-  // Use hash of blob ID to distribute locks evenly
-  // Hash both major and minor components for good distribution
-  std::hash<chi::u32> hasher;
-  size_t hash_value = hasher(blob_id.major_) ^ (hasher(blob_id.minor_) << 1);
-  return hash_value % tag_locks_.size();
+  // Use same hash function as chi::unordered_map_ll for BlobId keys
+  // std::hash<chi::UniqueId> is defined in types.h
+  std::hash<BlobId> hasher;
+  return hasher(blob_id) % tag_locks_.size();
 }
 
 // Explicit template instantiations for required template methods
@@ -1405,39 +1442,35 @@ template void Runtime::MonitorGetOrCreateTag<CreateParams>(
 BlobInfo *Runtime::CheckBlobExists(const BlobId &blob_id,
                                    const std::string &blob_name,
                                    const TagId &tag_id, BlobId &found_blob_id) {
-  // Acquire read lock for blob/tag data structures
-  // Use tag_id to determine which lock to use for sharding
-  size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
-  chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
-
   // Check if blob id is provided and not null
   bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
   bool blob_name_provided = !blob_name.empty();
+
+  // Acquire read lock ONLY for map lookups
+  size_t tag_lock_index = GetTagLockIndex(tag_id);
+  chi::ScopedCoRwReadLock tag_lock(*tag_locks_[tag_lock_index]);
+
+  BlobInfo *blob_info_ptr = nullptr;
 
   if (blob_name_provided) {
     // Search by name first using compound key
     std::string compound_key = std::to_string(tag_id.major_) + "." +
                                std::to_string(tag_id.minor_) + "." + blob_name;
-    auto blob_name_it = tag_blob_name_to_id_.find(compound_key);
-    if (blob_name_it != tag_blob_name_to_id_.end()) {
-      const BlobId &blob_id_found = blob_name_it->second;
-      found_blob_id = blob_id_found;
-      auto blob_it = blob_id_to_info_.find(found_blob_id);
-      if (blob_it != blob_id_to_info_.end()) {
-        return &blob_id_to_info_[found_blob_id];
-      }
+    BlobId *blob_id_found_ptr = tag_blob_name_to_id_.find(compound_key);
+    if (blob_id_found_ptr != nullptr) {
+      found_blob_id = *blob_id_found_ptr;
+      blob_info_ptr = blob_id_to_info_.find(found_blob_id);
     }
   } else if (blob_id_provided) {
     // Search by blob id if no blob name provided
-    auto blob_it = blob_id_to_info_.find(blob_id);
-    if (blob_it != blob_id_to_info_.end()) {
+    blob_info_ptr = blob_id_to_info_.find(blob_id);
+    if (blob_info_ptr != nullptr) {
       found_blob_id = blob_id;
-      return &blob_id_to_info_[blob_id];
     }
   }
 
-  // Blob not found
-  return nullptr;
+  // Return result (lock released automatically at scope exit)
+  return blob_info_ptr;
 }
 
 BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
@@ -1448,15 +1481,10 @@ BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
     return nullptr;
   }
 
-  // Acquire write lock for blob/tag data structures
-  // Use tag_id to determine which lock to use for sharding
-  size_t tag_lock_index = tag_id.minor_ % tag_locks_.size();
-  chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
-
-  // Generate new blob ID
+  // Generate new blob ID (atomic operation, no lock needed)
   created_blob_id = GenerateNewBlobId();
 
-  // Create new blob info with empty block vector
+  // Prepare blob info structure BEFORE acquiring lock
   auto *ipc_manager = CHI_IPC;
   auto *main_allocator = ipc_manager->GetMainAllocator();
   BlobInfo new_blob_info(main_allocator);
@@ -1464,23 +1492,30 @@ BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
   new_blob_info.blob_name_ = blob_name;
   new_blob_info.score_ = blob_score;
 
-  // Store blob info in global blob tracking
-  blob_id_to_info_[created_blob_id] = new_blob_info;
-  BlobInfo *blob_info_ptr = &blob_id_to_info_[created_blob_id];
+  // Prepare compound key for name-to-id mapping
+  std::string compound_key = std::to_string(tag_id.major_) + "." +
+                             std::to_string(tag_id.minor_) + "." + blob_name;
 
-  // Update tag mappings
-  auto tag_it = tag_id_to_info_.find(tag_id);
-  if (tag_it != tag_id_to_info_.end()) {
-    TagInfo &tag_info = tag_it->second;
+  // Acquire write lock ONLY for map insertions
+  size_t tag_lock_index = GetTagLockIndex(tag_id);
+  BlobInfo *blob_info_ptr = nullptr;
+  {
+    chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
 
-    // Add to tag's blob set
-    tag_info.blob_ids_[created_blob_id] = 1;
+    // Store blob info in global blob tracking
+    auto insert_result = blob_id_to_info_.insert_or_assign(created_blob_id, new_blob_info);
+    blob_info_ptr = insert_result.second;
 
-    // Add name-to-id mapping using compound key
-    std::string compound_key = std::to_string(tag_id.major_) + "." +
-                               std::to_string(tag_id.minor_) + "." + blob_name;
-    tag_blob_name_to_id_[compound_key] = created_blob_id;
-  }
+    // Update tag mappings
+    TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+    if (tag_info_ptr != nullptr) {
+      // Add to tag's blob set
+      tag_info_ptr->blob_ids_[created_blob_id] = 1;
+
+      // Add name-to-id mapping
+      tag_blob_name_to_id_.insert_or_assign(compound_key, created_blob_id);
+    }
+  } // Release lock immediately after insertions
 
   return blob_info_ptr;
 }
@@ -1499,17 +1534,11 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
   chi::u64 additional_size = required_size - current_blob_size;
 
   // Get all available targets for data placement
-  size_t lock_index = GetBlobLockIndex(blob_info.blob_id_);
   std::vector<TargetInfo> available_targets;
-  {
-    chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
-
-    available_targets.reserve(registered_targets_.size());
-    for (const auto &pair : registered_targets_) {
-      const TargetInfo &target_info = pair.second;
-      available_targets.push_back(target_info);
-    }
-  }
+  available_targets.reserve(registered_targets_.size());
+  registered_targets_.for_each([&available_targets](const chi::PoolId &target_id, const TargetInfo &target_info) {
+    available_targets.push_back(target_info);
+  });
 
   if (available_targets.empty()) {
     return 1;
@@ -1539,40 +1568,33 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
     chi::PoolId selected_target_id = selected_target_info.bdev_client_.pool_id_;
 
     // Find the selected target info for allocation using TargetId
-    size_t target_lock_index = GetTargetLockIndex(selected_target_id);
-    TargetInfo *target_info = nullptr;
-    {
-      chi::ScopedCoRwWriteLock write_lock(*target_locks_[target_lock_index]);
-      auto target_it = registered_targets_.find(selected_target_id);
-      if (target_it == registered_targets_.end()) {
-        continue; // Try next target
-      }
-      TargetInfo &target_info_ref = target_it->second;
-      target_info = &target_info_ref;
-
-      // Calculate how much we can allocate from this target
-      chi::u64 allocate_size =
-          std::min(remaining_to_allocate, target_info->remaining_space_);
-
-      if (allocate_size == 0) {
-        // No space available, try next target
-        continue;
-      }
-
-      // Allocate space using bdev client
-      chi::u64 allocated_offset;
-      if (!AllocateFromTarget(*target_info, allocate_size, allocated_offset)) {
-        // Allocation failed, try next target
-        continue;
-      }
-
-      // Create new block for the allocated space
-      BlobBlock new_block(target_info->bdev_client_, allocated_offset,
-                          allocate_size);
-      blob_info.blocks_.emplace_back(new_block);
-
-      remaining_to_allocate -= allocate_size;
+    TargetInfo *target_info = registered_targets_.find(selected_target_id);
+    if (target_info == nullptr) {
+      continue; // Try next target
     }
+
+    // Calculate how much we can allocate from this target
+    chi::u64 allocate_size =
+        std::min(remaining_to_allocate, target_info->remaining_space_);
+
+    if (allocate_size == 0) {
+      // No space available, try next target
+      continue;
+    }
+
+    // Allocate space using bdev client
+    chi::u64 allocated_offset;
+    if (!AllocateFromTarget(*target_info, allocate_size, allocated_offset)) {
+      // Allocation failed, try next target
+      continue;
+    }
+
+    // Create new block for the allocated space
+    BlobBlock new_block(target_info->bdev_client_, allocated_offset,
+                        allocate_size);
+    blob_info.blocks_.emplace_back(new_block);
+
+    remaining_to_allocate -= allocate_size;
   }
 
   // Error condition: if we've exhausted all targets but still have remaining
@@ -2037,7 +2059,8 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
     TagId tag_id = task->tag_id_;
 
     // Validate tag exists
-    if (tag_id_to_info_.find(tag_id) == tag_id_to_info_.end()) {
+    TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
+    if (tag_info_ptr == nullptr) {
       task->result_code_ = 1; // Tag not found
       return;
     }
@@ -2045,24 +2068,14 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
     // Clear output vector
     task->blob_names_.clear();
 
-    // Get the tag entry
-    auto tag_it = tag_id_to_info_.find(tag_id);
-    if (tag_it == tag_id_to_info_.end()) {
-      task->result_code_ = 1; // Tag not found
-      return;
-    }
-    TagInfo &tag_info = tag_it->second;
-
     // Iterate through all blobs in this tag
-    for (const auto &blob_pair : tag_info.blob_ids_) {
+    for (const auto &blob_pair : tag_info_ptr->blob_ids_) {
       const BlobId &blob_id = blob_pair.first;
-
       // Look up the blob info to get the actual blob name
-      auto blob_info_it = blob_id_to_info_.find(blob_id);
-      if (blob_info_it != blob_id_to_info_.end()) {
-        const BlobInfo &blob_info = blob_info_it->second;
+      BlobInfo *blob_info_ptr = blob_id_to_info_.find(blob_id);
+      if (blob_info_ptr != nullptr) {
         // Add blob name to the output vector
-        task->blob_names_.emplace_back(blob_info.blob_name_.c_str());
+        task->blob_names_.emplace_back(blob_info_ptr->blob_name_.c_str());
       }
     }
 
