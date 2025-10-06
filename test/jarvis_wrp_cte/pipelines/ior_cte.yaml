@@ -20,8 +20,8 @@ pkgs:
     pkg_name: benchmark
     interceptors: ["cte_adapters"]
     nprocs: 8
-    block: "1G"
-    transfer: "1M"
+    block: "256m"
+    xfer: "4k"
     api: "POSIX"
     out: "${HOME}/test_hermes/ior.bin"
     do_dbg: false

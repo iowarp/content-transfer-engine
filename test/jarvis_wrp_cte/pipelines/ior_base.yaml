@@ -9,9 +9,10 @@ pkgs:
     pkg_name: benchmark
     interceptors: ["cte_adapters"]
     nprocs: 1
-    block: "1G"
-    transfer: "1M"
+    block: "256m"
+    xfer: "4k"
     api: "POSIX"
+    direct: true
     out: "${HOME}/test_hermes/ior.bin"
     do_dbg: false
     dbg_port: 4001

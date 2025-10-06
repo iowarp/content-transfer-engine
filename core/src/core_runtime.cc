@@ -530,10 +530,7 @@ void Runtime::MonitorGetOrCreateTag(
 
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
   try {
-    auto start_total = std::chrono::high_resolution_clock::now();
-
     // Extract input parameters
-    auto start_extract = std::chrono::high_resolution_clock::now();
     TagId tag_id = task->tag_id_;
     std::string blob_name = task->blob_name_.str();
     BlobId blob_id = task->blob_id_;
@@ -545,11 +542,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Suppress unused variable warning for flags - may be used in future
     (void)flags;
-    auto end_extract = std::chrono::high_resolution_clock::now();
-    double extract_ms = std::chrono::duration<double, std::milli>(end_extract - start_extract).count();
 
     // Validate input parameters
-    auto start_validate = std::chrono::high_resolution_clock::now();
     if (size == 0 || blob_data.IsNull()) {
       task->result_code_ = 1;
       return;
@@ -563,20 +557,14 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       task->result_code_ = 1;
       return;
     }
-    auto end_validate = std::chrono::high_resolution_clock::now();
-    double validate_ms = std::chrono::duration<double, std::milli>(end_validate - start_validate).count();
 
     // Step 1: Check if blob exists
-    auto start_check = std::chrono::high_resolution_clock::now();
     BlobId found_blob_id;
     BlobInfo *blob_info_ptr =
         CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
     bool blob_found = (blob_info_ptr != nullptr);
-    auto end_check = std::chrono::high_resolution_clock::now();
-    double check_ms = std::chrono::duration<double, std::milli>(end_check - start_check).count();
 
     // Step 2: Create blob if it doesn't exist
-    auto start_create = std::chrono::high_resolution_clock::now();
     if (!blob_found) {
       blob_info_ptr =
           CreateNewBlob(blob_name, tag_id, blob_score, found_blob_id);
@@ -586,8 +574,6 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       }
       task->blob_id_ = found_blob_id;
     }
-    auto end_create = std::chrono::high_resolution_clock::now();
-    double create_ms = std::chrono::duration<double, std::milli>(end_create - start_create).count();
 
     // Step 2.5: Track blob size before modification for tag total_size_
     // accounting (no lock needed - blob_info_ptr is already obtained)
@@ -595,11 +581,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Step 3: Allocate additional space if needed for blob extension
     // (no lock held during expensive bdev allocation)
-    auto start_alloc = std::chrono::high_resolution_clock::now();
     chi::u32 allocation_result =
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
-    auto end_alloc = std::chrono::high_resolution_clock::now();
-    double alloc_ms = std::chrono::duration<double, std::milli>(end_alloc - start_alloc).count();
 
     if (allocation_result != 0) {
       task->result_code_ = allocation_result;
@@ -608,11 +591,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Step 4: Write data to blob blocks
     // (no lock held during expensive I/O operations)
-    auto start_write = std::chrono::high_resolution_clock::now();
     chi::u32 write_result =
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
-    auto end_write = std::chrono::high_resolution_clock::now();
-    double write_ms = std::chrono::duration<double, std::milli>(end_write - start_write).count();
 
     if (write_result != 0) {
       task->result_code_ = write_result;
@@ -625,7 +605,6 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
                            static_cast<chi::i64>(old_blob_size);
 
     // Step 6: Update metadata (read lock only for map access - not modifying map structure)
-    auto start_metadata = std::chrono::high_resolution_clock::now();
     auto now = std::chrono::steady_clock::now();
     size_t tag_lock_index = GetTagLockIndex(tag_id);
     size_t tag_total_size = 0;
@@ -657,24 +636,12 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         tag_total_size = tag_info_ptr->total_size_;
       }
     } // Release read lock
-    auto end_metadata = std::chrono::high_resolution_clock::now();
-    double metadata_ms = std::chrono::duration<double, std::milli>(end_metadata - start_metadata).count();
 
     // Log telemetry and success messages
     LogTelemetry(CteOp::kPutBlob, offset, size, found_blob_id, tag_id, now,
                  blob_info_ptr->last_read_);
 
-    auto end_total = std::chrono::high_resolution_clock::now();
-    double total_ms = std::chrono::duration<double, std::milli>(end_total - start_total).count();
-
     task->result_code_ = 0;
-
-    HILOG(kInfo,
-          "PutBlob: blob_id={},{}, size={} | total={} ms, extract={} ms, validate={} ms, "
-          "check={} ms, create={} ms, alloc={} ms, write={} ms, metadata={} ms",
-          found_blob_id.major_, found_blob_id.minor_, size,
-          total_ms, extract_ms, validate_ms, check_ms, create_ms,
-          alloc_ms, write_ms, metadata_ms);
 
   } catch (const std::exception &e) {
     task->result_code_ = 1;

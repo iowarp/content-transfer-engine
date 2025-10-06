@@ -1092,6 +1092,20 @@ for entry in telemetry_entries:
     print(f"Size: {entry.size_}")
     print(f"Offset: {entry.off_}")
     print(f"Logical Time: {entry.logical_time_}")
+
+# Reorganize blobs with new scores
+tag_id = cte.TagId()
+tag_id.major_ = 0
+tag_id.minor_ = 1
+
+blob_names = ["blob_001", "blob_002", "blob_003"]
+new_scores = [0.95, 0.85, 0.75]  # Different tier assignments
+
+result = client.ReorganizeBlobs(mctx, tag_id, blob_names, new_scores)
+if result == 0:
+    print(f"Blobs reorganized successfully")
+else:
+    print(f"Reorganization failed with error code: {result}")
 ```
 
 ### Python Data Types
@@ -1113,6 +1127,127 @@ print(cte.CteOp.kPutBlob)    # Put blob operation
 print(cte.CteOp.kGetBlob)    # Get blob operation
 print(cte.CteOp.kDelBlob)    # Delete blob operation
 ```
+
+### Python Blob Reorganization
+
+The Python bindings support batch blob reorganization for dynamic data placement optimization using the `ReorganizeBlobs` method:
+
+```python
+import wrp_cte_core_ext as cte
+
+# Initialize CTE system (as shown in previous examples)
+# ...
+
+client = cte.get_cte_client()
+mctx = cte.MemContext()
+
+# Get or create tag for the blobs
+tag_id = cte.TagId()
+tag_id.major_ = 0
+tag_id.minor_ = 1
+
+# Example 1: Reorganize multiple blobs to different tiers
+blob_names = ["hot_data", "warm_data", "cold_archive"]
+new_scores = [0.95, 0.6, 0.2]  # Hot, warm, and cold tiers
+
+result = client.ReorganizeBlobs(mctx, tag_id, blob_names, new_scores)
+if result == 0:
+    print("Blobs reorganized successfully")
+else:
+    print(f"Reorganization failed with error code: {result}")
+
+# Example 2: Promote frequently accessed blobs based on telemetry
+telemetry = client.PollTelemetryLog(mctx, 0)
+access_counts = {}
+
+# Count accesses per blob name (requires tracking blob names from telemetry)
+# Note: You may need to maintain a blob_id to blob_name mapping
+for entry in telemetry:
+    if entry.op_ == cte.CteOp.kGetBlob:
+        # Track access patterns
+        blob_key = (entry.blob_id_.major_, entry.blob_id_.minor_)
+        access_counts[blob_key] = access_counts.get(blob_key, 0) + 1
+
+# Batch reorganize based on access frequency
+# Assuming you have a mapping of blob IDs to names
+blob_id_to_name = {
+    (0, 1): "dataset_001",
+    (0, 2): "dataset_002",
+    (0, 3): "dataset_003"
+}
+
+blobs_to_reorganize = []
+new_scores_list = []
+
+for blob_key, count in access_counts.items():
+    if blob_key in blob_id_to_name and count > 10:
+        blob_name = blob_id_to_name[blob_key]
+        blobs_to_reorganize.append(blob_name)
+
+        # Calculate score based on access frequency
+        score = min(0.5 + (count / 100.0), 1.0)
+        new_scores_list.append(score)
+
+# Perform batch reorganization
+if blobs_to_reorganize:
+    result = client.ReorganizeBlobs(mctx, tag_id, blobs_to_reorganize, new_scores_list)
+    if result == 0:
+        print(f"Reorganized {len(blobs_to_reorganize)} blobs successfully")
+
+# Example 3: Tier-based reorganization strategy
+# Organize blobs into three tiers based on size and access patterns
+
+# Small, frequently accessed -> Hot tier (0.9)
+small_hot_blobs = ["config", "index", "metadata"]
+small_hot_scores = [0.9] * len(small_hot_blobs)
+
+result = client.ReorganizeBlobs(mctx, tag_id, small_hot_blobs, small_hot_scores)
+if result == 0:
+    print("Hot tier blobs reorganized")
+
+# Medium, occasionally accessed -> Warm tier (0.5-0.7)
+warm_blobs = ["dataset_recent_01", "dataset_recent_02"]
+warm_scores = [0.6, 0.5]
+
+result = client.ReorganizeBlobs(mctx, tag_id, warm_blobs, warm_scores)
+if result == 0:
+    print("Warm tier blobs reorganized")
+
+# Large, rarely accessed -> Cold tier (0.1-0.3)
+cold_blobs = ["archive_2023", "backup_full"]
+cold_scores = [0.2, 0.1]
+
+result = client.ReorganizeBlobs(mctx, tag_id, cold_blobs, cold_scores)
+if result == 0:
+    print("Cold tier blobs reorganized")
+```
+
+**Score Guidelines for Python:**
+- `0.9 - 1.0`: Highest tier (RAM cache, frequently accessed)
+- `0.7 - 0.8`: High tier (NVMe, recently accessed)
+- `0.4 - 0.6`: Medium tier (SSD, occasionally accessed)
+- `0.1 - 0.3`: Low tier (HDD, archival data)
+- `0.0`: Lowest tier (cold storage, rarely accessed)
+
+**Method Signature:**
+```python
+result = client.ReorganizeBlobs(
+    mctx,           # Memory context
+    tag_id,         # Tag ID containing the blobs
+    blob_names,     # List of blob names (list of strings)
+    new_scores      # List of new scores (list of floats, same length as blob_names)
+)
+```
+
+**Return Codes:**
+- `0`: Success - all blobs reorganized successfully
+- `Non-zero`: Error - reorganization failed (tag not found, blob not found, insufficient space, etc.)
+
+**Important Notes:**
+- `blob_names` and `new_scores` lists must have the same length
+- All blobs must belong to the specified `tag_id`
+- Scores must be in the range `[0.0, 1.0]`
+- Batch reorganization is more efficient than reorganizing blobs individually
 
 ## Advanced Topics
 

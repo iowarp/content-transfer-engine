@@ -61,13 +61,16 @@ NB_MODULE(_wrp_cte_core_ext, m) {
       .def_rw("read_time_", &wrp_cte::core::CteTelemetry::read_time_)
       .def_rw("logical_time_", &wrp_cte::core::CteTelemetry::logical_time_);
 
-  // Bind Client class with PollTelemetryLog method
+  // Bind Client class with PollTelemetryLog and ReorganizeBlobs methods
   nb::class_<wrp_cte::core::Client>(m, "Client")
       .def(nb::init<>())
       .def(nb::init<const chi::PoolId &>())
       .def("PollTelemetryLog", &wrp_cte::core::Client::PollTelemetryLog,
            "mctx"_a, "minimum_logical_time"_a,
-           "Poll telemetry log with minimum logical time filter");
+           "Poll telemetry log with minimum logical time filter")
+      .def("ReorganizeBlobs", &wrp_cte::core::Client::ReorganizeBlobs,
+           "mctx"_a, "tag_id"_a, "blob_names"_a, "new_scores"_a,
+           "Reorganize multiple blobs with new scores for data placement optimization");
 
   // Module-level convenience functions
   m.def(
