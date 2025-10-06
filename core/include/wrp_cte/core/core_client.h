@@ -2,8 +2,8 @@
 #define WRPCTE_CORE_CLIENT_H_
 
 #include <chimaera/chimaera.h>
-#include <wrp_cte/core/core_tasks.h>
 #include <hermes_shm/util/singleton.h>
+#include <wrp_cte/core/core_tasks.h>
 
 namespace wrp_cte::core {
 
@@ -45,10 +45,10 @@ public:
         chi::CreateTaskNode(),
         chi::kAdminPoolId, // Always use admin pool for CreateTask
         pool_query,
-        "wrp_cte_core",                   // ChiMod name
-        "wrp_cte_core",                   // Pool name as string
-        pool_id_,                         // Target pool ID
-        params);                          // CreateParams with configuration
+        "wrp_cte_core", // ChiMod name
+        "wrp_cte_core", // Pool name as string
+        pool_id_,       // Target pool ID
+        params);        // CreateParams with configuration
 
     // Submit to runtime
     ipc_manager->Enqueue(task);
@@ -216,6 +216,9 @@ public:
                              blob_data, score, flags);
     task->Wait();
     bool result = (task->result_code_ == 0);
+    if (!result) {
+      HELOG(kError, "PutBlob failed: {}", task->result_code_);
+    }
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -453,7 +456,7 @@ public:
    * Synchronous get blob score - waits for completion
    */
   float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
-                     const std::string &blob_name, 
+                     const std::string &blob_name,
                      const BlobId &blob_id = BlobId::GetNull()) {
     auto task = AsyncGetBlobScore(mctx, tag_id, blob_name, blob_id);
     task->Wait();
@@ -467,7 +470,7 @@ public:
    */
   hipc::FullPtr<GetBlobScoreTask>
   AsyncGetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
-                    const std::string &blob_name, 
+                    const std::string &blob_name,
                     const BlobId &blob_id = BlobId::GetNull()) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
@@ -484,7 +487,7 @@ public:
    * Synchronous get blob size - waits for completion
    */
   chi::u64 GetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
-                       const std::string &blob_name, 
+                       const std::string &blob_name,
                        const BlobId &blob_id = BlobId::GetNull()) {
     auto task = AsyncGetBlobSize(mctx, tag_id, blob_name, blob_id);
     task->Wait();
@@ -498,7 +501,7 @@ public:
    */
   hipc::FullPtr<GetBlobSizeTask>
   AsyncGetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
-                   const std::string &blob_name, 
+                   const std::string &blob_name,
                    const BlobId &blob_id = BlobId::GetNull()) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
@@ -514,12 +517,13 @@ public:
   /**
    * Synchronous get contained blobs - waits for completion
    */
-  std::vector<std::string> GetContainedBlobs(const hipc::MemContext &mctx, const TagId &tag_id) {
+  std::vector<std::string> GetContainedBlobs(const hipc::MemContext &mctx,
+                                             const TagId &tag_id) {
     auto task = AsyncGetContainedBlobs(mctx, tag_id);
     task->Wait();
     std::vector<std::string> result;
     if (task->result_code_ == 0) {
-      for (const auto& blob_name : task->blob_names_) {
+      for (const auto &blob_name : task->blob_names_) {
         result.emplace_back(blob_name.str());
       }
     }
@@ -573,7 +577,8 @@ public:
   explicit Tag(const std::string &tag_name);
 
   /**
-   * Constructor - Does not call WRP_CTE client function, just sets the TagId variable
+   * Constructor - Does not call WRP_CTE client function, just sets the TagId
+   * variable
    * @param tag_id Tag ID to use directly
    */
   explicit Tag(const TagId &tag_id);
@@ -585,7 +590,8 @@ public:
    * @param data_size Size of data
    * @param off Offset within blob (default 0)
    */
-  void PutBlob(const std::string &blob_name, const char *data, size_t data_size, size_t off = 0);
+  void PutBlob(const std::string &blob_name, const char *data, size_t data_size,
+               size_t off = 0);
 
   /**
    * PutBlob (SHM) - Direct shared memory version
@@ -595,42 +601,52 @@ public:
    * @param off Offset within blob (default 0)
    * @param score Blob score for placement decisions (default 1.0)
    */
-  void PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_t data_size, 
-               size_t off = 0, float score = 1.0f);
+  void PutBlob(const std::string &blob_name, const hipc::Pointer &data,
+               size_t data_size, size_t off = 0, float score = 1.0f);
 
   /**
    * Asynchronous PutBlob (SHM) - Caller must manage shared memory lifecycle
    * @param blob_name Name of the blob
-   * @param data Shared memory pointer to data (must remain valid until task completes)
+   * @param data Shared memory pointer to data (must remain valid until task
+   * completes)
    * @param data_size Size of data
    * @param off Offset within blob (default 0)
    * @param score Blob score for placement decisions (default 1.0)
    * @return Task pointer for async operation
-   * @note For raw data, caller must allocate shared memory using CHI_IPC->AllocateBuffer<void>()
-   *       and keep the FullPtr alive until the async task completes
+   * @note For raw data, caller must allocate shared memory using
+   * CHI_IPC->AllocateBuffer<void>() and keep the FullPtr alive until the async
+   * task completes
    */
-  hipc::FullPtr<PutBlobTask> AsyncPutBlob(const std::string &blob_name, const hipc::Pointer &data, 
-                                          size_t data_size, size_t off = 0, float score = 1.0f);
+  hipc::FullPtr<PutBlobTask> AsyncPutBlob(const std::string &blob_name,
+                                          const hipc::Pointer &data,
+                                          size_t data_size, size_t off = 0,
+                                          float score = 1.0f);
 
   /**
-   * GetBlob - Allocates shared memory, retrieves blob data, copies to output buffer
+   * GetBlob - Allocates shared memory, retrieves blob data, copies to output
+   * buffer
    * @param blob_name Name of the blob to retrieve
-   * @param data Output buffer to copy blob data into (must be pre-allocated by caller)
+   * @param data Output buffer to copy blob data into (must be pre-allocated by
+   * caller)
    * @param data_size Size of data to retrieve (must be > 0)
    * @param off Offset within blob (default 0)
    * @note Automatically handles shared memory allocation/deallocation
    */
-  void GetBlob(const std::string &blob_name, char *data, size_t data_size, size_t off = 0);
+  void GetBlob(const std::string &blob_name, char *data, size_t data_size,
+               size_t off = 0);
 
   /**
    * GetBlob (SHM) - Retrieves blob data into pre-allocated shared memory buffer
    * @param blob_name Name of the blob to retrieve
-   * @param data Pre-allocated shared memory pointer for output data (must not be null)
+   * @param data Pre-allocated shared memory pointer for output data (must not
+   * be null)
    * @param data_size Size of data to retrieve (must be > 0)
    * @param off Offset within blob (default 0)
-   * @note Caller must pre-allocate shared memory using CHI_IPC->AllocateBuffer<void>(data_size)
+   * @note Caller must pre-allocate shared memory using
+   * CHI_IPC->AllocateBuffer<void>(data_size)
    */
-  void GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_size, size_t off = 0);
+  void GetBlob(const std::string &blob_name, hipc::Pointer data,
+               size_t data_size, size_t off = 0);
 
   /**
    * Get blob score
@@ -656,7 +672,7 @@ public:
    * Get the TagId for this tag
    * @return TagId of this tag
    */
-  const TagId& GetTagId() const { return tag_id_; }
+  const TagId &GetTagId() const { return tag_id_; }
 };
 
 } // namespace wrp_cte::core

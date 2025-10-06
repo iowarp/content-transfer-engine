@@ -11,7 +11,7 @@ import time
 def test_import():
     """Test that the module can be imported successfully"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         print("✅ Module import successful")
         return True
     except ImportError as e:
@@ -21,7 +21,7 @@ def test_import():
 def test_basic_types():
     """Test that basic types can be created"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Test enum
         op = cte.CteOp.kPutBlob
@@ -57,7 +57,7 @@ def test_basic_types():
 def test_functions():
     """Test that module functions are accessible"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Test initialization functions exist
         runtime_init = cte.chimaera_runtime_init
@@ -79,7 +79,7 @@ def test_functions():
 def test_runtime_initialization():
     """Test Chimaera runtime and CTE initialization"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Initialize Chimaera runtime
         print("🔧 Initializing Chimaera runtime...")
@@ -113,7 +113,7 @@ def test_runtime_initialization():
 def test_poll_telemetry_log():
     """Test PollTelemetryLog functionality"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Test that we can access the client (even if not fully initialized)
         try:

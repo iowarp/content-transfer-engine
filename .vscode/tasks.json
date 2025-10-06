@@ -9,7 +9,7 @@
                 "--build",
                 "${workspaceFolder}/build",
                 "--target",
-                "_wrp_cte_core_ext"
+                "wrp_cte_core_ext"
             ],
             "group": "build",
             "presentation": {

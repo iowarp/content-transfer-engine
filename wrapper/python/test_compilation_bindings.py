@@ -9,7 +9,7 @@ import sys
 def test_import():
     """Test that the module can be imported successfully"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         print("✅ Module import successful")
         return True
     except ImportError as e:
@@ -19,7 +19,7 @@ def test_import():
 def test_basic_types():
     """Test that basic types can be created"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Test enum
         op = cte.CteOp.kPutBlob
@@ -55,7 +55,7 @@ def test_basic_types():
 def test_functions_accessibility():
     """Test that module functions are accessible without calling them"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Test initialization functions exist
         runtime_init = cte.chimaera_runtime_init
@@ -77,7 +77,7 @@ def test_functions_accessibility():
 def test_poll_telemetry_log_binding():
     """Test PollTelemetryLog method binding without runtime initialization"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         
         # Test Client type has PollTelemetryLog method
         client_type = cte.Client
@@ -102,7 +102,7 @@ def test_poll_telemetry_log_binding():
 def test_runtime_functions_signature():
     """Test that runtime initialization functions have correct signatures"""
     try:
-        import _wrp_cte_core_ext as cte
+        import wrp_cte_core_ext as cte
         import inspect
         
         # Check chimaera_runtime_init signature

@@ -544,8 +544,13 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     (void)flags;
 
     // Validate input parameters
-    if (size == 0 || blob_data.IsNull()) {
-      task->result_code_ = 1;
+    if (size == 0) {
+      task->result_code_ = 2; // Error: Invalid size (zero)
+      return;
+    }
+
+    if (blob_data.IsNull()) {
+      task->result_code_ = 3; // Error: Null data pointer
       return;
     }
 
@@ -554,7 +559,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     bool blob_name_provided = !blob_name.empty();
 
     if (!blob_id_provided && !blob_name_provided) {
-      task->result_code_ = 1;
+      task->result_code_ = 4; // Error: No blob identifier provided
       return;
     }
 
@@ -569,7 +574,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       blob_info_ptr =
           CreateNewBlob(blob_name, tag_id, blob_score, found_blob_id);
       if (blob_info_ptr == nullptr) {
-        task->result_code_ = 1;
+        task->result_code_ = 5; // Error: Failed to create blob
         return;
       }
       task->blob_id_ = found_blob_id;
@@ -585,7 +590,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
 
     if (allocation_result != 0) {
-      task->result_code_ = allocation_result;
+      task->result_code_ = 10 + allocation_result; // Error: Allocation failure (10-19 range)
       return;
     }
 
@@ -595,7 +600,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
 
     if (write_result != 0) {
-      task->result_code_ = write_result;
+      task->result_code_ = 20 + write_result; // Error: Write failure (20-29 range)
       return;
     }
 
@@ -644,7 +649,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     task->result_code_ = 0;
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->result_code_ = 1; // Error: General exception
   }
 }
 

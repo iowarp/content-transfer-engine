@@ -10,7 +10,7 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-NB_MODULE(_wrp_cte_core_ext, m) {
+NB_MODULE(wrp_cte_core_ext, m) {
   m.doc() = "Python bindings for WRP CTE Core";
 
   // Bind CteOp enum
