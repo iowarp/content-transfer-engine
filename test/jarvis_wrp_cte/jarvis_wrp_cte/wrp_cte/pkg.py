@@ -99,16 +99,16 @@ class WrpCte(Service):
         Args:
             **kwargs: Configuration arguments from _configure_menu.
         """
-        print("Configuring Content Transfer Engine (CTE)...")
+        self.log("Configuring Content Transfer Engine (CTE)...")
         
         # Handle devices configuration
         devices = self.config.get('devices', [])
         
         if not devices:
-            print("No devices specified, attempting to use resource graph...")
+            self.log("No devices specified, attempting to use resource graph...")
             devices = self._get_devices_from_resource_graph()
             if not devices:
-                print("Warning: No devices available from resource graph, using defaults")
+                self.log("Warning: No devices available from resource graph, using defaults")
                 devices = self._get_default_devices()
         else:
             # Validate and convert device tuples
@@ -124,26 +124,27 @@ class WrpCte(Service):
         try:
             with open(self.config_file_path, 'w') as f:
                 yaml.dump(cte_config, f, default_flow_style=False, indent=2)
-            print(f"CTE configuration written to: {self.config_file_path}")
+            self.log(f"CTE configuration written to: {self.config_file_path}")
         except Exception as e:
-            print(f"Error writing CTE configuration: {e}")
+            self.log(f"Error writing CTE configuration: {e}")
             raise
         
         # Set environment variable
         self.setenv('WRP_CTE_CONF', self.config_file_path)
-        print(f"Environment variable WRP_CTE_CONF set to: {self.config_file_path}")
+        self.log(f"Environment variable WRP_CTE_CONF set to: {self.config_file_path}")
 
         # Create parent directories for each device
-        print("Creating parent directories for storage devices...")
+        self.log("Creating parent directories for storage devices...")
         for path, capacity, score in devices:
             parent_dir = os.path.dirname(path)
+            self.log(f"Creating directory: {parent_dir}")
             try:
                 Mkdir(parent_dir, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
-                print(f"Created directory: {parent_dir}")
+                self.log(f"Created directory: {parent_dir}")
             except Exception as e:
-                print(f"Error creating directory {parent_dir}: {e}")
+                self.log(f"Error creating directory {parent_dir}: {e}")
 
-        print("CTE configuration completed successfully")
+        self.log("CTE configuration completed successfully")
 
     def _get_devices_from_resource_graph(self):
         """
@@ -159,13 +160,13 @@ class WrpCte(Service):
             rg_manager = ResourceGraphManager()
 
             if not rg_manager.resource_graph.get_all_nodes():
-                print("Warning: Resource graph is empty. Run 'jarvis rg build' first.")
+                self.log("Warning: Resource graph is empty. Run 'jarvis rg build' first.")
                 return []
 
             # Get common storage - returns dict mapping mount points to device lists
             common_storage = rg_manager.resource_graph.get_common_storage()
             if not common_storage:
-                print("Warning: No common storage found in resource graph")
+                self.log("Warning: No common storage found in resource graph")
                 return []
 
             devices = []
@@ -187,15 +188,15 @@ class WrpCte(Service):
                     score = self._calculate_device_score(device_type, device)
 
                     devices.append((path, capacity, score))
-                    print(f"Found storage device: {path} (available: {available_space}, using: {capacity}, score: {score}, type: {device_type})")
+                    self.log(f"Found storage device: {path} (available: {available_space}, using: {capacity}, score: {score}, type: {device_type})")
 
             return devices
 
         except ImportError as e:
-            print(f"Warning: ResourceGraphManager not available: {e}")
+            self.log(f"Warning: ResourceGraphManager not available: {e}")
             return []
         except Exception as e:
-            print(f"Warning: Error accessing resource graph: {e}")
+            self.log(f"Warning: Error accessing resource graph: {e}")
             return []
 
     def _adjust_capacity(self, capacity_str, factor):
@@ -330,11 +331,11 @@ class WrpCte(Service):
                     raise ValueError(f"Device {i} must be a tuple/list with at least 3 elements")
                     
             except Exception as e:
-                print(f"Warning: Invalid device specification {i}: {device} - {e}")
+                self.log(f"Warning: Invalid device specification {i}: {device} - {e}")
                 continue
         
         if not validated_devices:
-            print("Warning: No valid devices found, using defaults")
+            self.log("Warning: No valid devices found, using defaults")
             return self._get_default_devices()
         
         return validated_devices
@@ -449,9 +450,9 @@ class WrpCte(Service):
         Returns:
             bool: Always True since this is configuration-only.
         """
-        print("WrpCte is a configuration service - no persistent process to start")
+        self.log("WrpCte is a configuration service - no persistent process to start")
         if self.config_file_path and os.path.exists(self.config_file_path):
-            print(f"CTE configuration is available at: {self.config_file_path}")
+            self.log(f"CTE configuration is available at: {self.config_file_path}")
         return True
 
     def stop(self):
@@ -463,7 +464,7 @@ class WrpCte(Service):
         Returns:
             bool: Always True since this is configuration-only.
         """
-        print("WrpCte is a configuration service - no persistent process to stop")
+        self.log("WrpCte is a configuration service - no persistent process to stop")
         return True
 
     def kill(self):
@@ -475,7 +476,7 @@ class WrpCte(Service):
         Returns:
             bool: Always True since this is configuration-only.
         """
-        print("WrpCte is a configuration service - no persistent process to kill")
+        self.log("WrpCte is a configuration service - no persistent process to kill")
         return True
 
     def status(self):
@@ -504,15 +505,15 @@ class WrpCte(Service):
         """
         Clean up CTE configuration files and storage devices using Rm with PsshExecInfo.
         """
-        print("Starting CTE cleanup process...")
+        self.log("Starting CTE cleanup process...")
         
         # Clean up configuration file
         if self.config_file_path and os.path.exists(self.config_file_path):
             try:
                 os.remove(self.config_file_path)
-                print(f"Removed CTE configuration file: {self.config_file_path}")
+                self.log(f"Removed CTE configuration file: {self.config_file_path}")
             except Exception as e:
-                print(f"Error removing configuration file: {e}")
+                self.log(f"Error removing configuration file: {e}")
         
         # Clean up storage devices using Rm with PsshExecInfo
         try:
@@ -525,25 +526,26 @@ class WrpCte(Service):
 
             # Clean up each device and parent directory using Rm with PsshExecInfo
             if devices:
-                print(f"Cleaning up {len(devices)} storage devices...")
+                self.log(f"Cleaning up {len(devices)} storage devices...")
 
                 for path, capacity, score in devices:
                     try:
                         # Execute removal using Rm with PsshExecInfo across all nodes
                         Rm(path, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
-                        print(f"Successfully cleaned storage device: {path}")
+                        self.log(f"Successfully cleaned storage device: {path}")
 
                         # Remove parent directory
                         parent_dir = os.path.dirname(path)
+                        self.log(f"Removing directory: {parent_dir}")
                         Rm(parent_dir, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
-                        print(f"Successfully removed parent directory: {parent_dir}")
+                        self.log(f"Successfully removed parent directory: {parent_dir}")
 
                     except Exception as e:
-                        print(f"Error cleaning storage device {path}: {e}")
+                        self.log(f"Error cleaning storage device {path}: {e}")
             else:
-                print("No storage devices to clean")
+                self.log("No storage devices to clean")
 
         except Exception as e:
-            print(f"Error during storage device cleanup: {e}")
+            self.log(f"Error during storage device cleanup: {e}")
         
-        print("CTE configuration cleanup completed")
+        self.log("CTE configuration cleanup completed")
