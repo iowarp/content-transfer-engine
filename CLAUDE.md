@@ -216,3 +216,11 @@ find_package(wrp_cte_core REQUIRED)          # CTE ChiMod package
 - Never call chi_refresh_repo directly. Use bash env.sh instead
 - Always use debug cmake preset: `cmake --preset=debug`
 - Build: `cmake --build build --config Debug`
+
+## Device Configuration
+
+### Directory Management
+When configuring devices:
+- Use `mkdir` to create each parent directory specified in the devices configuration during the configure phase
+- Remove each directory during the clean phase to ensure proper cleanup
+- This ensures device paths exist before use and are properly cleaned up after

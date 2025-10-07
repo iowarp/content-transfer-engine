@@ -1,6 +1,6 @@
 from jarvis_cd.core.pkg import Service
 from jarvis_cd.util import SizeType
-from jarvis_cd.shell.process import Rm
+from jarvis_cd.shell.process import Rm, Mkdir
 from jarvis_cd.shell import PsshExecInfo
 import yaml
 import os
@@ -132,7 +132,17 @@ class WrpCte(Service):
         # Set environment variable
         self.setenv('WRP_CTE_CONF', self.config_file_path)
         print(f"Environment variable WRP_CTE_CONF set to: {self.config_file_path}")
-        
+
+        # Create parent directories for each device
+        print("Creating parent directories for storage devices...")
+        for path, capacity, score in devices:
+            parent_dir = os.path.dirname(path)
+            try:
+                Mkdir(parent_dir, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+                print(f"Created directory: {parent_dir}")
+            except Exception as e:
+                print(f"Error creating directory {parent_dir}: {e}")
+
         print("CTE configuration completed successfully")
 
     def _get_devices_from_resource_graph(self):
@@ -508,26 +518,31 @@ class WrpCte(Service):
         try:
             # Get all configured storage devices
             devices = self.config.get('devices', [])
-            
+
             # If no devices were manually configured, get from resource graph
             if not devices:
                 devices.extend(self._get_devices_from_resource_graph())
-            
-            # Clean up each device using Rm with PsshExecInfo
+
+            # Clean up each device and parent directory using Rm with PsshExecInfo
             if devices:
                 print(f"Cleaning up {len(devices)} storage devices...")
-                
+
                 for path, capacity, score in devices:
                     try:
                         # Execute removal using Rm with PsshExecInfo across all nodes
                         Rm(path, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
                         print(f"Successfully cleaned storage device: {path}")
-                            
+
+                        # Remove parent directory
+                        parent_dir = os.path.dirname(path)
+                        Rm(parent_dir, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+                        print(f"Successfully removed parent directory: {parent_dir}")
+
                     except Exception as e:
                         print(f"Error cleaning storage device {path}: {e}")
             else:
                 print("No storage devices to clean")
-                
+
         except Exception as e:
             print(f"Error during storage device cleanup: {e}")
         
