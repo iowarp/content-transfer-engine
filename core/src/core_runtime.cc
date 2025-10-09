@@ -1,3 +1,4 @@
+#include "chimaera/worker.h"
 #include "hermes_shm/util/logging.h"
 #include <algorithm>
 #include <cmath>
@@ -10,7 +11,6 @@
 #include <wrp_cte/core/core_config.h>
 #include <wrp_cte/core/core_dpe.h>
 #include <wrp_cte/core/core_runtime.h>
-#include "chimaera/worker.h"
 
 namespace wrp_cte::core {
 
@@ -20,7 +20,7 @@ using chi::Worker;
 
 // No more static member definitions - using instance-based locking
 
-chi::u64 Runtime::ParseCapacityToBytes(const std::string& capacity_str) {
+chi::u64 Runtime::ParseCapacityToBytes(const std::string &capacity_str) {
   if (capacity_str.empty()) {
     return 0;
   }
@@ -30,7 +30,7 @@ chi::u64 Runtime::ParseCapacityToBytes(const std::string& capacity_str) {
   size_t pos = 0;
   try {
     value = std::stod(capacity_str, &pos);
-  } catch (const std::exception&) {
+  } catch (const std::exception &) {
     HILOG(kWarning, "Invalid capacity format: {}", capacity_str);
     return 0;
   }
@@ -38,7 +38,8 @@ chi::u64 Runtime::ParseCapacityToBytes(const std::string& capacity_str) {
   // Parse suffix (case-insensitive)
   std::string suffix = capacity_str.substr(pos);
   // Remove whitespace
-  suffix.erase(std::remove_if(suffix.begin(), suffix.end(), ::isspace), suffix.end());
+  suffix.erase(std::remove_if(suffix.begin(), suffix.end(), ::isspace),
+               suffix.end());
 
   // Convert to uppercase for case-insensitive comparison
   std::transform(suffix.begin(), suffix.end(), suffix.begin(), ::toupper);
@@ -68,8 +69,10 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
   // Initialize unordered_map_ll instances with 64 buckets to match lock count
   // This ensures each bucket can have its own lock for maximum concurrency
-  registered_targets_ = chi::unordered_map_ll<chi::PoolId, TargetInfo>(kMaxLocks);
-  target_name_to_id_ = chi::unordered_map_ll<std::string, chi::PoolId>(kMaxLocks);
+  registered_targets_ =
+      chi::unordered_map_ll<chi::PoolId, TargetInfo>(kMaxLocks);
+  target_name_to_id_ =
+      chi::unordered_map_ll<std::string, chi::PoolId>(kMaxLocks);
   tag_name_to_id_ = chi::unordered_map_ll<std::string, TagId>(kMaxLocks);
   tag_id_to_info_ = chi::unordered_map_ll<TagId, TagInfo>(kMaxLocks);
   tag_blob_name_to_id_ = chi::unordered_map_ll<std::string, BlobId>(kMaxLocks);
@@ -130,7 +133,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
 
       // Append hermes_data.bin to the device path
       std::string target_path = device.path_;
-      
+
       // Capacity is already in bytes
       chi::u64 capacity_bytes = device.capacity_limit_;
 
@@ -145,8 +148,8 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
                                                bdev_type, capacity_bytes);
 
       if (result == 0) {
-        HILOG(kInfo, "  - Registered target: {} ({}, {} bytes)",
-              target_path, device.bdev_type_, capacity_bytes);
+        HILOG(kInfo, "  - Registered target: {} ({}, {} bytes)", target_path,
+              device.bdev_type_, capacity_bytes);
       } else {
         HILOG(kWarning, "  - Failed to register target {} (error code: {})",
               target_path, result);
@@ -156,9 +159,9 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
     HILOG(kInfo, "Warning: No storage devices configured");
   }
 
-  // Queue management has been removed - queues are now managed by Chimaera runtime
-  // Local queues (kTargetManagementQueue, kTagManagementQueue, kBlobOperationsQueue, kStatsQueue)
-  // are no longer created explicitly
+  // Queue management has been removed - queues are now managed by Chimaera
+  // runtime Local queues (kTargetManagementQueue, kTagManagementQueue,
+  // kBlobOperationsQueue, kStatsQueue) are no longer created explicitly
 
   // Initialize atomic counters
   next_tag_id_minor_.store(1);  // Start tag ID minors from 1
@@ -318,7 +321,8 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     {
       chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
       registered_targets_.insert_or_assign(target_id, target_info);
-      target_name_to_id_.insert_or_assign(target_name, target_id); // Maintain reverse lookup
+      target_name_to_id_.insert_or_assign(target_name,
+                                          target_id); // Maintain reverse lookup
     }
 
     task->result_code_ = 0; // Success
@@ -417,9 +421,10 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
 
     // Populate target name list while lock is held
     task->target_names_.reserve(registered_targets_.size());
-    registered_targets_.for_each([&task](const chi::PoolId &target_id, const TargetInfo &target_info) {
-      task->target_names_.emplace_back(target_info.target_name_.c_str());
-    });
+    registered_targets_.for_each(
+        [&task](const chi::PoolId &target_id, const TargetInfo &target_info) {
+          task->target_names_.emplace_back(target_info.target_name_.c_str());
+        });
 
     task->result_code_ = 0; // Success
 
@@ -451,10 +456,12 @@ void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
         std::hash<std::string>{}("stat_targets") % target_locks_.size();
     chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
 
-    // Update stats for all targets - read lock is sufficient since we're only updating values, not modifying map structure
-    registered_targets_.for_each([this](const chi::PoolId &target_id, TargetInfo &target_info) {
-      UpdateTargetStats(target_id, target_info);
-    });
+    // Update stats for all targets - read lock is sufficient since we're only
+    // updating values, not modifying map structure
+    registered_targets_.for_each(
+        [this](const chi::PoolId &target_id, TargetInfo &target_info) {
+          UpdateTargetStats(target_id, target_info);
+        });
 
     task->result_code_ = 0; // Success
 
@@ -590,7 +597,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
 
     if (allocation_result != 0) {
-      task->result_code_ = 10 + allocation_result; // Error: Allocation failure (10-19 range)
+      task->result_code_ =
+          10 + allocation_result; // Error: Allocation failure (10-19 range)
       return;
     }
 
@@ -600,7 +608,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
 
     if (write_result != 0) {
-      task->result_code_ = 20 + write_result; // Error: Write failure (20-29 range)
+      task->result_code_ =
+          20 + write_result; // Error: Write failure (20-29 range)
       return;
     }
 
@@ -609,12 +618,14 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     chi::i64 size_change = static_cast<chi::i64>(new_blob_size) -
                            static_cast<chi::i64>(old_blob_size);
 
-    // Step 6: Update metadata (read lock only for map access - not modifying map structure)
+    // Step 6: Update metadata (read lock only for map access - not modifying
+    // map structure)
     auto now = std::chrono::steady_clock::now();
     size_t tag_lock_index = GetTagLockIndex(tag_id);
     size_t tag_total_size = 0;
 
-    // Update blob timestamp (blob_info_ptr already obtained, no additional lock needed)
+    // Update blob timestamp (blob_info_ptr already obtained, no additional lock
+    // needed)
     blob_info_ptr->last_modified_ = now;
 
     // Acquire read lock for tag map access and value updates
@@ -724,10 +735,11 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
       return;
     }
 
-    // Step 3: Update timestamp (no lock needed - just updating values, not modifying map structure)
+    // Step 3: Update timestamp (no lock needed - just updating values, not
+    // modifying map structure)
     auto now = std::chrono::steady_clock::now();
     size_t tag_lock_index = GetTagLockIndex(tag_id);
-    (void)tag_lock_index;  // Suppress unused variable warning
+    (void)tag_lock_index; // Suppress unused variable warning
     size_t num_blocks = 0;
     blob_info_ptr->last_read_ = now;
     num_blocks = blob_info_ptr->blocks_.size();
@@ -776,7 +788,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
     // Validate tag exists
     if (!tag_id_to_info_.contains(tag_id)) {
-      task->result_code_ = 1; // Tag not found
+      task->result_code_ = 2; // Tag not found
       return;
     }
 
@@ -876,7 +888,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
                   kError,
                   "Failed to allocate buffer for blob {} during reorganization",
                   i);
-              task->result_code_ = 1;
+              task->result_code_ = 3;
               return;
             }
             blob_data_ptrs[i] = blob_data_buffers[i].shm_;
@@ -1098,7 +1110,8 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     // properly clean up blocks
     auto *cte_client = WRP_CTE_CLIENT;
 
-    // Collect all blob IDs first (since we'll be modifying the map during deletion)
+    // Collect all blob IDs first (since we'll be modifying the map during
+    // deletion)
     std::vector<BlobId> blob_ids_to_delete;
     for (const auto &blob_pair : tag_info_ptr->blob_ids_) {
       blob_ids_to_delete.push_back(blob_pair.first);
@@ -1109,10 +1122,12 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     std::vector<hipc::FullPtr<DelBlobTask>> async_tasks;
     size_t processed_blobs = 0;
 
-    for (size_t i = 0; i < blob_ids_to_delete.size(); i += kMaxConcurrentDelBlobTasks) {
+    for (size_t i = 0; i < blob_ids_to_delete.size();
+         i += kMaxConcurrentDelBlobTasks) {
       // Create a batch of async tasks (up to kMaxConcurrentDelBlobTasks)
       async_tasks.clear();
-      size_t batch_end = std::min(i + kMaxConcurrentDelBlobTasks, blob_ids_to_delete.size());
+      size_t batch_end =
+          std::min(i + kMaxConcurrentDelBlobTasks, blob_ids_to_delete.size());
 
       for (size_t j = i; j < batch_end; ++j) {
         const BlobId &blob_id = blob_ids_to_delete[j];
@@ -1122,8 +1137,7 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
         if (blob_info_ptr != nullptr) {
           // Call AsyncDelBlob from client
           auto async_task = cte_client->AsyncDelBlob(
-              hipc::MemContext(), tag_id, blob_info_ptr->blob_name_,
-              blob_id);
+              hipc::MemContext(), tag_id, blob_info_ptr->blob_name_, blob_id);
           async_tasks.push_back(async_task);
         }
       }
@@ -1152,11 +1166,13 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     std::string tag_prefix = std::to_string(tag_id.major_) + "." +
                              std::to_string(tag_id.minor_) + ".";
     std::vector<std::string> keys_to_erase;
-    tag_blob_name_to_id_.for_each([&tag_prefix, &keys_to_erase](const std::string &compound_key, const BlobId &blob_id) {
-      if (compound_key.compare(0, tag_prefix.length(), tag_prefix) == 0) {
-        keys_to_erase.push_back(compound_key);
-      }
-    });
+    tag_blob_name_to_id_.for_each(
+        [&tag_prefix, &keys_to_erase](const std::string &compound_key,
+                                      const BlobId &blob_id) {
+          if (compound_key.compare(0, tag_prefix.length(), tag_prefix) == 0) {
+            keys_to_erase.push_back(compound_key);
+          }
+        });
     for (const auto &key : keys_to_erase) {
       tag_blob_name_to_id_.erase(key);
     }
@@ -1222,8 +1238,8 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
     task->result_code_ = 0;
 
     // Log telemetry for GetTagSize operation
-    LogTelemetry(CteOp::kGetTagSize, 0, tag_info_ptr->total_size_, BlobId::GetNull(),
-                 tag_id, tag_info_ptr->last_modified_, now);
+    LogTelemetry(CteOp::kGetTagSize, 0, tag_info_ptr->total_size_,
+                 BlobId::GetNull(), tag_id, tag_info_ptr->last_modified_, now);
 
     HILOG(kInfo, "GetTagSize successful: tag_id={},{}, total_size={}",
           tag_id.major_, tag_id.minor_, task->tag_size_);
@@ -1361,7 +1377,8 @@ size_t Runtime::GetTargetLockIndex(const chi::PoolId &target_id) const {
 }
 
 size_t Runtime::GetTagLockIndex(const std::string &tag_name) const {
-  // Use same hash function as chi::unordered_map_ll to ensure lock maps to same bucket
+  // Use same hash function as chi::unordered_map_ll to ensure lock maps to same
+  // bucket
   std::hash<std::string> hasher;
   return hasher(tag_name) % tag_locks_.size();
 }
@@ -1475,7 +1492,8 @@ BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
     chi::ScopedCoRwWriteLock tag_lock(*tag_locks_[tag_lock_index]);
 
     // Store blob info in global blob tracking
-    auto insert_result = blob_id_to_info_.insert_or_assign(created_blob_id, new_blob_info);
+    auto insert_result =
+        blob_id_to_info_.insert_or_assign(created_blob_id, new_blob_info);
     blob_info_ptr = insert_result.second;
 
     // Update tag mappings
@@ -1508,9 +1526,11 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
   // Get all available targets for data placement
   std::vector<TargetInfo> available_targets;
   available_targets.reserve(registered_targets_.size());
-  registered_targets_.for_each([&available_targets](const chi::PoolId &target_id, const TargetInfo &target_info) {
-    available_targets.push_back(target_info);
-  });
+  registered_targets_.for_each(
+      [&available_targets](const chi::PoolId &target_id,
+                           const TargetInfo &target_info) {
+        available_targets.push_back(target_info);
+      });
 
   if (available_targets.empty()) {
     return 1;
