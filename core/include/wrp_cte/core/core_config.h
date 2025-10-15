@@ -11,16 +11,20 @@
 
 namespace wrp_cte::core {
 
+// Named queue priorities for semantic clarity
+constexpr chi::QueueId kLowLatencyQueue = 0;
+constexpr chi::QueueId kHighLatencyQueue = 1;
+
 /**
  * Queue configuration structure for CTE Core
  */
 struct QueueConfig {
   chi::u32 lane_count_;
-  chi::QueuePriority priority_;
-  
-  QueueConfig() : lane_count_(1), priority_(chi::kLowLatency) {}
-  QueueConfig(chi::u32 lane_count, chi::QueuePriority priority)
-      : lane_count_(lane_count), priority_(priority) {}
+  chi::QueueId queue_id_;
+
+  QueueConfig() : lane_count_(1), queue_id_(kLowLatencyQueue) {}
+  QueueConfig(chi::u32 lane_count, chi::QueueId queue_id)
+      : lane_count_(lane_count), queue_id_(queue_id) {}
 };
 
 /**
@@ -136,21 +140,21 @@ class Config {
    * Default constructor
    */
   Config() : worker_count_(4),
-             target_management_queue_(2, chi::kLowLatency),
-             tag_management_queue_(2, chi::kLowLatency),
-             blob_operations_queue_(4, chi::kHighLatency),
-             stats_queue_(1, chi::kHighLatency),
+             target_management_queue_(2, kLowLatencyQueue),
+             tag_management_queue_(2, kLowLatencyQueue),
+             blob_operations_queue_(4, kHighLatencyQueue),
+             stats_queue_(1, kHighLatencyQueue),
              config_env_var_("WRP_CTE_CONF") {}
-  
+
   /**
    * Constructor with allocator (for compatibility)
    */
-  explicit Config(void *alloc) 
+  explicit Config(void *alloc)
       : worker_count_(4),
-        target_management_queue_(2, chi::kLowLatency),
-        tag_management_queue_(2, chi::kLowLatency),
-        blob_operations_queue_(4, chi::kHighLatency),
-        stats_queue_(1, chi::kHighLatency),
+        target_management_queue_(2, kLowLatencyQueue),
+        tag_management_queue_(2, kLowLatencyQueue),
+        blob_operations_queue_(4, kHighLatencyQueue),
+        stats_queue_(1, kHighLatencyQueue),
         config_env_var_("WRP_CTE_CONF") {
     (void)alloc; // Suppress unused variable warning
   }
@@ -260,18 +264,18 @@ class Config {
                        const QueueConfig &config) const;
   
   /**
-   * Convert priority to string
-   * @param priority Priority value
-   * @return Priority name as string
+   * Convert queue ID to string
+   * @param queue_id Queue identifier
+   * @return Queue ID name as string
    */
-  std::string PriorityToString(chi::QueuePriority priority) const;
-  
+  std::string QueueIdToString(chi::QueueId queue_id) const;
+
   /**
-   * Convert string to priority
-   * @param priority_str Priority name as string
-   * @return Priority value, or chi::kLowLatency if not found
+   * Convert string to queue ID
+   * @param queue_str Queue ID name as string
+   * @return Queue ID value, or kLowLatencyQueue if not found
    */
-  chi::QueuePriority StringToPriority(const std::string &priority_str) const;
+  chi::QueueId StringToQueueId(const std::string &queue_str) const;
   
   /**
    * Validate queue configuration

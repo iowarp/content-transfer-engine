@@ -352,12 +352,12 @@ bool Config::ParseQueueConfig(const YAML::Node &node, QueueConfig &queue_config)
   if (node["lane_count"]) {
     queue_config.lane_count_ = node["lane_count"].as<chi::u32>();
   }
-  
+
   if (node["priority"]) {
     std::string priority_str = node["priority"].as<std::string>();
-    queue_config.priority_ = StringToPriority(priority_str);
+    queue_config.queue_id_ = StringToQueueId(priority_str);
   }
-  
+
   return true;
 }
 
@@ -591,35 +591,34 @@ std::string Config::FormatSizeBytes(chi::u64 size_bytes) const {
   }
 }
 
-void Config::EmitQueueConfig(YAML::Emitter &emitter, 
+void Config::EmitQueueConfig(YAML::Emitter &emitter,
                              const std::string &name,
                              const QueueConfig &config) const {
   emitter << YAML::Key << name << YAML::Value << YAML::BeginMap;
   emitter << YAML::Key << "lane_count" << YAML::Value << config.lane_count_;
-  emitter << YAML::Key << "priority" << YAML::Value << PriorityToString(config.priority_);
+  emitter << YAML::Key << "priority" << YAML::Value << QueueIdToString(config.queue_id_);
   emitter << YAML::EndMap;
 }
 
-std::string Config::PriorityToString(chi::QueuePriority priority) const {
-  switch (priority) {
-    case chi::kLowLatency:
-      return "low_latency";
-    case chi::kHighLatency:
-      return "high_latency";
-    default:
-      return "low_latency";
+std::string Config::QueueIdToString(chi::QueueId queue_id) const {
+  if (queue_id == kLowLatencyQueue) {
+    return "low_latency";
+  } else if (queue_id == kHighLatencyQueue) {
+    return "high_latency";
+  } else {
+    return "low_latency";
   }
 }
 
-chi::QueuePriority Config::StringToPriority(const std::string &priority_str) const {
-  if (priority_str == "low_latency") {
-    return chi::kLowLatency;
-  } else if (priority_str == "high_latency") {
-    return chi::kHighLatency;
+chi::QueueId Config::StringToQueueId(const std::string &queue_str) const {
+  if (queue_str == "low_latency") {
+    return kLowLatencyQueue;
+  } else if (queue_str == "high_latency") {
+    return kHighLatencyQueue;
   }
-  
-  HELOG(kError, "Config warning: Unknown priority '{}', using default (low_latency)", priority_str);
-  return chi::kLowLatency;
+
+  HELOG(kError, "Config warning: Unknown priority '{}', using default (low_latency)", queue_str);
+  return kLowLatencyQueue;
 }
 
 bool Config::ValidateQueueConfig(const QueueConfig &config, 

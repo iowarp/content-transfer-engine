@@ -42,7 +42,7 @@ public:
 
     // CRITICAL: CreateTask MUST use admin pool for GetOrCreatePool processing
     auto task = ipc_manager->NewTask<CreateTask>(
-        chi::CreateTaskNode(),
+        chi::CreateTaskId(),
         chi::kAdminPoolId, // Always use admin pool for CreateTask
         pool_query,
         "wrp_cte_core", // ChiMod name
@@ -80,7 +80,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<RegisterTargetTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), target_name,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), target_name,
         bdev_type, total_size);
 
     ipc_manager->Enqueue(task);
@@ -109,7 +109,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<UnregisterTargetTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), target_name);
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), target_name);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -142,7 +142,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<ListTargetsTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local());
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local());
 
     ipc_manager->Enqueue(task);
     return task;
@@ -168,7 +168,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<StatTargetsTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local());
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local());
 
     ipc_manager->Enqueue(task);
     return task;
@@ -198,7 +198,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetOrCreateTagTask<CreateParams>>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_name,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_name,
         tag_id);
 
     ipc_manager->Enqueue(task);
@@ -235,7 +235,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<PutBlobTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id,
         blob_name, blob_id, offset, size, blob_data, score, flags);
 
     ipc_manager->Enqueue(task);
@@ -269,7 +269,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetBlobTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id,
         blob_name, blob_id, offset, size, flags, blob_data);
 
     ipc_manager->Enqueue(task);
@@ -300,7 +300,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<ReorganizeBlobsTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id,
         blob_names, new_scores);
 
     ipc_manager->Enqueue(task);
@@ -330,7 +330,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<DelBlobTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id,
         blob_name, blob_id);
 
     ipc_manager->Enqueue(task);
@@ -368,7 +368,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<DelTagTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id);
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -383,7 +383,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<DelTagTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_name);
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_name);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -409,7 +409,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetTagSizeTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id);
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -445,7 +445,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<PollTelemetryLogTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(),
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(),
         minimum_logical_time);
 
     ipc_manager->Enqueue(task);
@@ -476,7 +476,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetBlobScoreTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id,
         blob_name, blob_id);
 
     ipc_manager->Enqueue(task);
@@ -507,7 +507,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetBlobSizeTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id,
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id,
         blob_name, blob_id);
 
     ipc_manager->Enqueue(task);
@@ -540,7 +540,7 @@ public:
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetContainedBlobsTask>(
-        chi::CreateTaskNode(), pool_id_, chi::PoolQuery::Local(), tag_id);
+        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Local(), tag_id);
 
     ipc_manager->Enqueue(task);
     return task;
