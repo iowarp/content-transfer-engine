@@ -546,9 +546,6 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     float blob_score = task->score_;
     chi::u32 flags = task->flags_;
 
-    HILOG(kInfo, "PutBlob called: name={}, blob_id={},{}, size={}, score={}",
-          blob_name, blob_id.major_, blob_id.minor_, size, blob_score);
-
     // Suppress unused variable warning for flags - may be used in future
     (void)flags;
 
@@ -629,8 +626,6 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     // Update blob timestamp and score (blob_info_ptr already obtained, no additional lock
     // needed)
     blob_info_ptr->last_modified_ = now;
-    HILOG(kInfo, "PutBlob updating score for blob_id={},{}, name={}, old_score={}, new_score={}",
-          found_blob_id.major_, found_blob_id.minor_, blob_name, blob_info_ptr->score_, blob_score);
     blob_info_ptr->score_ = blob_score;
 
     // Acquire read lock for tag map access and value updates
