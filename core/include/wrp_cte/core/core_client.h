@@ -64,7 +64,7 @@ public:
                           chi::u64 total_size) {
     auto task = AsyncRegisterTarget(mctx, target_name, bdev_type, total_size);
     task->Wait();
-    chi::u32 result = task->result_code_;
+    chi::u32 result = task->return_code_.load();
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -94,7 +94,7 @@ public:
                             const std::string &target_name) {
     auto task = AsyncUnregisterTarget(mctx, target_name);
     task->Wait();
-    chi::u32 result = task->result_code_;
+    chi::u32 result = task->return_code_.load();
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -154,7 +154,7 @@ public:
   chi::u32 StatTargets(const hipc::MemContext &mctx) {
     auto task = AsyncStatTargets(mctx);
     task->Wait();
-    chi::u32 result = task->result_code_;
+    chi::u32 result = task->return_code_.load();
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -215,9 +215,9 @@ public:
     auto task = AsyncPutBlob(mctx, tag_id, blob_name, blob_id, offset, size,
                              blob_data, score, flags);
     task->Wait();
-    bool result = (task->result_code_ == 0);
+    bool result = (task->return_code_.load() == 0);
     if (!result) {
-      HELOG(kError, "PutBlob failed: {}", task->result_code_);
+      HELOG(kError, "PutBlob failed: {}", task->return_code_.load());
     }
     CHI_IPC->DelTask(task);
     return result;
@@ -252,7 +252,7 @@ public:
     auto task = AsyncGetBlob(mctx, tag_id, blob_name, blob_id, offset, size,
                              flags, blob_data);
     task->Wait();
-    bool result = (task->result_code_ == 0);
+    bool result = (task->return_code_.load() == 0);
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -284,7 +284,7 @@ public:
                            const std::vector<float> &new_scores) {
     auto task = AsyncReorganizeBlobs(mctx, tag_id, blob_names, new_scores);
     task->Wait();
-    chi::u32 result = task->result_code_;
+    chi::u32 result = task->return_code_.load();
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -314,7 +314,7 @@ public:
                const std::string &blob_name, const BlobId &blob_id) {
     auto task = AsyncDelBlob(mctx, tag_id, blob_name, blob_id);
     task->Wait();
-    bool result = (task->result_code_ == 0);
+    bool result = (task->return_code_.load() == 0);
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -343,7 +343,7 @@ public:
   bool DelTag(const hipc::MemContext &mctx, const TagId &tag_id) {
     auto task = AsyncDelTag(mctx, tag_id);
     task->Wait();
-    bool result = (task->result_code_ == 0);
+    bool result = (task->return_code_.load() == 0);
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -354,7 +354,7 @@ public:
   bool DelTag(const hipc::MemContext &mctx, const std::string &tag_name) {
     auto task = AsyncDelTag(mctx, tag_name);
     task->Wait();
-    bool result = (task->result_code_ == 0);
+    bool result = (task->return_code_.load() == 0);
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -395,7 +395,7 @@ public:
   size_t GetTagSize(const hipc::MemContext &mctx, const TagId &tag_id) {
     auto task = AsyncGetTagSize(mctx, tag_id);
     task->Wait();
-    size_t result = (task->result_code_ == 0) ? task->tag_size_ : 0;
+    size_t result = (task->return_code_.load() == 0) ? task->tag_size_ : 0;
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -460,7 +460,7 @@ public:
                      const BlobId &blob_id = BlobId::GetNull()) {
     auto task = AsyncGetBlobScore(mctx, tag_id, blob_name, blob_id);
     task->Wait();
-    float result = (task->result_code_ == 0) ? task->score_ : 0.0f;
+    float result = (task->return_code_.load() == 0) ? task->score_ : 0.0f;
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -491,7 +491,7 @@ public:
                        const BlobId &blob_id = BlobId::GetNull()) {
     auto task = AsyncGetBlobSize(mctx, tag_id, blob_name, blob_id);
     task->Wait();
-    chi::u64 result = (task->result_code_ == 0) ? task->size_ : 0;
+    chi::u64 result = (task->return_code_.load() == 0) ? task->size_ : 0;
     CHI_IPC->DelTask(task);
     return result;
   }
@@ -522,7 +522,7 @@ public:
     auto task = AsyncGetContainedBlobs(mctx, tag_id);
     task->Wait();
     std::vector<std::string> result;
-    if (task->result_code_ == 0) {
+    if (task->return_code_.load() == 0) {
       for (const auto &blob_name : task->blob_names_) {
         result.emplace_back(blob_name.str());
       }

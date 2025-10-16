@@ -504,7 +504,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
     REQUIRE(WaitForTaskCompletion(register_task, 10000));
 
     // Check real result
-    chi::u32 result = register_task->result_code_;
+    chi::u32 result = register_task->return_code_.load();
     REQUIRE(result == 0);
     INFO(
         "SUCCESS: Async target registration completed with result: " << result);
@@ -594,7 +594,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     REQUIRE(!put_task.IsNull());
     REQUIRE(WaitForTaskCompletion(put_task, 10000));
-    REQUIRE(put_task->result_code_ == 0);
+    REQUIRE(put_task->return_code_.load() == 0);
 
     // Extract the allocated blob ID
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
@@ -647,7 +647,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                                      blob_size, blob_data_ptr, score, 0);
 
       if (!put_task.IsNull() && WaitForTaskCompletion(put_task, 10000) &&
-          put_task->result_code_ == 0) {
+          put_task->return_code_.load() == 0) {
         wrp_cte::core::BlobId allocated_id = put_task->blob_id_;
         INFO("Blob " << blob_name << " stored successfully with allocated ID: {"
                      << allocated_id.major_ << "," << allocated_id.minor_
@@ -697,7 +697,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                                      chunk_size, chunk_ptr, 0.8f, 0);
 
       if (!chunk_task.IsNull() && WaitForTaskCompletion(chunk_task, 10000) &&
-          chunk_task->result_code_ == 0) {
+          chunk_task->return_code_.load() == 0) {
         INFO("Chunk at offset " << offset << " stored successfully");
       } else {
         INFO("Chunk at offset " << offset << " storage failed");
@@ -743,7 +743,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     REQUIRE(WaitForTaskCompletion(put_task, 10000)); // 10 second timeout
 
     // Check result and extract allocated blob ID
-    chi::u32 result = put_task->result_code_;
+    chi::u32 result = put_task->return_code_.load();
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
     INFO("Async PutBlob completed with result: " << result);
     INFO("Allocated blob_id: {" << allocated_blob_id.major_ << ","
@@ -771,7 +771,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                                                    0, 512, data_ptr, 0.5f, 0);
       if (!error_task.IsNull()) {
         bool completed = WaitForTaskCompletion(error_task, 5000);
-        bool success = completed && (error_task->result_code_ == 0);
+        bool success = completed && (error_task->return_code_.load() == 0);
         INFO("Empty name result: "
              << (success ? "true" : "false")
              << " (false indicates proper error handling)");
@@ -787,7 +787,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                                                   0, 512, data_ptr, 0.5f, 0);
       if (!null_task.IsNull()) {
         bool completed = WaitForTaskCompletion(null_task, 5000);
-        bool success = completed && (null_task->result_code_ == 0);
+        bool success = completed && (null_task->return_code_.load() == 0);
         INFO("Null ID result: "
              << (success ? "true" : "false")
              << " (true expected for valid auto-generation)");
@@ -808,7 +808,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
           wrp_cte::core::BlobId::GetNull(), 0, 512, data_ptr, 0.5f, 0);
       if (!invalid_tag_task.IsNull()) {
         bool completed = WaitForTaskCompletion(invalid_tag_task, 5000);
-        bool success = completed && (invalid_tag_task->result_code_ == 0);
+        bool success = completed && (invalid_tag_task->return_code_.load() == 0);
         INFO("Invalid tag result: "
              << (success ? "true" : "false")
              << " (false indicates proper error handling)");
@@ -886,7 +886,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     REQUIRE(!put_task.IsNull());
     REQUIRE(WaitForTaskCompletion(put_task, 10000));
-    REQUIRE(put_task->result_code_ == 0);
+    REQUIRE(put_task->return_code_.load() == 0);
 
     // Extract the allocated blob ID
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
@@ -966,7 +966,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
           mctx_, tag_id, blob_name, blob_id, 0, blob_size, put_ptr, 0.5f, 0);
 
       if (!put_task.IsNull() && WaitForTaskCompletion(put_task, 10000) &&
-          put_task->result_code_ == 0) {
+          put_task->return_code_.load() == 0) {
         wrp_cte::core::BlobId allocated_id = put_task->blob_id_;
         allocated_blob_ids.push_back(allocated_id);
         INFO("Stored " << blob_name << " with allocated ID: {"
@@ -1060,7 +1060,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     REQUIRE(!put_task.IsNull());
     REQUIRE(WaitForTaskCompletion(put_task, 10000));
-    REQUIRE(put_task->result_code_ == 0);
+    REQUIRE(put_task->return_code_.load() == 0);
 
     // Extract the allocated blob ID
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
@@ -1137,7 +1137,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     REQUIRE(!put_task.IsNull());
     REQUIRE(WaitForTaskCompletion(put_task, 10000));
-    REQUIRE(put_task->result_code_ == 0);
+    REQUIRE(put_task->return_code_.load() == 0);
 
     // Extract the allocated blob ID
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
@@ -1169,7 +1169,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     REQUIRE(WaitForTaskCompletion(get_task, 10000)); // 10 second timeout
 
     // Check result and data
-    chi::u32 result = get_task->result_code_;
+    chi::u32 result = get_task->return_code_.load();
     bool get_success = (result == 0);
     INFO("Async GetBlob completed with success: " << (get_success ? "true"
                                                                   : "false"));
@@ -1300,7 +1300,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     REQUIRE(!put_task.IsNull());
     REQUIRE(WaitForTaskCompletion(put_task, 10000));
-    REQUIRE(put_task->result_code_ == 0);
+    REQUIRE(put_task->return_code_.load() == 0);
 
     // Extract the allocated blob ID
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
@@ -1400,7 +1400,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
           mctx_, tag_id, blob_name, blob_id, 0, blob_size, put_ptr, score, 0);
 
       if (!put_task.IsNull() && WaitForTaskCompletion(put_task, 10000) &&
-          put_task->result_code_ == 0) {
+          put_task->return_code_.load() == 0) {
         wrp_cte::core::BlobId allocated_id = put_task->blob_id_;
         allocated_blob_ids.push_back(allocated_id);
         INFO("✓ " << blob_name << " stored with allocated ID: {"
@@ -1501,7 +1501,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       auto put1_task = core_client_->AsyncPutBlob(
           mctx_, tag1_id, blob_name, blob_id, 0, blob_size, put1_ptr, 0.5f, 0);
       if (!put1_task.IsNull() && WaitForTaskCompletion(put1_task, 10000) &&
-          put1_task->result_code_ == 0) {
+          put1_task->return_code_.load() == 0) {
         tag1_allocated_id = put1_task->blob_id_;
         INFO("Tag1 blob stored with allocated ID: {"
              << tag1_allocated_id.major_ << "," << tag1_allocated_id.minor_
@@ -1521,7 +1521,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       auto put2_task = core_client_->AsyncPutBlob(
           mctx_, tag2_id, blob_name, blob_id, 0, blob_size, put2_ptr, 0.5f, 0);
       if (!put2_task.IsNull() && WaitForTaskCompletion(put2_task, 10000) &&
-          put2_task->result_code_ == 0) {
+          put2_task->return_code_.load() == 0) {
         tag2_allocated_id = put2_task->blob_id_;
         INFO("Tag2 blob stored with allocated ID: {"
              << tag2_allocated_id.major_ << "," << tag2_allocated_id.minor_
@@ -1611,7 +1611,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Waiting for async put completion...");
     REQUIRE(WaitForTaskCompletion(put_task, 10000));
 
-    chi::u32 put_result = put_task->result_code_;
+    chi::u32 put_result = put_task->return_code_.load();
     bool put_success = (put_result == 0);
     wrp_cte::core::BlobId allocated_blob_id = put_task->blob_id_;
     INFO("Async put completed with success: " << (put_success ? "true"
@@ -1696,7 +1696,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                                      chunk_size, chunk_ptr, 0.6f, 0);
 
       if (!chunk_task.IsNull() && WaitForTaskCompletion(chunk_task, 10000) &&
-          chunk_task->result_code_ == 0) {
+          chunk_task->return_code_.load() == 0) {
         if (i == 0) { // Only store the blob ID from the first chunk
           allocated_blob_id = chunk_task->blob_id_;
           INFO("✓ Chunk " << i << " stored - allocated blob_id: {"
@@ -1876,9 +1876,9 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
   // Wait for PutBlob completion
   REQUIRE(WaitForTaskCompletion(put_task, 10000));
-  REQUIRE(put_task->result_code_ == 0);
+  REQUIRE(put_task->return_code_.load() == 0);
   INFO("✓ PutBlob completed successfully with result code: "
-       << put_task->result_code_);
+       << put_task->return_code_.load());
 
   // Step 5: Extract the actual blob_id returned from PutBlob
   wrp_cte::core::BlobId actual_blob_id = put_task->blob_id_;
@@ -1918,9 +1918,9 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
   // Wait for GetBlob completion
   REQUIRE(WaitForTaskCompletion(get_task, 10000));
-  REQUIRE(get_task->result_code_ == 0);
+  REQUIRE(get_task->return_code_.load() == 0);
   INFO("✓ GetBlob completed successfully with result code: "
-       << get_task->result_code_);
+       << get_task->return_code_.load());
 
   // Step 7: Verify data integrity matches exactly (test should FAIL if data
   // doesn't match)
@@ -2035,7 +2035,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
       REQUIRE(!put_task.IsNull());
       REQUIRE(WaitForTaskCompletion(put_task, 10000));
-      REQUIRE(put_task->result_code_ == 0);
+      REQUIRE(put_task->return_code_.load() == 0);
 
       allocated_blob_ids.push_back(put_task->blob_id_);
       INFO("✓ Blob " << i << " stored: " << blob_name 
@@ -2064,7 +2064,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     REQUIRE(!reorganize_task.IsNull());
     INFO("Waiting for ReorganizeBlobs completion...");
     REQUIRE(WaitForTaskCompletion(reorganize_task, 30000)); // Longer timeout for batch operation
-    REQUIRE(reorganize_task->result_code_ == 0);
+    REQUIRE(reorganize_task->return_code_.load() == 0);
     INFO("✓ ReorganizeBlobs completed successfully");
     CHI_IPC->DelTask(reorganize_task);
 
@@ -2124,7 +2124,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
       REQUIRE(!put_task.IsNull());
       REQUIRE(WaitForTaskCompletion(put_task, 10000));
-      REQUIRE(put_task->result_code_ == 0);
+      REQUIRE(put_task->return_code_.load() == 0);
       CHI_IPC->DelTask(put_task);
       
       INFO("✓ Test blob " << i << " stored with score " << initial_scores[i]);
@@ -2137,7 +2137,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     REQUIRE(!threshold_reorganize_task.IsNull());
     REQUIRE(WaitForTaskCompletion(threshold_reorganize_task, 20000));
-    REQUIRE(threshold_reorganize_task->result_code_ == 0);
+    REQUIRE(threshold_reorganize_task->return_code_.load() == 0);
     CHI_IPC->DelTask(threshold_reorganize_task);
 
     // Verify that blobs with significant score differences were updated
@@ -2187,7 +2187,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
       REQUIRE(!put_task.IsNull());
       REQUIRE(WaitForTaskCompletion(put_task, 10000));
-      REQUIRE(put_task->result_code_ == 0);
+      REQUIRE(put_task->return_code_.load() == 0);
       CHI_IPC->DelTask(put_task);
 
       if ((i + 1) % 8 == 0) {
@@ -2205,7 +2205,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     REQUIRE(!batch_reorganize_task.IsNull());
     INFO("Waiting for batch reorganization (may take longer for 32 blobs)...");
     REQUIRE(WaitForTaskCompletion(batch_reorganize_task, 60000)); // Extended timeout
-    REQUIRE(batch_reorganize_task->result_code_ == 0);
+    REQUIRE(batch_reorganize_task->return_code_.load() == 0);
     CHI_IPC->DelTask(batch_reorganize_task);
 
     // Verify all blobs in batch were updated

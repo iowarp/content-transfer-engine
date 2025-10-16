@@ -23,7 +23,7 @@ using Timestamp = std::chrono::time_point<std::chrono::steady_clock>;
 struct CreateParams {
   // CTE-specific parameters
   hipc::string config_file_path_; // YAML config file path
-  chi::u32 worker_count_;        // Number of worker threads
+  chi::u32 worker_count_;         // Number of worker threads
 
   // Required: chimod library name for module manager
   static constexpr const char *chimod_lib_name = "wrp_cte_core";
@@ -108,13 +108,11 @@ struct RegisterTargetTask : public chi::Task {
   IN hipc::string target_name_; // Name and file path of the target to register
   IN chimaera::bdev::BdevType bdev_type_; // Block device type enum
   IN chi::u64 total_size_;                // Total size for allocation
-  OUT chi::u32 result_code_;              // Output result (0 = success)
 
   // SHM constructor
   explicit RegisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), target_name_(alloc),
-        bdev_type_(chimaera::bdev::BdevType::kFile), total_size_(0),
-        result_code_(0) {}
+        bdev_type_(chimaera::bdev::BdevType::kFile), total_size_(0) {}
 
   // Emplace constructor
   explicit RegisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -124,10 +122,9 @@ struct RegisterTargetTask : public chi::Task {
                               const std::string &target_name,
                               chimaera::bdev::BdevType bdev_type,
                               chi::u64 total_size)
-      : chi::Task(alloc, task_id, pool_id, pool_query,
-                  Method::kRegisterTarget),
+      : chi::Task(alloc, task_id, pool_id, pool_query, Method::kRegisterTarget),
         target_name_(alloc, target_name), bdev_type_(bdev_type),
-        total_size_(total_size), result_code_(0) {
+        total_size_(total_size) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kRegisterTarget;
@@ -145,23 +142,17 @@ struct RegisterTargetTask : public chi::Task {
   /**
    * Serialize OUT and INOUT parameters
    */
-  template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(result_code_);
-  }
+  template <typename Archive> void SerializeOut(Archive &ar) {}
 
   /**
    * Copy from another RegisterTargetTask
    * Used when creating replicas for remote execution
    */
   void Copy(const hipc::FullPtr<RegisterTargetTask> &other) {
-    // Copy base task fields
-    chi::Task::Copy(other.template Cast<chi::Task>());
-
     // Copy RegisterTargetTask-specific fields
     target_name_ = other->target_name_;
     bdev_type_ = other->bdev_type_;
     total_size_ = other->total_size_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -171,12 +162,11 @@ struct RegisterTargetTask : public chi::Task {
  */
 struct UnregisterTargetTask : public chi::Task {
   IN hipc::string target_name_; // Name of the target to unregister
-  OUT chi::u32 result_code_;   // Output result (0 = success)
 
   // SHM constructor
   explicit UnregisterTargetTask(
       const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), target_name_(alloc), result_code_(0) {}
+      : chi::Task(alloc), target_name_(alloc) {}
 
   // Emplace constructor
   explicit UnregisterTargetTask(
@@ -185,7 +175,7 @@ struct UnregisterTargetTask : public chi::Task {
       const chi::PoolQuery &pool_query, const std::string &target_name)
       : chi::Task(alloc, task_id, pool_id, pool_query,
                   Method::kUnregisterTarget),
-        target_name_(alloc, target_name), result_code_(0) {
+        target_name_(alloc, target_name) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kUnregisterTarget;
@@ -204,16 +194,14 @@ struct UnregisterTargetTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(result_code_);
+    // No output parameters (return_code_ handled by base class)
   }
 
   /**
    * Copy from another UnregisterTargetTask
    */
   void Copy(const hipc::FullPtr<UnregisterTargetTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     target_name_ = other->target_name_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -221,12 +209,12 @@ struct UnregisterTargetTask : public chi::Task {
  * ListTargets task - Return set of registered target names on this node
  */
 struct ListTargetsTask : public chi::Task {
-  OUT hipc::vector<hipc::string> target_names_; // List of registered target names
-  OUT chi::u32 result_code_;                  // Output result (0 = success)
+  OUT hipc::vector<hipc::string>
+      target_names_; // List of registered target names
 
   // SHM constructor
   explicit ListTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), target_names_(alloc), result_code_(0) {}
+      : chi::Task(alloc), target_names_(alloc) {}
 
   // Emplace constructor
   explicit ListTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -234,7 +222,7 @@ struct ListTargetsTask : public chi::Task {
                            const chi::PoolId &pool_id,
                            const chi::PoolQuery &pool_query)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kListTargets),
-        target_names_(alloc), result_code_(0) {
+        target_names_(alloc) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kListTargets;
@@ -253,16 +241,14 @@ struct ListTargetsTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(target_names_, result_code_);
+    ar(target_names_);
   }
 
   /**
    * Copy from another ListTargetsTask
    */
   void Copy(const hipc::FullPtr<ListTargetsTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     target_names_ = other->target_names_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -270,19 +256,16 @@ struct ListTargetsTask : public chi::Task {
  * StatTargets task - Poll each target in vector, update performance stats
  */
 struct StatTargetsTask : public chi::Task {
-  OUT chi::u32 result_code_; // Output result (0 = success)
-
   // SHM constructor
   explicit StatTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), result_code_(0) {}
+      : chi::Task(alloc) {}
 
   // Emplace constructor
   explicit StatTargetsTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                            const chi::TaskId &task_id,
                            const chi::PoolId &pool_id,
                            const chi::PoolQuery &pool_query)
-      : chi::Task(alloc, task_id, pool_id, pool_query, Method::kStatTargets),
-        result_code_(0) {
+      : chi::Task(alloc, task_id, pool_id, pool_query, Method::kStatTargets) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kStatTargets;
@@ -301,15 +284,15 @@ struct StatTargetsTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(result_code_);
+    // No output parameters (return_code_ handled by base class)
   }
 
   /**
    * Copy from another StatTargetsTask
    */
   void Copy(const hipc::FullPtr<StatTargetsTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
-    result_code_ = other->result_code_;
+    // No task-specific fields to copy
+    (void)other; // Suppress unused parameter warning
   }
 };
 
@@ -470,12 +453,12 @@ struct CteTelemetry {
         logical_time_(logical_time) {}
 
   // Serialization support for cereal
-  template <class Archive>
-  void serialize(Archive &ar) {
+  template <class Archive> void serialize(Archive &ar) {
     // Convert timestamps to duration counts for serialization
     auto mod_count = mod_time_.time_since_epoch().count();
     auto read_count = read_time_.time_since_epoch().count();
-    ar(op_, off_, size_, blob_id_, tag_id_, mod_count, read_count, logical_time_);
+    ar(op_, off_, size_, blob_id_, tag_id_, mod_count, read_count,
+       logical_time_);
     // Note: On deserialization, timestamps will be reconstructed from counts
     if (Archive::is_loading::value) {
       mod_time_ = Timestamp(Timestamp::duration(mod_count));
@@ -490,14 +473,12 @@ struct CteTelemetry {
  */
 template <typename CreateParamsT = CreateParams>
 struct GetOrCreateTagTask : public chi::Task {
-  IN hipc::string tag_name_;  // Tag name (required)
+  IN hipc::string tag_name_; // Tag name (required)
   INOUT TagId tag_id_;       // Tag unique ID (default null, output on creation)
-  OUT chi::u32 result_code_; // Output result (0 = success)
 
   // SHM constructor
   explicit GetOrCreateTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), tag_name_(alloc), tag_id_(TagId::GetNull()),
-        result_code_(0) {}
+      : chi::Task(alloc), tag_name_(alloc), tag_id_(TagId::GetNull()) {}
 
   // Emplace constructor
   explicit GetOrCreateTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -506,10 +487,8 @@ struct GetOrCreateTagTask : public chi::Task {
                               const chi::PoolQuery &pool_query,
                               const std::string &tag_name,
                               const TagId &tag_id = TagId::GetNull())
-      : chi::Task(alloc, task_id, pool_id, pool_query,
-                  Method::kGetOrCreateTag),
-        tag_name_(alloc, tag_name), tag_id_(tag_id),
-        result_code_(0) {
+      : chi::Task(alloc, task_id, pool_id, pool_query, Method::kGetOrCreateTag),
+        tag_name_(alloc, tag_name), tag_id_(tag_id) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kGetOrCreateTag;
@@ -528,17 +507,15 @@ struct GetOrCreateTagTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(tag_id_, result_code_);
+    ar(tag_id_);
   }
 
   /**
    * Copy from another GetOrCreateTagTask
    */
   void Copy(const hipc::FullPtr<GetOrCreateTagTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_name_ = other->tag_name_;
     tag_id_ = other->tag_id_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -546,27 +523,24 @@ struct GetOrCreateTagTask : public chi::Task {
  * PutBlob task - Store a blob (unimplemented for now)
  */
 struct PutBlobTask : public chi::Task {
-  IN TagId tag_id_;             // Tag ID for blob grouping
+  IN TagId tag_id_;              // Tag ID for blob grouping
   INOUT hipc::string blob_name_; // Blob name (optional, generated if empty)
-  INOUT BlobId blob_id_;        // Blob ID (optional, generated if null)
-  IN chi::u64 offset_;          // Offset within blob
-  IN chi::u64 size_;            // Size of blob data
-  IN hipc::Pointer blob_data_;  // Blob data (shared memory pointer)
-  IN float score_;              // Score 0-1 for placement decisions
-  IN chi::u32 flags_;           // Operation flags
-  OUT chi::u32 result_code_;    // Output result (0 = success)
+  INOUT BlobId blob_id_;         // Blob ID (optional, generated if null)
+  IN chi::u64 offset_;           // Offset within blob
+  IN chi::u64 size_;             // Size of blob data
+  IN hipc::Pointer blob_data_;   // Blob data (shared memory pointer)
+  IN float score_;               // Score 0-1 for placement decisions
+  IN chi::u32 flags_;            // Operation flags
 
   // SHM constructor
   explicit PutBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_name_(alloc),
         blob_id_(BlobId::GetNull()), offset_(0), size_(0),
-        blob_data_(hipc::Pointer::GetNull()), score_(0.5f), flags_(0),
-        result_code_(0) {}
+        blob_data_(hipc::Pointer::GetNull()), score_(0.5f), flags_(0) {}
 
   // Emplace constructor
   explicit PutBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-                       const chi::TaskId &task_id,
-                       const chi::PoolId &pool_id,
+                       const chi::TaskId &task_id, const chi::PoolId &pool_id,
                        const chi::PoolQuery &pool_query, const TagId &tag_id,
                        const std::string &blob_name, const BlobId &blob_id,
                        chi::u64 offset, chi::u64 size, hipc::Pointer blob_data,
@@ -574,7 +548,7 @@ struct PutBlobTask : public chi::Task {
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kPutBlob),
         tag_id_(tag_id), blob_name_(alloc, blob_name), blob_id_(blob_id),
         offset_(offset), size_(size), blob_data_(blob_data), score_(score),
-        flags_(flags), result_code_(0) {
+        flags_(flags) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kPutBlob;
@@ -586,21 +560,23 @@ struct PutBlobTask : public chi::Task {
    * Serialize IN and INOUT parameters
    */
   template <typename Archive> void SerializeIn(Archive &ar) {
-    ar(tag_id_, blob_name_, blob_id_, offset_, size_, blob_data_, score_, flags_);
+    ar(tag_id_, blob_name_, blob_id_, offset_, size_, score_, flags_);
+    // Use BULK_XFER to transfer blob data from client to runtime
+    ar.bulk(blob_data_, size_, BULK_XFER);
   }
 
   /**
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(blob_name_, blob_id_, result_code_);
+    ar(blob_name_, blob_id_);
+    // No bulk transfer needed for PutBlob output (metadata only)
   }
 
   /**
    * Copy from another PutBlobTask
    */
   void Copy(const hipc::FullPtr<PutBlobTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_name_ = other->blob_name_;
     blob_id_ = other->blob_id_;
@@ -609,7 +585,6 @@ struct PutBlobTask : public chi::Task {
     blob_data_ = other->blob_data_;
     score_ = other->score_;
     flags_ = other->flags_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -617,34 +592,31 @@ struct PutBlobTask : public chi::Task {
  * GetBlob task - Retrieve a blob (unimplemented for now)
  */
 struct GetBlobTask : public chi::Task {
-  IN TagId tag_id_;             // Tag ID for blob lookup
+  IN TagId tag_id_;              // Tag ID for blob lookup
   INOUT hipc::string blob_name_; // Blob name (optional)
-  INOUT BlobId blob_id_;        // Blob ID (optional)
-  IN chi::u64 offset_;          // Offset within blob
-  IN chi::u64 size_;            // Size of data to retrieve
-  IN chi::u32 flags_;           // Operation flags
+  INOUT BlobId blob_id_;         // Blob ID (optional)
+  IN chi::u64 offset_;           // Offset within blob
+  IN chi::u64 size_;             // Size of data to retrieve
+  IN chi::u32 flags_;            // Operation flags
   IN hipc::Pointer
       blob_data_; // Input buffer for blob data (shared memory pointer)
-  OUT chi::u32 result_code_; // Output result (0 = success)
 
   // SHM constructor
   explicit GetBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_name_(alloc),
         blob_id_(BlobId::GetNull()), offset_(0), size_(0), flags_(0),
-        blob_data_(hipc::Pointer::GetNull()), result_code_(0) {}
+        blob_data_(hipc::Pointer::GetNull()) {}
 
   // Emplace constructor
   explicit GetBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-                       const chi::TaskId &task_id,
-                       const chi::PoolId &pool_id,
+                       const chi::TaskId &task_id, const chi::PoolId &pool_id,
                        const chi::PoolQuery &pool_query, const TagId &tag_id,
                        const std::string &blob_name, const BlobId &blob_id,
                        chi::u64 offset, chi::u64 size, chi::u32 flags,
                        hipc::Pointer blob_data)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kGetBlob),
         tag_id_(tag_id), blob_name_(alloc, blob_name), blob_id_(blob_id),
-        offset_(offset), size_(size), flags_(flags), blob_data_(blob_data),
-        result_code_(0) {
+        offset_(offset), size_(size), flags_(flags), blob_data_(blob_data) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kGetBlob;
@@ -656,21 +628,25 @@ struct GetBlobTask : public chi::Task {
    * Serialize IN and INOUT parameters
    */
   template <typename Archive> void SerializeIn(Archive &ar) {
-    ar(tag_id_, blob_name_, blob_id_, offset_, size_, flags_, blob_data_);
+    ar(tag_id_, blob_name_, blob_id_, offset_, size_, flags_);
+    // Use BULK_EXPOSE - metadata only, runtime will allocate buffer for read
+    // data
+    ar.bulk(blob_data_, size_, BULK_EXPOSE);
   }
 
   /**
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(blob_name_, blob_id_, result_code_);
+    ar(blob_name_, blob_id_);
+    // Use BULK_XFER to transfer read data back to client
+    ar.bulk(blob_data_, size_, BULK_XFER);
   }
 
   /**
    * Copy from another GetBlobTask
    */
   void Copy(const hipc::FullPtr<GetBlobTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_name_ = other->blob_name_;
     blob_id_ = other->blob_id_;
@@ -678,7 +654,6 @@ struct GetBlobTask : public chi::Task {
     size_ = other->size_;
     flags_ = other->flags_;
     blob_data_ = other->blob_data_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -690,13 +665,12 @@ struct ReorganizeBlobsTask : public chi::Task {
   IN chi::ipc::vector<chi::ipc::string>
       blob_names_;                        // Vector of blob names to reorganize
   IN chi::ipc::vector<float> new_scores_; // New scores for each blob (0-1)
-  OUT chi::u32 result_code_;              // Output result (0 = success)
 
   // SHM constructor
   explicit ReorganizeBlobsTask(
       const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_names_(alloc),
-        new_scores_(alloc), result_code_(0) {}
+        new_scores_(alloc) {}
 
   // Emplace constructor
   explicit ReorganizeBlobsTask(
@@ -707,8 +681,7 @@ struct ReorganizeBlobsTask : public chi::Task {
       const std::vector<float> &new_scores)
       : chi::Task(alloc, task_id, pool_id, pool_query,
                   Method::kReorganizeBlobs),
-        tag_id_(tag_id), blob_names_(alloc), new_scores_(alloc),
-        result_code_(0) {
+        tag_id_(tag_id), blob_names_(alloc), new_scores_(alloc) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kReorganizeBlobs;
@@ -735,18 +708,16 @@ struct ReorganizeBlobsTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(result_code_);
+    // No output parameters (return_code_ handled by base class)
   }
 
   /**
    * Copy from another ReorganizeBlobsTask
    */
   void Copy(const hipc::FullPtr<ReorganizeBlobsTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_names_ = other->blob_names_;
     new_scores_ = other->new_scores_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -754,25 +725,22 @@ struct ReorganizeBlobsTask : public chi::Task {
  * DelBlob task - Remove blob and decrement tag size
  */
 struct DelBlobTask : public chi::Task {
-  IN TagId tag_id_;          // Tag ID for blob lookup
+  IN TagId tag_id_;           // Tag ID for blob lookup
   IN hipc::string blob_name_; // Blob name (optional)
-  IN BlobId blob_id_;        // Blob ID (optional)
-  OUT chi::u32 result_code_; // Output result (0 = success)
+  IN BlobId blob_id_;         // Blob ID (optional)
 
   // SHM constructor
   explicit DelBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_name_(alloc),
-        blob_id_(BlobId::GetNull()), result_code_(0) {}
+        blob_id_(BlobId::GetNull()) {}
 
   // Emplace constructor
   explicit DelBlobTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-                       const chi::TaskId &task_id,
-                       const chi::PoolId &pool_id,
+                       const chi::TaskId &task_id, const chi::PoolId &pool_id,
                        const chi::PoolQuery &pool_query, const TagId &tag_id,
                        const std::string &blob_name, const BlobId &blob_id)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kDelBlob),
-        tag_id_(tag_id), blob_name_(alloc, blob_name), blob_id_(blob_id),
-        result_code_(0) {
+        tag_id_(tag_id), blob_name_(alloc, blob_name), blob_id_(blob_id) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kDelBlob;
@@ -791,18 +759,16 @@ struct DelBlobTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(result_code_);
+    // No output parameters (return_code_ handled by base class)
   }
 
   /**
    * Copy from another DelBlobTask
    */
   void Copy(const hipc::FullPtr<DelBlobTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_name_ = other->blob_name_;
     blob_id_ = other->blob_id_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -812,21 +778,18 @@ struct DelBlobTask : public chi::Task {
  */
 struct DelTagTask : public chi::Task {
   INOUT TagId tag_id_;       // Tag ID to delete (input or lookup result)
-  IN hipc::string tag_name_;  // Tag name for lookup (optional)
-  OUT chi::u32 result_code_; // Output result (0 = success)
+  IN hipc::string tag_name_; // Tag name for lookup (optional)
 
   // SHM constructor
   explicit DelTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), tag_id_(TagId::GetNull()), tag_name_(alloc),
-        result_code_(0) {}
+      : chi::Task(alloc), tag_id_(TagId::GetNull()), tag_name_(alloc) {}
 
   // Emplace constructor with tag ID
   explicit DelTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-                      const chi::TaskId &task_id,
-                      const chi::PoolId &pool_id,
+                      const chi::TaskId &task_id, const chi::PoolId &pool_id,
                       const chi::PoolQuery &pool_query, const TagId &tag_id)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kDelTag),
-        tag_id_(tag_id), tag_name_(alloc), result_code_(0) {
+        tag_id_(tag_id), tag_name_(alloc) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kDelTag;
@@ -836,12 +799,11 @@ struct DelTagTask : public chi::Task {
 
   // Emplace constructor with tag name
   explicit DelTagTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-                      const chi::TaskId &task_id,
-                      const chi::PoolId &pool_id,
+                      const chi::TaskId &task_id, const chi::PoolId &pool_id,
                       const chi::PoolQuery &pool_query,
                       const std::string &tag_name)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kDelTag),
-        tag_id_(TagId::GetNull()), tag_name_(alloc, tag_name), result_code_(0) {
+        tag_id_(TagId::GetNull()), tag_name_(alloc, tag_name) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kDelTag;
@@ -860,17 +822,15 @@ struct DelTagTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(tag_id_, result_code_);
+    ar(tag_id_);
   }
 
   /**
    * Copy from another DelTagTask
    */
   void Copy(const hipc::FullPtr<DelTagTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     tag_name_ = other->tag_name_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -878,14 +838,12 @@ struct DelTagTask : public chi::Task {
  * GetTagSize task - Get the total size of a tag
  */
 struct GetTagSizeTask : public chi::Task {
-  IN TagId tag_id_;          // Tag ID to query
-  OUT size_t tag_size_;      // Total size of all blobs in tag
-  OUT chi::u32 result_code_; // Output result (0 = success)
+  IN TagId tag_id_;     // Tag ID to query
+  OUT size_t tag_size_; // Total size of all blobs in tag
 
   // SHM constructor
   explicit GetTagSizeTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), tag_id_(TagId::GetNull()), tag_size_(0),
-        result_code_(0) {}
+      : chi::Task(alloc), tag_id_(TagId::GetNull()), tag_size_(0) {}
 
   // Emplace constructor
   explicit GetTagSizeTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -893,7 +851,7 @@ struct GetTagSizeTask : public chi::Task {
                           const chi::PoolId &pool_id,
                           const chi::PoolQuery &pool_query, const TagId &tag_id)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kGetTagSize),
-        tag_id_(tag_id), tag_size_(0), result_code_(0) {
+        tag_id_(tag_id), tag_size_(0) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kGetTagSize;
@@ -904,25 +862,21 @@ struct GetTagSizeTask : public chi::Task {
   /**
    * Serialize IN and INOUT parameters
    */
-  template <typename Archive> void SerializeIn(Archive &ar) {
-    ar(tag_id_);
-  }
+  template <typename Archive> void SerializeIn(Archive &ar) { ar(tag_id_); }
 
   /**
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(tag_size_, result_code_);
+    ar(tag_size_);
   }
 
   /**
    * Copy from another GetTagSizeTask
    */
   void Copy(const hipc::FullPtr<GetTagSizeTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     tag_size_ = other->tag_size_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -933,13 +887,12 @@ struct PollTelemetryLogTask : public chi::Task {
   IN std::uint64_t minimum_logical_time_;  // Minimum logical time filter
   OUT std::uint64_t last_logical_time_;    // Last logical time scanned
   OUT hipc::vector<CteTelemetry> entries_; // Retrieved telemetry entries
-  OUT chi::u32 result_code_;               // Output result (0 = success)
 
   // SHM constructor
   explicit PollTelemetryLogTask(
       const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), minimum_logical_time_(0), last_logical_time_(0),
-        entries_(alloc), result_code_(0) {}
+        entries_(alloc) {}
 
   // Emplace constructor
   explicit PollTelemetryLogTask(
@@ -949,7 +902,7 @@ struct PollTelemetryLogTask : public chi::Task {
       : chi::Task(alloc, task_id, pool_id, pool_query,
                   Method::kPollTelemetryLog),
         minimum_logical_time_(minimum_logical_time), last_logical_time_(0),
-        entries_(alloc), result_code_(0) {
+        entries_(alloc) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kPollTelemetryLog;
@@ -968,18 +921,16 @@ struct PollTelemetryLogTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(last_logical_time_, entries_, result_code_);
+    ar(last_logical_time_, entries_);
   }
 
   /**
    * Copy from another PollTelemetryLogTask
    */
   void Copy(const hipc::FullPtr<PollTelemetryLogTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     minimum_logical_time_ = other->minimum_logical_time_;
     last_logical_time_ = other->last_logical_time_;
     entries_ = other->entries_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -987,16 +938,15 @@ struct PollTelemetryLogTask : public chi::Task {
  * GetBlobScore task - Get the score of a blob
  */
 struct GetBlobScoreTask : public chi::Task {
-  IN TagId tag_id_;          // Tag ID for blob lookup
+  IN TagId tag_id_;           // Tag ID for blob lookup
   IN hipc::string blob_name_; // Blob name (required)
-  IN BlobId blob_id_;        // Blob ID (optional)
-  OUT float score_;          // Blob score (0-1)
-  OUT chi::u32 result_code_; // Output result (0 = success)
+  IN BlobId blob_id_;         // Blob ID (optional)
+  OUT float score_;           // Blob score (0-1)
 
   // SHM constructor
   explicit GetBlobScoreTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_name_(alloc),
-        blob_id_(BlobId::GetNull()), score_(0.0f), result_code_(0) {}
+        blob_id_(BlobId::GetNull()), score_(0.0f) {}
 
   // Emplace constructor
   explicit GetBlobScoreTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -1007,7 +957,7 @@ struct GetBlobScoreTask : public chi::Task {
                             const BlobId &blob_id = BlobId::GetNull())
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kGetBlobScore),
         tag_id_(tag_id), blob_name_(alloc, blob_name), blob_id_(blob_id),
-        score_(0.0f), result_code_(0) {
+        score_(0.0f) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kGetBlobScore;
@@ -1026,19 +976,17 @@ struct GetBlobScoreTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(score_, result_code_);
+    ar(score_);
   }
 
   /**
    * Copy from another GetBlobScoreTask
    */
   void Copy(const hipc::FullPtr<GetBlobScoreTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_name_ = other->blob_name_;
     blob_id_ = other->blob_id_;
     score_ = other->score_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -1046,16 +994,15 @@ struct GetBlobScoreTask : public chi::Task {
  * GetBlobSize task - Get the size of a blob
  */
 struct GetBlobSizeTask : public chi::Task {
-  IN TagId tag_id_;          // Tag ID for blob lookup
+  IN TagId tag_id_;           // Tag ID for blob lookup
   IN hipc::string blob_name_; // Blob name (required)
-  IN BlobId blob_id_;        // Blob ID (optional)
-  OUT chi::u64 size_;        // Blob size in bytes
-  OUT chi::u32 result_code_; // Output result (0 = success)
+  IN BlobId blob_id_;         // Blob ID (optional)
+  OUT chi::u64 size_;         // Blob size in bytes
 
   // SHM constructor
   explicit GetBlobSizeTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_name_(alloc),
-        blob_id_(BlobId::GetNull()), size_(0), result_code_(0) {}
+        blob_id_(BlobId::GetNull()), size_(0) {}
 
   // Emplace constructor
   explicit GetBlobSizeTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -1066,7 +1013,7 @@ struct GetBlobSizeTask : public chi::Task {
                            const BlobId &blob_id = BlobId::GetNull())
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kGetBlobSize),
         tag_id_(tag_id), blob_name_(alloc, blob_name), blob_id_(blob_id),
-        size_(0), result_code_(0) {
+        size_(0) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kGetBlobSize;
@@ -1085,19 +1032,17 @@ struct GetBlobSizeTask : public chi::Task {
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(size_, result_code_);
+    ar(size_);
   }
 
   /**
    * Copy from another GetBlobSizeTask
    */
   void Copy(const hipc::FullPtr<GetBlobSizeTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_name_ = other->blob_name_;
     blob_id_ = other->blob_id_;
     size_ = other->size_;
-    result_code_ = other->result_code_;
   }
 };
 
@@ -1107,14 +1052,12 @@ struct GetBlobSizeTask : public chi::Task {
 struct GetContainedBlobsTask : public chi::Task {
   IN TagId tag_id_; // Tag ID to query
   OUT chi::ipc::vector<chi::ipc::string>
-      blob_names_;           // Vector of blob names in the tag
-  OUT chi::u32 result_code_; // Output result (0 = success)
+      blob_names_; // Vector of blob names in the tag
 
   // SHM constructor
   explicit GetContainedBlobsTask(
       const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
-      : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_names_(alloc),
-        result_code_(0) {}
+      : chi::Task(alloc), tag_id_(TagId::GetNull()), blob_names_(alloc) {}
 
   // Emplace constructor
   explicit GetContainedBlobsTask(
@@ -1123,7 +1066,7 @@ struct GetContainedBlobsTask : public chi::Task {
       const chi::PoolQuery &pool_query, const TagId &tag_id)
       : chi::Task(alloc, task_id, pool_id, pool_query,
                   Method::kGetContainedBlobs),
-        tag_id_(tag_id), blob_names_(alloc), result_code_(0) {
+        tag_id_(tag_id), blob_names_(alloc) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kGetContainedBlobs;
@@ -1134,25 +1077,21 @@ struct GetContainedBlobsTask : public chi::Task {
   /**
    * Serialize IN and INOUT parameters
    */
-  template <typename Archive> void SerializeIn(Archive &ar) {
-    ar(tag_id_);
-  }
+  template <typename Archive> void SerializeIn(Archive &ar) { ar(tag_id_); }
 
   /**
    * Serialize OUT and INOUT parameters
    */
   template <typename Archive> void SerializeOut(Archive &ar) {
-    ar(blob_names_, result_code_);
+    ar(blob_names_);
   }
 
   /**
    * Copy from another GetContainedBlobsTask
    */
   void Copy(const hipc::FullPtr<GetContainedBlobsTask> &other) {
-    chi::Task::Copy(other.template Cast<chi::Task>());
     tag_id_ = other->tag_id_;
     blob_names_ = other->blob_names_;
-    result_code_ = other->result_code_;
   }
 };
 

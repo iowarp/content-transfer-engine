@@ -524,7 +524,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<CreateTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<CreateTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -535,7 +537,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<DestroyTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<DestroyTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -546,7 +550,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<RegisterTargetTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<RegisterTargetTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -557,7 +563,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<UnregisterTargetTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<UnregisterTargetTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -568,7 +576,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<ListTargetsTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<ListTargetsTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -579,7 +589,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<StatTargetsTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<StatTargetsTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -590,7 +602,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<core::GetOrCreateTagTask<core::CreateParams>>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<core::GetOrCreateTagTask<core::CreateParams>>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -601,7 +615,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<PutBlobTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<PutBlobTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -612,7 +628,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<GetBlobTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<GetBlobTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -623,7 +641,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<ReorganizeBlobsTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<ReorganizeBlobsTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -634,7 +654,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<DelBlobTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<DelBlobTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -645,7 +667,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<DelTagTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<DelTagTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -656,7 +680,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<GetTagSizeTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<GetTagSizeTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -667,7 +693,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<PollTelemetryLogTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<PollTelemetryLogTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -678,7 +706,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<GetBlobScoreTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<GetBlobScoreTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -689,7 +719,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<GetBlobSizeTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<GetBlobSizeTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
@@ -700,7 +732,9 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       // Allocate new task using SHM default constructor
       auto typed_task = ipc_manager->NewTask<GetContainedBlobsTask>();
       if (!typed_task.IsNull()) {
-        // Use Copy method for actual copying
+        // Copy base Task fields first
+        typed_task.template Cast<chi::Task>()->Copy(orig_task);
+        // Then copy task-specific fields
         typed_task->Copy(orig_task.Cast<GetContainedBlobsTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();

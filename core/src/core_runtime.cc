@@ -267,7 +267,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
     // Check if creation was successful
     if (bdev_client.return_code_ != 0) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -280,7 +280,6 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
       chi::ScopedCoRwReadLock read_lock(*target_locks_[lock_index]);
       TargetInfo *existing_target = registered_targets_.find(target_id);
       if (existing_target != nullptr) {
-        task->result_code_ = 1;
         return;
       }
     }
@@ -325,7 +324,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
                                           target_id); // Maintain reverse lookup
     }
 
-    task->result_code_ = 0; // Success
+    task->return_code_.store(0); // Success
     HILOG(kInfo,
           "Target '{}' registered with bdev pool: {} (type={}, path={}, "
           "size={}, remaining={})",
@@ -341,7 +340,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
           perf_metrics.iops_);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -367,7 +366,7 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
     // Look up TargetId from target_name
     chi::PoolId *target_id_ptr = target_name_to_id_.find(target_name);
     if (target_id_ptr == nullptr) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -378,7 +377,7 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
     {
       chi::ScopedCoRwWriteLock write_lock(*target_locks_[lock_index]);
       if (!registered_targets_.contains(target_id)) {
-        task->result_code_ = 1;
+        task->return_code_.store(1);
         return;
       }
 
@@ -386,11 +385,11 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
       target_name_to_id_.erase(target_name); // Remove reverse lookup
     }
 
-    task->result_code_ = 0; // Success
+    task->return_code_.store(0); // Success
     HILOG(kInfo, "Target '{}' unregistered", target_name);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -426,10 +425,10 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
           task->target_names_.emplace_back(target_info.target_name_.c_str());
         });
 
-    task->result_code_ = 0; // Success
+    task->return_code_.store(0); // Success
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -463,10 +462,10 @@ void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
           UpdateTargetStats(target_id, target_info);
         });
 
-    task->result_code_ = 0; // Success
+    task->return_code_.store(0); // Success
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -512,10 +511,10 @@ void Runtime::GetOrCreateTag(
       }
     }
 
-    task->result_code_ = 0; // Success
+    task->return_code_.store(0); // Success
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -552,12 +551,12 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Validate input parameters
     if (size == 0) {
-      task->result_code_ = 2; // Error: Invalid size (zero)
+      task->return_code_.store(2); // Error: Invalid size (zero)
       return;
     }
 
     if (blob_data.IsNull()) {
-      task->result_code_ = 3; // Error: Null data pointer
+      task->return_code_.store(3); // Error: Null data pointer
       return;
     }
 
@@ -566,7 +565,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     bool blob_name_provided = !blob_name.empty();
 
     if (!blob_id_provided && !blob_name_provided) {
-      task->result_code_ = 4; // Error: No blob identifier provided
+      task->return_code_.store(4); // Error: No blob identifier provided
       return;
     }
 
@@ -581,7 +580,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       blob_info_ptr =
           CreateNewBlob(blob_name, tag_id, blob_score, found_blob_id);
       if (blob_info_ptr == nullptr) {
-        task->result_code_ = 5; // Error: Failed to create blob
+        task->return_code_.store(5); // Error: Failed to create blob
         return;
       }
       task->blob_id_ = found_blob_id;
@@ -597,8 +596,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
 
     if (allocation_result != 0) {
-      task->result_code_ =
-          10 + allocation_result; // Error: Allocation failure (10-19 range)
+      task->return_code_.store(
+          10 + allocation_result); // Error: Allocation failure (10-19 range)
       return;
     }
 
@@ -608,8 +607,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
 
     if (write_result != 0) {
-      task->result_code_ =
-          20 + write_result; // Error: Write failure (20-29 range)
+      task->return_code_.store(
+          20 + write_result); // Error: Write failure (20-29 range)
       return;
     }
 
@@ -657,10 +656,10 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     LogTelemetry(CteOp::kPutBlob, offset, size, found_blob_id, tag_id, now,
                  blob_info_ptr->last_read_);
 
-    task->result_code_ = 0;
+    task->return_code_.store(0);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1; // Error: General exception
+    task->return_code_.store(1); // Error: General exception
   }
 }
 
@@ -692,7 +691,7 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
 
     // Validate input parameters
     if (size == 0) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -702,7 +701,7 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
     bool blob_name_provided = !blob_name.empty();
 
     if (!blob_id_provided && !blob_name_provided) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -713,14 +712,14 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
 
     // If blob doesn't exist, error
     if (blob_info_ptr == nullptr) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
     // Check if blob id is non-null and exists. If it doesn't, error.
     if (blob_id_provided && (found_blob_id.major_ != blob_id.major_ ||
                              found_blob_id.minor_ != blob_id.minor_)) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -731,7 +730,7 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
     chi::u32 read_result =
         ReadData(blob_info_ptr->blocks_, blob_data_ptr, size, offset);
     if (read_result != 0) {
-      task->result_code_ = read_result;
+      task->return_code_.store(read_result);
       return;
     }
 
@@ -748,7 +747,7 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
     LogTelemetry(CteOp::kGetBlob, offset, size, found_blob_id, tag_id,
                  blob_info_ptr->last_modified_, now);
 
-    task->result_code_ = 0;
+    task->return_code_.store(0);
     HILOG(kInfo,
           "GetBlob successful: blob_id={},{}, name={}, offset={}, size={}, "
           "blocks={}",
@@ -756,7 +755,7 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
           num_blocks);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -782,13 +781,13 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
     // Validate inputs
     if (task->blob_names_.size() != task->new_scores_.size()) {
-      task->result_code_ = 1; // Invalid input - mismatched array sizes
+      task->return_code_.store(1); // Invalid input - mismatched array sizes
       return;
     }
 
     // Validate tag exists
     if (!tag_id_to_info_.contains(tag_id)) {
-      task->result_code_ = 2; // Tag not found
+      task->return_code_.store(2); // Tag not found
       return;
     }
 
@@ -830,7 +829,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
         score_tasks[i]->Wait();
         size_t global_idx = batch_start + i;
 
-        if (score_tasks[i]->result_code_ == 0) {
+        if (score_tasks[i]->return_code_.load() == 0) {
           current_scores[i] = score_tasks[i]->score_;
           float new_score = task->new_scores_[global_idx];
 
@@ -876,7 +875,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
       auto *ipc_manager = CHI_IPC;
       for (size_t i = 0; i < size_tasks.size(); ++i) {
         size_tasks[i]->Wait();
-        if (size_tasks[i]->result_code_ == 0) {
+        if (size_tasks[i]->return_code_.load() == 0) {
           blob_sizes[i] = size_tasks[i]->size_;
 
           // Step 5: Allocate individual buffer for each blob
@@ -888,7 +887,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
                   kError,
                   "Failed to allocate buffer for blob {} during reorganization",
                   i);
-              task->result_code_ = 3;
+              task->return_code_.store(3);
               return;
             }
             blob_data_ptrs[i] = blob_data_buffers[i].shm_;
@@ -916,7 +915,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
       // Step 7: Wait for get tasks completion
       for (auto get_task : get_tasks) {
         get_task->Wait();
-        if (get_task->result_code_ != 0) {
+        if (get_task->return_code_.load() != 0) {
           HILOG(kWarning,
                 "Failed to get blob data during reorganization, skipping blob");
         }
@@ -944,7 +943,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
       size_t successful_reorganizations = 0;
       for (auto put_task : put_tasks) {
         put_task->Wait();
-        if (put_task->result_code_ == 0) {
+        if (put_task->return_code_.load() == 0) {
           successful_reorganizations++;
         } else {
           HILOG(kWarning, "Failed to put blob during reorganization");
@@ -956,7 +955,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
     }
 
     // Set result based on whether any blobs were successfully reorganized
-    task->result_code_ = 0;
+    task->return_code_.store(0);
 
     // Update telemetry
     LogTelemetry(CteOp::kGetOrCreateTag, total_reorganized, 0,
@@ -970,7 +969,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
   } catch (const std::exception &e) {
     HILOG(kError, "ReorganizeBlobs failed: {}", e.what());
-    task->result_code_ = 1; // Error during reorganization
+    task->return_code_.store(1); // Error during reorganization
   }
 }
 
@@ -999,7 +998,7 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
     bool blob_name_provided = !blob_name.empty();
 
     if (!blob_id_provided && !blob_name_provided) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -1009,7 +1008,7 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
         CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
 
     if (blob_info_ptr == nullptr) {
-      task->result_code_ = 1; // Blob not found
+      task->return_code_.store(1); // Blob not found
       return;
     }
 
@@ -1057,12 +1056,12 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
                  now);
 
     // Success
-    task->result_code_ = 0;
+    task->return_code_.store(0);
     HILOG(kInfo, "DelBlob successful: blob_id={},{}, name={}, blob_size={}",
           found_blob_id.major_, found_blob_id.minor_, blob_name, blob_size);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -1089,20 +1088,20 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
       // Look up tag ID by name
       TagId *found_tag_id_ptr = tag_name_to_id_.find(tag_name);
       if (found_tag_id_ptr == nullptr) {
-        task->result_code_ = 1; // Tag not found by name
+        task->return_code_.store(1); // Tag not found by name
         return;
       }
       tag_id = *found_tag_id_ptr;
       task->tag_id_ = tag_id; // Update task with resolved tag ID
     } else if (tag_id.IsNull() && tag_name.empty()) {
-      task->result_code_ = 1; // Neither tag ID nor tag name provided
+      task->return_code_.store(1); // Neither tag ID nor tag name provided
       return;
     }
 
     // Step 2: Find the tag by ID
     TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
     if (tag_info_ptr == nullptr) {
-      task->result_code_ = 1; // Tag not found by ID
+      task->return_code_.store(1); // Tag not found by ID
       return;
     }
 
@@ -1147,7 +1146,7 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
         task->Wait();
 
         // Check if DelBlob succeeded
-        if (task->result_code_ != 0) {
+        if (task->return_code_.load() != 0) {
           HILOG(kWarning,
                 "DelBlob failed for blob_id={},{} during tag deletion, "
                 "continuing",
@@ -1194,13 +1193,13 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     tag_id_to_info_.erase(tag_id);
 
     // Success
-    task->result_code_ = 0;
+    task->return_code_.store(0);
     HILOG(kInfo,
           "DelTag successful: tag_id={},{}, removed {} blobs, total_size={}",
           tag_id.major_, tag_id.minor_, blob_count, total_size);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -1225,7 +1224,7 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
     // Find the tag
     TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
     if (tag_info_ptr == nullptr) {
-      task->result_code_ = 1; // Tag not found
+      task->return_code_.store(1); // Tag not found
       task->tag_size_ = 0;
       return;
     }
@@ -1235,7 +1234,7 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
     tag_info_ptr->last_read_ = now;
 
     task->tag_size_ = tag_info_ptr->total_size_;
-    task->result_code_ = 0;
+    task->return_code_.store(0);
 
     // Log telemetry for GetTagSize operation
     LogTelemetry(CteOp::kGetTagSize, 0, tag_info_ptr->total_size_,
@@ -1245,7 +1244,7 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
           tag_id.major_, tag_id.minor_, task->tag_size_);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
     task->tag_size_ = 0;
   }
 }
@@ -1899,10 +1898,10 @@ void Runtime::PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task,
     }
 
     task->last_logical_time_ = max_logical_time;
-    task->result_code_ = 0;
+    task->return_code_.store(0);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
     task->last_logical_time_ = 0;
   }
   (void)ctx;
@@ -1934,7 +1933,7 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
     bool blob_name_provided = !blob_name.empty();
 
     if (!blob_id_provided && !blob_name_provided) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -1944,7 +1943,7 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
         CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
 
     if (blob_info_ptr == nullptr) {
-      task->result_code_ = 1; // Blob not found
+      task->return_code_.store(1); // Blob not found
       return;
     }
 
@@ -1961,13 +1960,13 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
                  blob_info_ptr->last_modified_, now);
 
     // Success
-    task->result_code_ = 0;
+    task->return_code_.store(0);
     HILOG(kInfo, "GetBlobScore successful: blob_id={},{}, name={}, score={}",
           found_blob_id.major_, found_blob_id.minor_, blob_name,
           blob_info_ptr->score_);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -1996,7 +1995,7 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
     bool blob_id_provided = (blob_id.major_ != 0 || blob_id.minor_ != 0);
     bool blob_name_provided = !blob_name.empty();
     if (!blob_id_provided && !blob_name_provided) {
-      task->result_code_ = 1;
+      task->return_code_.store(1);
       return;
     }
 
@@ -2005,7 +2004,7 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
     BlobInfo *blob_info_ptr =
         CheckBlobExists(blob_id, blob_name, tag_id, found_blob_id);
     if (blob_info_ptr == nullptr) {
-      task->result_code_ = 1; // Blob not found
+      task->return_code_.store(1); // Blob not found
       return;
     }
 
@@ -2022,12 +2021,12 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
                  blob_info_ptr->last_modified_, now);
 
     // Success
-    task->result_code_ = 0;
+    task->return_code_.store(0);
     HILOG(kInfo, "GetBlobSize successful: blob_id={},{}, name={}, size={}",
           found_blob_id.major_, found_blob_id.minor_, blob_name, task->size_);
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1;
+    task->return_code_.store(1);
   }
 }
 
@@ -2053,7 +2052,7 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
     // Validate tag exists
     TagInfo *tag_info_ptr = tag_id_to_info_.find(tag_id);
     if (tag_info_ptr == nullptr) {
-      task->result_code_ = 1; // Tag not found
+      task->return_code_.store(1); // Tag not found
       return;
     }
 
@@ -2072,7 +2071,7 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
     }
 
     // Success
-    task->result_code_ = 0;
+    task->return_code_.store(0);
 
     // Log telemetry for this operation
     LogTelemetry(CteOp::kGetOrCreateTag, task->blob_names_.size(), 0,
@@ -2083,7 +2082,7 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
           tag_id.major_, tag_id.minor_, task->blob_names_.size());
 
   } catch (const std::exception &e) {
-    task->result_code_ = 1; // Error during operation
+    task->return_code_.store(1); // Error during operation
     HILOG(kError, "GetContainedBlobs failed: {}", e.what());
   }
 }
