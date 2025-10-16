@@ -16,6 +16,7 @@ build
 *.egg-info
 /CMakePresets.json
 *.env.cmake
+*.env
 cufile.log
 myfile.txt
 

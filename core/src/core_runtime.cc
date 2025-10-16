@@ -546,6 +546,9 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     float blob_score = task->score_;
     chi::u32 flags = task->flags_;
 
+    HILOG(kInfo, "PutBlob called: name={}, blob_id={},{}, size={}, score={}",
+          blob_name, blob_id.major_, blob_id.minor_, size, blob_score);
+
     // Suppress unused variable warning for flags - may be used in future
     (void)flags;
 
@@ -623,9 +626,12 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     size_t tag_lock_index = GetTagLockIndex(tag_id);
     size_t tag_total_size = 0;
 
-    // Update blob timestamp (blob_info_ptr already obtained, no additional lock
+    // Update blob timestamp and score (blob_info_ptr already obtained, no additional lock
     // needed)
     blob_info_ptr->last_modified_ = now;
+    HILOG(kInfo, "PutBlob updating score for blob_id={},{}, name={}, old_score={}, new_score={}",
+          found_blob_id.major_, found_blob_id.minor_, blob_name, blob_info_ptr->score_, blob_score);
+    blob_info_ptr->score_ = blob_score;
 
     // Acquire read lock for tag map access and value updates
     {
@@ -775,6 +781,7 @@ void Runtime::MonitorGetBlob(chi::MonitorModeId mode,
 
 void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
                               chi::RunContext &ctx) {
+  HILOG(kInfo, "=== ReorganizeBlobs ENTRY: {} blobs ===", task->blob_names_.size());
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -796,9 +803,6 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
     float score_difference_threshold =
         config.performance_.score_difference_threshold_;
 
-    // Get CTE client for async operations
-    auto *cte_client = WRP_CTE_CLIENT;
-
     // Process blobs in batches of 32
     constexpr size_t kMaxBatchSize = 32;
     size_t total_reorganized = 0;
@@ -815,8 +819,8 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
       for (size_t i = batch_start; i < batch_end; ++i) {
         const std::string blob_name = task->blob_names_[i].str();
-        auto score_task = cte_client->AsyncGetBlobScore(hipc::MemContext(),
-                                                        tag_id, blob_name);
+        auto score_task = client_.AsyncGetBlobScore(hipc::MemContext(),
+                                                     tag_id, blob_name);
         score_tasks.push_back(score_task);
       }
 
@@ -832,13 +836,27 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
         if (score_tasks[i]->return_code_.load() == 0) {
           current_scores[i] = score_tasks[i]->score_;
           float new_score = task->new_scores_[global_idx];
+          std::string blob_name = task->blob_names_[global_idx].str();
 
-          // Step 2: Remove blobs with negligibly different scores
+          // Step 2: Check if score needs updating
           float score_diff = std::abs(new_score - current_scores[i]);
+          HILOG(kInfo, "SCORE CHECK: blob={}, current={}, new={}, diff={}, threshold={}",
+                blob_name, current_scores[i], new_score, score_diff, score_difference_threshold);
           if (score_diff >= score_difference_threshold && new_score >= 0.0f &&
               new_score <= 1.0f) {
+            // Directly update blob score without data reorganization
+            BlobId found_blob_id;
+            BlobInfo *blob_info_ptr =
+                CheckBlobExists(BlobId::GetNull(), blob_name, tag_id, found_blob_id);
+            if (blob_info_ptr != nullptr) {
+              HILOG(kInfo, "UPDATING SCORE: blob={}, old_score={}, new_score={}",
+                    blob_name, blob_info_ptr->score_, new_score);
+              blob_info_ptr->score_ = new_score;
+              valid_blobs_in_batch++;
+            } else {
+              HILOG(kInfo, "CheckBlobExists returned NULL for blob={}", blob_name);
+            }
             should_reorganize[i] = true;
-            valid_blobs_in_batch++;
           }
         }
 
@@ -860,8 +878,8 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
         if (should_reorganize[i]) {
           size_t global_idx = batch_start + i;
           const std::string blob_name = task->blob_names_[global_idx].str();
-          auto size_task = cte_client->AsyncGetBlobSize(hipc::MemContext(),
-                                                        tag_id, blob_name);
+          auto size_task = client_.AsyncGetBlobSize(hipc::MemContext(),
+                                                     tag_id, blob_name);
           size_tasks.push_back(size_task);
           reorganize_indices.push_back(i);
         }
@@ -905,7 +923,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
           size_t global_idx = batch_start + batch_idx;
           const std::string blob_name = task->blob_names_[global_idx].str();
 
-          auto get_task = cte_client->AsyncGetBlob(
+          auto get_task = client_.AsyncGetBlob(
               hipc::MemContext(), tag_id, blob_name, BlobId::GetNull(), 0,
               blob_sizes[i], 0, blob_data_ptrs[i]);
           get_tasks.push_back(get_task);
@@ -925,14 +943,18 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
       // Step 8: Asynchronously put blobs with new scores
       std::vector<hipc::FullPtr<PutBlobTask>> put_tasks;
 
+      HILOG(kInfo, "ReorganizeBlobs: size_tasks.size()={}, about to put blobs", size_tasks.size());
       for (size_t i = 0; i < size_tasks.size(); ++i) {
+        HILOG(kInfo, "ReorganizeBlobs: blob[{}] size={}", i, blob_sizes[i]);
         if (blob_sizes[i] > 0) {
           size_t batch_idx = reorganize_indices[i];
           size_t global_idx = batch_start + batch_idx;
           const std::string blob_name = task->blob_names_[global_idx].str();
           float new_score = task->new_scores_[global_idx];
 
-          auto put_task = cte_client->AsyncPutBlob(
+          HILOG(kInfo, "ReorganizeBlobs calling AsyncPutBlob for blob={}, new_score={}",
+                blob_name, new_score);
+          auto put_task = client_.AsyncPutBlob(
               hipc::MemContext(), tag_id, blob_name, BlobId::GetNull(), 0,
               blob_sizes[i], blob_data_ptrs[i], new_score, 0);
           put_tasks.push_back(put_task);
@@ -1107,8 +1129,6 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
 
     // Step 3: Delete all blobs in this tag using client AsyncDelBlob to
     // properly clean up blocks
-    auto *cte_client = WRP_CTE_CLIENT;
-
     // Collect all blob IDs first (since we'll be modifying the map during
     // deletion)
     std::vector<BlobId> blob_ids_to_delete;
@@ -1135,7 +1155,7 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
         BlobInfo *blob_info_ptr = blob_id_to_info_.find(blob_id);
         if (blob_info_ptr != nullptr) {
           // Call AsyncDelBlob from client
-          auto async_task = cte_client->AsyncDelBlob(
+          auto async_task = client_.AsyncDelBlob(
               hipc::MemContext(), tag_id, blob_info_ptr->blob_name_, blob_id);
           async_tasks.push_back(async_task);
         }
@@ -1645,8 +1665,8 @@ chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
           block.target_offset_ + write_start_in_block, write_size, 0);
       hipc::Pointer data_ptr = data + data_buffer_offset;
 
-      chimaera::bdev::Client client_copy = block.bdev_client_;
-      auto write_task = client_copy.AsyncWrite(hipc::MemContext(), bdev_block,
+      chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
+      auto write_task = cte_clientcopy.AsyncWrite(hipc::MemContext(), bdev_block,
                                                data_ptr, write_size);
 
       write_tasks.push_back(write_task);
@@ -1727,8 +1747,8 @@ chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks,
           block.target_offset_ + read_start_in_block, read_size, 0);
       hipc::Pointer data_ptr = data + data_buffer_offset;
 
-      chimaera::bdev::Client client_copy = block.bdev_client_;
-      auto read_task = client_copy.AsyncRead(hipc::MemContext(), bdev_block,
+      chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
+      auto read_task = cte_clientcopy.AsyncRead(hipc::MemContext(), bdev_block,
                                              data_ptr, read_size);
 
       read_tasks.push_back(read_task);
