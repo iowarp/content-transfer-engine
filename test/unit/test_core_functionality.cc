@@ -241,7 +241,7 @@ public:
    * Helper method to copy data to shared memory pointer (FullPtr version)
    * Primary version following MODULE_DEVELOPMENT_GUIDE.md pattern
    */
-  bool CopyToSharedMemory(hipc::FullPtr<void> ptr,
+  bool CopyToSharedMemory(hipc::FullPtr<char> ptr,
                           const std::vector<char> &data) {
     if (ptr.IsNull() || data.empty()) {
       INFO("Copy to shared memory skipped - null pointer or empty data");
@@ -251,7 +251,7 @@ public:
     // Access data directly through .ptr_ as specified in
     // MODULE_DEVELOPMENT_GUIDE.md
     if (ptr.ptr_ == nullptr) {
-      INFO("Failed to get buffer data from hipc::FullPtr<void>");
+      INFO("Failed to get buffer data from hipc::FullPtr<char>");
       return false;
     }
 
@@ -294,7 +294,7 @@ public:
    * Helper method to copy data from shared memory pointer (FullPtr version)
    * Following MODULE_DEVELOPMENT_GUIDE.md pattern
    */
-  std::vector<char> CopyFromSharedMemory(hipc::FullPtr<void> ptr, size_t size) {
+  std::vector<char> CopyFromSharedMemory(hipc::FullPtr<char> ptr, size_t size) {
     std::vector<char> result;
 
     if (ptr.IsNull() || size == 0) {
@@ -305,7 +305,7 @@ public:
     // Access data directly through .ptr_ as specified in
     // MODULE_DEVELOPMENT_GUIDE.md
     if (ptr.ptr_ == nullptr) {
-      INFO("Failed to get buffer data from hipc::FullPtr<void>");
+      INFO("Failed to get buffer data from hipc::FullPtr<char>");
       return result;
     }
 
@@ -563,9 +563,9 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     REQUIRE(VerifyTestData(test_data, 'B'));
 
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    // Using CHI_IPC->AllocateBuffer<void>() which returns hipc::FullPtr<void>
-    hipc::FullPtr<void> blob_data_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    // Using CHI_IPC->AllocateBuffer() which returns hipc::FullPtr<char>
+    hipc::FullPtr<char> blob_data_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (blob_data_fullptr.IsNull()) {
       WARN("Memory context allocation failed - unable to allocate shared "
            "memory");
@@ -630,8 +630,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
       // Allocate and copy to shared memory using CHI_CLIENT pattern
       // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-      hipc::FullPtr<void> blob_data_fullptr =
-          CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> blob_data_fullptr =
+          CHI_IPC->AllocateBuffer(blob_size);
       if (blob_data_fullptr.IsNull()) {
         WARN("Skipping " << blob_name
                          << " due to memory context allocation failure");
@@ -679,8 +679,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
       auto chunk_data = CreateTestData(chunk_size, pattern);
       // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-      hipc::FullPtr<void> chunk_fullptr =
-          CHI_IPC->AllocateBuffer<void>(chunk_size);
+      hipc::FullPtr<char> chunk_fullptr =
+          CHI_IPC->AllocateBuffer(chunk_size);
 
       if (chunk_fullptr.IsNull()) {
         WARN("Skipping chunk at offset "
@@ -718,8 +718,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     auto test_data = CreateTestData(blob_size, 'A'); // 'A' for Async
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> blob_data_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> blob_data_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
 
     if (blob_data_fullptr.IsNull()) {
       WARN("Skipping async test due to memory context allocation failure");
@@ -761,7 +761,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Testing empty blob name error case...");
     auto test_data = CreateTestData(512);
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> data_fullptr = CHI_IPC->AllocateBuffer<void>(512);
+    hipc::FullPtr<char> data_fullptr = CHI_IPC->AllocateBuffer(512);
     hipc::Pointer data_ptr =
         data_fullptr.IsNull() ? hipc::Pointer::GetNull() : data_fullptr.shm_;
 
@@ -864,8 +864,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Store the blob first
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put_data_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> put_data_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (put_data_fullptr.IsNull()) {
       WARN("Memory context allocation failed - unable to allocate shared "
            "memory");
@@ -898,8 +898,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Calling core_client_->GetBlob() to retrieve stored data...");
 
     // Allocate buffer for retrieved data
-    hipc::FullPtr<void> get_data_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> get_data_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (get_data_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for GetBlob");
       return;
@@ -951,8 +951,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       original_data_set.push_back(blob_data);
 
       // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-      hipc::FullPtr<void> put_fullptr =
-          CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> put_fullptr =
+          CHI_IPC->AllocateBuffer(blob_size);
       if (put_fullptr.IsNull()) {
         WARN("Skipping " << blob_name
                          << " due to memory context allocation failure");
@@ -1003,8 +1003,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
            << "}");
 
       // Allocate buffer for retrieved data
-      hipc::FullPtr<void> buffer_fullptr =
-          CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> buffer_fullptr =
+          CHI_IPC->AllocateBuffer(blob_size);
       if (buffer_fullptr.IsNull()) {
         WARN("Failed to allocate buffer for GetBlob");
         continue;
@@ -1044,7 +1044,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Store the full blob
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put_fullptr = CHI_IPC->AllocateBuffer<void>(total_size);
+    hipc::FullPtr<char> put_fullptr = CHI_IPC->AllocateBuffer(total_size);
     if (put_fullptr.IsNull()) {
       WARN("Skipping partial retrieval test due to memory context allocation "
            "failure");
@@ -1073,8 +1073,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                                             << ", size=" << partial_size);
 
     // Allocate buffer for retrieved data
-    hipc::FullPtr<void> partial_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(partial_size);
+    hipc::FullPtr<char> partial_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(partial_size);
     if (partial_buffer_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for partial GetBlob");
       return;
@@ -1120,7 +1120,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     // Store blob for async retrieval
     auto test_data = CreateTestData(blob_size, 'A'); // 'A' for Async
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> put_fullptr = CHI_IPC->AllocateBuffer(blob_size);
 
     if (put_fullptr.IsNull()) {
       WARN("Skipping async test due to memory context allocation failure");
@@ -1149,8 +1149,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Calling core_client_->AsyncGetBlob()...");
 
     // Allocate buffer for retrieved data
-    hipc::FullPtr<void> async_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> async_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (async_buffer_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for AsyncGetBlob");
       return;
@@ -1192,8 +1192,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("=== Testing REAL GetBlob error handling ===\n");
 
     // Allocate buffer for error case testing
-    hipc::FullPtr<void> error_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(1024);
+    hipc::FullPtr<char> error_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(1024);
     if (error_buffer_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for error case testing");
       return;
@@ -1284,7 +1284,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Allocate shared memory and store data using CHI_CLIENT pattern
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> put_fullptr = CHI_IPC->AllocateBuffer(blob_size);
     if (put_fullptr.IsNull()) {
       WARN("Skipping Put-Get cycle due to memory context allocation failure");
       return;
@@ -1312,8 +1312,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Step 2: Retrieving blob with GetBlob...");
 
     // Allocate buffer for retrieved data
-    hipc::FullPtr<void> get_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> get_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (get_buffer_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for GetBlob");
       return;
@@ -1385,8 +1385,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       stored_data.push_back(blob_data);
 
       // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-      hipc::FullPtr<void> put_fullptr =
-          CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> put_fullptr =
+          CHI_IPC->AllocateBuffer(blob_size);
       if (put_fullptr.IsNull()) {
         WARN("Skipping " << blob_name
                          << " due to memory context allocation failure");
@@ -1438,8 +1438,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       INFO("Retrieving " << blob_name << " and verifying integrity...");
 
       // Allocate buffer for retrieved data
-      hipc::FullPtr<void> multi_buffer_fullptr =
-          CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> multi_buffer_fullptr =
+          CHI_IPC->AllocateBuffer(blob_size);
       if (multi_buffer_fullptr.IsNull()) {
         WARN("Failed to allocate buffer for GetBlob");
         continue;
@@ -1493,7 +1493,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Store in tag1
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put1_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> put1_fullptr = CHI_IPC->AllocateBuffer(blob_size);
     hipc::Pointer put1_ptr =
         put1_fullptr.IsNull() ? hipc::Pointer::GetNull() : put1_fullptr.shm_;
     wrp_cte::core::BlobId tag1_allocated_id = wrp_cte::core::BlobId::GetNull();
@@ -1513,7 +1513,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Store in tag2
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put2_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> put2_fullptr = CHI_IPC->AllocateBuffer(blob_size);
     hipc::Pointer put2_ptr =
         put2_fullptr.IsNull() ? hipc::Pointer::GetNull() : put2_fullptr.shm_;
     wrp_cte::core::BlobId tag2_allocated_id = wrp_cte::core::BlobId::GetNull();
@@ -1536,8 +1536,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Retrieve from tag1 using allocated ID
     // Allocate buffer for tag1 retrieval
-    hipc::FullPtr<void> tag1_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> tag1_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (!tag1_buffer_fullptr.IsNull() &&
         !(tag1_allocated_id.major_ == 0 && tag1_allocated_id.minor_ == 0)) {
       hipc::Pointer tag1_buffer_ptr = tag1_buffer_fullptr.shm_;
@@ -1559,8 +1559,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Retrieve from tag2 using allocated ID
     // Allocate buffer for tag2 retrieval
-    hipc::FullPtr<void> tag2_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> tag2_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (!tag2_buffer_fullptr.IsNull() &&
         !(tag2_allocated_id.major_ == 0 && tag2_allocated_id.minor_ == 0)) {
       hipc::Pointer tag2_buffer_ptr = tag2_buffer_fullptr.shm_;
@@ -1593,7 +1593,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     auto test_data = CreateTestData(blob_size, 'A'); // 'A' for Async
     // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-    hipc::FullPtr<void> put_fullptr = CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> put_fullptr = CHI_IPC->AllocateBuffer(blob_size);
 
     if (put_fullptr.IsNull() || !CopyToSharedMemory(put_fullptr, test_data)) {
       WARN(
@@ -1624,8 +1624,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("Step 2: Sync GetBlob...");
 
     // Allocate buffer for retrieved data
-    hipc::FullPtr<void> sync_get_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(blob_size);
+    hipc::FullPtr<char> sync_get_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(blob_size);
     if (sync_get_buffer_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for sync GetBlob");
       return;
@@ -1681,8 +1681,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                             << pattern << "'");
 
       // Following MODULE_DEVELOPMENT_GUIDE.md AllocateBuffer<T> specification
-      hipc::FullPtr<void> chunk_fullptr =
-          CHI_IPC->AllocateBuffer<void>(chunk_size);
+      hipc::FullPtr<char> chunk_fullptr =
+          CHI_IPC->AllocateBuffer(chunk_size);
       if (chunk_fullptr.IsNull() ||
           !CopyToSharedMemory(chunk_fullptr, chunk_data[i])) {
         WARN("Skipping chunk " << i
@@ -1726,8 +1726,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       INFO("Retrieving chunk " << i << " from offset " << offset);
 
       // Allocate buffer for chunk retrieval
-      hipc::FullPtr<void> chunk_get_buffer_fullptr =
-          CHI_IPC->AllocateBuffer<void>(chunk_size);
+      hipc::FullPtr<char> chunk_get_buffer_fullptr =
+          CHI_IPC->AllocateBuffer(chunk_size);
       if (chunk_get_buffer_fullptr.IsNull()) {
         WARN("Failed to allocate buffer for chunk GetBlob");
         continue;
@@ -1754,8 +1754,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("\nPhase 3: Retrieving full blob and verifying...");
 
     // Allocate buffer for full blob retrieval
-    hipc::FullPtr<void> full_buffer_fullptr =
-        CHI_IPC->AllocateBuffer<void>(total_size);
+    hipc::FullPtr<char> full_buffer_fullptr =
+        CHI_IPC->AllocateBuffer(total_size);
     if (full_buffer_fullptr.IsNull()) {
       WARN("Failed to allocate buffer for full blob GetBlob");
       return;
@@ -1852,8 +1852,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   const float blob_score = 0.75f;
 
   // Allocate shared memory for PutBlob
-  hipc::FullPtr<void> put_data_buffer =
-      CHI_IPC->AllocateBuffer<void>(test_data_size);
+  hipc::FullPtr<char> put_data_buffer =
+      CHI_IPC->AllocateBuffer(test_data_size);
   REQUIRE(!put_data_buffer.IsNull());
   hipc::Pointer put_data_ptr = put_data_buffer.shm_;
 
@@ -1899,8 +1899,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   const std::string empty_blob_name = ""; // Empty string as required
 
   // Allocate shared memory for GetBlob
-  hipc::FullPtr<void> get_data_buffer =
-      CHI_IPC->AllocateBuffer<void>(test_data_size);
+  hipc::FullPtr<char> get_data_buffer =
+      CHI_IPC->AllocateBuffer(test_data_size);
   REQUIRE(!get_data_buffer.IsNull());
   hipc::Pointer get_data_ptr = get_data_buffer.shm_;
 
@@ -2025,7 +2025,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       blob_data.push_back(data);
 
       // Allocate shared memory and store blob
-      hipc::FullPtr<void> put_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> put_buffer = CHI_IPC->AllocateBuffer(blob_size);
       REQUIRE(!put_buffer.IsNull());
       REQUIRE(CopyToSharedMemory(put_buffer, data));
 
@@ -2079,7 +2079,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     // Phase 5: Verify data integrity after reorganization
     INFO("Phase 5: Verifying data integrity after reorganization...");
     for (size_t i = 0; i < num_blobs; ++i) {
-      hipc::FullPtr<void> get_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> get_buffer = CHI_IPC->AllocateBuffer(blob_size);
       REQUIRE(!get_buffer.IsNull());
 
       bool get_success = core_client_->GetBlob(
@@ -2114,7 +2114,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       test_blob_names.push_back(blob_name);
 
       auto data = CreateTestData(blob_size, static_cast<char>('T' + i));
-      hipc::FullPtr<void> put_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> put_buffer = CHI_IPC->AllocateBuffer(blob_size);
       REQUIRE(!put_buffer.IsNull());
       REQUIRE(CopyToSharedMemory(put_buffer, data));
 
@@ -2177,7 +2177,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       batch_blob_names.push_back(blob_name);
 
       auto data = CreateTestData(blob_size, static_cast<char>('B'));
-      hipc::FullPtr<void> put_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+      hipc::FullPtr<char> put_buffer = CHI_IPC->AllocateBuffer(blob_size);
       REQUIRE(!put_buffer.IsNull());
       REQUIRE(CopyToSharedMemory(put_buffer, data));
 

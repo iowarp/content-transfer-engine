@@ -139,7 +139,7 @@ class WrpCte(Service):
             parent_dir = os.path.dirname(path)
             self.log(f"Creating directory: {parent_dir}")
             try:
-                Mkdir(parent_dir, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+                Mkdir(parent_dir, PsshExecInfo(hostfile=self.hostfile)).run()
                 self.log(f"Created directory: {parent_dir}")
             except Exception as e:
                 self.log(f"Error creating directory {parent_dir}: {e}")
@@ -531,13 +531,13 @@ class WrpCte(Service):
                 for path, capacity, score in devices:
                     try:
                         # Execute removal using Rm with PsshExecInfo across all nodes
-                        Rm(path, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+                        Rm(path, PsshExecInfo(hostfile=self.hostfile)).run()
                         self.log(f"Successfully cleaned storage device: {path}")
 
                         # Remove parent directory
                         parent_dir = os.path.dirname(path)
                         self.log(f"Removing directory: {parent_dir}")
-                        Rm(parent_dir, PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+                        Rm(parent_dir, PsshExecInfo(hostfile=self.hostfile)).run()
                         self.log(f"Successfully removed parent directory: {parent_dir}")
 
                     except Exception as e:

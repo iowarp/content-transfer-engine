@@ -185,7 +185,7 @@ private:
             }
 
             // Allocate shared memory for the data
-            hipc::FullPtr<void> shared_data = CHI_IPC->AllocateBuffer<void>(kTestDataSize);
+            hipc::FullPtr<char> shared_data = CHI_IPC->AllocateBuffer(kTestDataSize);
             if (shared_data.IsNull()) {
                 std::cout << "❌ Failed to allocate shared memory buffer" << std::endl;
                 return false;
@@ -242,7 +242,7 @@ private:
             );
 
             // Allocate buffer for reading
-            hipc::FullPtr<void> read_buffer = CHI_IPC->AllocateBuffer<void>(kTestDataSize);
+            hipc::FullPtr<char> read_buffer = CHI_IPC->AllocateBuffer(kTestDataSize);
             if (read_buffer.IsNull()) {
                 std::cout << "❌ Failed to allocate read buffer" << std::endl;
                 return false;

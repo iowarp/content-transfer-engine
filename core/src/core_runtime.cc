@@ -882,7 +882,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
       // Step 4: Wait for size tasks completion and allocate individual buffers
       std::vector<chi::u64> blob_sizes(size_tasks.size(), 0);
-      std::vector<hipc::FullPtr<void>> blob_data_buffers(size_tasks.size());
+      std::vector<hipc::FullPtr<char>> blob_data_buffers(size_tasks.size());
       std::vector<hipc::Pointer> blob_data_ptrs(size_tasks.size());
 
       auto *ipc_manager = CHI_IPC;
@@ -894,7 +894,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
           // Step 5: Allocate individual buffer for each blob
           if (blob_sizes[i] > 0) {
             blob_data_buffers[i] =
-                ipc_manager->AllocateBuffer<void>(blob_sizes[i]);
+                ipc_manager->AllocateBuffer(blob_sizes[i]);
             if (blob_data_buffers[i].IsNull()) {
               HILOG(
                   kError,

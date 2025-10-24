@@ -15,7 +15,7 @@ Tag::Tag(const TagId &tag_id) : tag_id_(tag_id), tag_name_("") {}
 void Tag::PutBlob(const std::string &blob_name, const char *data, size_t data_size, size_t off) {
   // Allocate shared memory for the data
   auto *ipc_manager = CHI_IPC;
-  hipc::FullPtr<void> shm_fullptr = ipc_manager->AllocateBuffer<void>(data_size);
+  hipc::FullPtr<char> shm_fullptr = ipc_manager->AllocateBuffer(data_size);
 
   if (shm_fullptr.IsNull()) {
     throw std::runtime_error("Failed to allocate shared memory for PutBlob");
@@ -46,8 +46,8 @@ void Tag::PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_
 
 // NOTE: AsyncPutBlob(const char*) overload removed due to memory management issues.
 // For async operations, the caller must manage shared memory lifecycle by:
-// 1. Allocating: hipc::FullPtr<void> shm_ptr = CHI_IPC->AllocateBuffer<void>(data_size);
-// 2. Copying data: memcpy(shm_ptr.ptr_, data, data_size);  
+// 1. Allocating: hipc::FullPtr<char> shm_ptr = CHI_IPC->AllocateBuffer(data_size);
+// 2. Copying data: memcpy(shm_ptr.ptr_, data, data_size);
 // 3. Calling: AsyncPutBlob(blob_name, shm_ptr.shm_, data_size, off, score);
 // 4. Keeping shm_ptr alive until task completes
 
@@ -70,7 +70,7 @@ void Tag::GetBlob(const std::string &blob_name, char *data, size_t data_size, si
 
   // Allocate shared memory for the data
   auto *ipc_manager = CHI_IPC;
-  hipc::FullPtr<void> shm_fullptr = ipc_manager->AllocateBuffer<void>(data_size);
+  hipc::FullPtr<char> shm_fullptr = ipc_manager->AllocateBuffer(data_size);
 
   if (shm_fullptr.IsNull()) {
     throw std::runtime_error("Failed to allocate shared memory for GetBlob");
@@ -97,7 +97,7 @@ void Tag::GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_
   
   if (data.IsNull()) {
     throw std::invalid_argument("data pointer must be pre-allocated by caller. "
-                               "Use CHI_IPC->AllocateBuffer<void>(data_size) to allocate shared memory.");
+                               "Use CHI_IPC->AllocateBuffer(data_size) to allocate shared memory.");
   }
   
   auto *cte_client = WRP_CTE_CLIENT;

@@ -389,7 +389,7 @@ def _configure(self, **kwargs):
 def start(self):
     """Start the package"""
     # Use self.mod_env for environment variables
-    # Use self.jarvis.hostfile for MPI execution
+    # Use self.hostfile for MPI execution
     cmd = ['my_application', '--config', self.config['config_file']]
     Exec(' '.join(cmd), LocalExecInfo(env=self.mod_env)).run()
 ```
@@ -413,7 +413,7 @@ def stop(self):
 def kill(self):
     """Forcibly kill the package"""
     from jarvis_cd.shell.process import Kill
-    Kill('my_application', PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+    Kill('my_application', PsshExecInfo(hostfile=self.hostfile)).run()
 ```
 
 #### `clean(self)`
@@ -425,7 +425,7 @@ def clean(self):
     """Clean package data"""
     from jarvis_cd.shell.process import Rm
     Rm(self.config['output_dir'], 
-       PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+       PsshExecInfo(hostfile=self.hostfile)).run()
 ```
 
 #### `status(self) -> str`
@@ -664,7 +664,7 @@ def start(self):
     cmd = ['simulator', '--params', self.param_file]
     Exec(' '.join(cmd), MpiExecInfo(
         env=self.mod_env,
-        hostfile=self.jarvis.hostfile,
+        hostfile=self.hostfile,
         nprocs=self.config['nprocs']
     )).run()
 ```
@@ -699,7 +699,7 @@ def _configure(self, **kwargs):
     
     # Generate hostfile for MPI applications
     with open(self.hostfile_path, 'w') as f:
-        for host in self.jarvis.hostfile:
+        for host in self.hostfile:
             f.write(f"{host}\n")
 ```
 
@@ -787,7 +787,7 @@ Exec('command', LocalExecInfo(env=self.mod_env)).run()
 # MPI execution
 Exec('mpi_command', MpiExecInfo(
     env=self.mod_env,
-    hostfile=self.jarvis.hostfile,
+    hostfile=self.hostfile,
     nprocs=self.config['nprocs'],
     ppn=self.config['ppn']
 )).run()
@@ -795,11 +795,11 @@ Exec('mpi_command', MpiExecInfo(
 # Parallel SSH execution
 Exec('command', PsshExecInfo(
     env=self.mod_env,
-    hostfile=self.jarvis.hostfile
+    hostfile=self.hostfile
 )).run()
 
 # Process utilities
-Kill('process_name', PsshExecInfo(hostfile=self.jarvis.hostfile)).run()
+Kill('process_name', PsshExecInfo(hostfile=self.hostfile)).run()
 Rm('/path/to/clean', LocalExecInfo()).run()
 ```
 
@@ -807,7 +807,7 @@ Rm('/path/to/clean', LocalExecInfo()).run()
 
 ```python
 # Access the hostfile for distributed execution
-hostfile = self.jarvis.hostfile
+hostfile = self.hostfile
 
 # Use in MPI commands
 exec_info = MpiExecInfo(
@@ -2055,7 +2055,7 @@ class ParallelApp(Application):
         
         Exec(' '.join(cmd), MpiExecInfo(
             env=self.mod_env,
-            hostfile=self.jarvis.hostfile,
+            hostfile=self.hostfile,
             nprocs=self.config['nprocs'],
             ppn=self.config['ppn']
         )).run()
