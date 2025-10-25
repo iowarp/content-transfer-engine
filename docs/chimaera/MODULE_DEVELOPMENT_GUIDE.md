@@ -420,7 +420,7 @@ class Container : public chi::Container {
       }
       case chi::MonitorModeId::kEstLoad: {
         // Estimate task execution time
-        ctx.estimated_completion_time_us = 1000.0;  // 1ms for container creation
+        ctx.est_load = 1000.0;  // 1ms for container creation
         break;
       }
     }
@@ -453,7 +453,7 @@ class Container : public chi::Container {
         break;
       case chi::MonitorModeId::kEstLoad:
         // Estimate execution time based on operation complexity
-        ctx.estimated_completion_time_us = task->operation_id_ * 100.0;  // Example calculation
+        ctx.est_load = task->operation_id_ * 100.0;  // Example calculation
         break;
     }
   }
@@ -3738,7 +3738,7 @@ void MonitorCustom(chi::MonitorModeId mode,
   switch (mode) {
     case chi::MonitorModeId::kEstLoad:
       // Optional: Estimate execution time for load balancing
-      rctx.estimated_completion_time_us = task_ptr->operation_id_ * 100.0;
+      rctx.est_load = task_ptr->operation_id_ * 100.0;
       break;
 
     case chi::MonitorModeId::kGlobalSchedule:

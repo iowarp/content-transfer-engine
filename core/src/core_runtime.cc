@@ -195,7 +195,7 @@ void Runtime::MonitorCreate(chi::MonitorModeId mode,
   }
   case chi::MonitorModeId::kEstLoad: {
     // Estimate container creation time
-    ctx.estimated_completion_time_us = 5000.0; // 5ms for container creation
+    ctx.est_load = 5000.0; // 5ms for container creation
     break;
   }
   }
@@ -242,7 +242,7 @@ void Runtime::MonitorDestroy(chi::MonitorModeId mode,
   }
   case chi::MonitorModeId::kEstLoad: {
     // Estimate container destruction time
-    ctx.estimated_completion_time_us = 1000.0; // 1ms for container cleanup
+    ctx.est_load = 1000.0; // 1ms for container cleanup
     break;
   }
   }
@@ -353,7 +353,7 @@ void Runtime::MonitorRegisterTarget(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate execution time for target registration
-    ctx.estimated_completion_time_us = 10000.0; // 10ms for bdev creation
+    ctx.est_load = 10000.0; // 10ms for bdev creation
     break;
   }
 }
@@ -402,7 +402,7 @@ void Runtime::MonitorUnregisterTarget(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate execution time for target unregistration
-    ctx.estimated_completion_time_us = 1000.0; // 1ms for unlinking
+    ctx.est_load = 1000.0; // 1ms for unlinking
     break;
   }
 }
@@ -441,7 +441,7 @@ void Runtime::MonitorListTargets(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate execution time for target listing
-    ctx.estimated_completion_time_us = 500.0; // 0.5ms for listing
+    ctx.est_load = 500.0; // 0.5ms for listing
     break;
   }
 }
@@ -478,7 +478,7 @@ void Runtime::MonitorStatTargets(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate execution time for stats update
-    ctx.estimated_completion_time_us = 2000.0; // 2ms for stats polling
+    ctx.est_load = 2000.0; // 2ms for stats polling
     break;
   }
 }
@@ -529,7 +529,7 @@ void Runtime::MonitorGetOrCreateTag(
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate execution time for tag operations
-    ctx.estimated_completion_time_us = 1000.0; // 1ms for tag lookup/creation
+    ctx.est_load = 1000.0; // 1ms for tag lookup/creation
     break;
   }
 }
@@ -623,8 +623,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     size_t tag_lock_index = GetTagLockIndex(tag_id);
     size_t tag_total_size = 0;
 
-    // Update blob timestamp and score (blob_info_ptr already obtained, no additional lock
-    // needed)
+    // Update blob timestamp and score (blob_info_ptr already obtained, no
+    // additional lock needed)
     blob_info_ptr->last_modified_ = now;
     blob_info_ptr->score_ = blob_score;
 
@@ -672,7 +672,7 @@ void Runtime::MonitorPutBlob(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate based on blob size
-    ctx.estimated_completion_time_us = task->size_ / 1000.0; // 1 us per KB
+    ctx.est_load = task->size_ / 1000.0; // 1 us per KB
     break;
   }
 }
@@ -768,15 +768,15 @@ void Runtime::MonitorGetBlob(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate based on blob size
-    ctx.estimated_completion_time_us =
-        task->size_ / 2000.0; // 0.5 us per KB (read is faster)
+    ctx.est_load = task->size_ / 2000.0; // 0.5 us per KB (read is faster)
     break;
   }
 }
 
 void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
                               chi::RunContext &ctx) {
-  HILOG(kInfo, "=== ReorganizeBlobs ENTRY: {} blobs ===", task->blob_names_.size());
+  HILOG(kInfo,
+        "=== ReorganizeBlobs ENTRY: {} blobs ===", task->blob_names_.size());
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -814,8 +814,8 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
       for (size_t i = batch_start; i < batch_end; ++i) {
         const std::string blob_name = task->blob_names_[i].str();
-        auto score_task = client_.AsyncGetBlobScore(hipc::MemContext(),
-                                                     tag_id, blob_name);
+        auto score_task =
+            client_.AsyncGetBlobScore(hipc::MemContext(), tag_id, blob_name);
         score_tasks.push_back(score_task);
       }
 
@@ -835,21 +835,26 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
           // Step 2: Check if score needs updating
           float score_diff = std::abs(new_score - current_scores[i]);
-          HILOG(kInfo, "SCORE CHECK: blob={}, current={}, new={}, diff={}, threshold={}",
-                blob_name, current_scores[i], new_score, score_diff, score_difference_threshold);
+          HILOG(
+              kInfo,
+              "SCORE CHECK: blob={}, current={}, new={}, diff={}, threshold={}",
+              blob_name, current_scores[i], new_score, score_diff,
+              score_difference_threshold);
           if (score_diff >= score_difference_threshold && new_score >= 0.0f &&
               new_score <= 1.0f) {
             // Directly update blob score without data reorganization
             BlobId found_blob_id;
-            BlobInfo *blob_info_ptr =
-                CheckBlobExists(BlobId::GetNull(), blob_name, tag_id, found_blob_id);
+            BlobInfo *blob_info_ptr = CheckBlobExists(
+                BlobId::GetNull(), blob_name, tag_id, found_blob_id);
             if (blob_info_ptr != nullptr) {
-              HILOG(kInfo, "UPDATING SCORE: blob={}, old_score={}, new_score={}",
+              HILOG(kInfo,
+                    "UPDATING SCORE: blob={}, old_score={}, new_score={}",
                     blob_name, blob_info_ptr->score_, new_score);
               blob_info_ptr->score_ = new_score;
               valid_blobs_in_batch++;
             } else {
-              HILOG(kInfo, "CheckBlobExists returned NULL for blob={}", blob_name);
+              HILOG(kInfo, "CheckBlobExists returned NULL for blob={}",
+                    blob_name);
             }
             should_reorganize[i] = true;
           }
@@ -873,8 +878,8 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
         if (should_reorganize[i]) {
           size_t global_idx = batch_start + i;
           const std::string blob_name = task->blob_names_[global_idx].str();
-          auto size_task = client_.AsyncGetBlobSize(hipc::MemContext(),
-                                                     tag_id, blob_name);
+          auto size_task =
+              client_.AsyncGetBlobSize(hipc::MemContext(), tag_id, blob_name);
           size_tasks.push_back(size_task);
           reorganize_indices.push_back(i);
         }
@@ -893,8 +898,7 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 
           // Step 5: Allocate individual buffer for each blob
           if (blob_sizes[i] > 0) {
-            blob_data_buffers[i] =
-                ipc_manager->AllocateBuffer(blob_sizes[i]);
+            blob_data_buffers[i] = ipc_manager->AllocateBuffer(blob_sizes[i]);
             if (blob_data_buffers[i].IsNull()) {
               HILOG(
                   kError,
@@ -938,7 +942,8 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
       // Step 8: Asynchronously put blobs with new scores
       std::vector<hipc::FullPtr<PutBlobTask>> put_tasks;
 
-      HILOG(kInfo, "ReorganizeBlobs: size_tasks.size()={}, about to put blobs", size_tasks.size());
+      HILOG(kInfo, "ReorganizeBlobs: size_tasks.size()={}, about to put blobs",
+            size_tasks.size());
       for (size_t i = 0; i < size_tasks.size(); ++i) {
         HILOG(kInfo, "ReorganizeBlobs: blob[{}] size={}", i, blob_sizes[i]);
         if (blob_sizes[i] > 0) {
@@ -947,8 +952,10 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
           const std::string blob_name = task->blob_names_[global_idx].str();
           float new_score = task->new_scores_[global_idx];
 
-          HILOG(kInfo, "ReorganizeBlobs calling AsyncPutBlob for blob={}, new_score={}",
-                blob_name, new_score);
+          HILOG(
+              kInfo,
+              "ReorganizeBlobs calling AsyncPutBlob for blob={}, new_score={}",
+              blob_name, new_score);
           auto put_task = client_.AsyncPutBlob(
               hipc::MemContext(), tag_id, blob_name, BlobId::GetNull(), 0,
               blob_sizes[i], blob_data_ptrs[i], new_score, 0);
@@ -998,7 +1005,7 @@ void Runtime::MonitorReorganizeBlobs(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for multiple score updates - 100μs per blob
-    ctx.estimated_completion_time_us = task->blob_names_.size() * 100.0;
+    ctx.est_load = task->blob_names_.size() * 100.0;
     break;
   }
 }
@@ -1090,7 +1097,7 @@ void Runtime::MonitorDelBlob(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for blob deletion
-    ctx.estimated_completion_time_us = 50.0; // 0.05ms for deletion
+    ctx.est_load = 50.0; // 0.05ms for deletion
     break;
   }
 }
@@ -1226,7 +1233,7 @@ void Runtime::MonitorDelTag(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for tag deletion (depends on number of blobs)
-    ctx.estimated_completion_time_us = 100.0; // 0.1ms base cost
+    ctx.est_load = 100.0; // 0.1ms base cost
     break;
   }
 }
@@ -1272,7 +1279,7 @@ void Runtime::MonitorGetTagSize(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for tag size lookup
-    ctx.estimated_completion_time_us = 10.0; // 0.01ms for lookup
+    ctx.est_load = 10.0; // 0.01ms for lookup
     break;
   }
 }
@@ -1661,8 +1668,8 @@ chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
       hipc::Pointer data_ptr = data + data_buffer_offset;
 
       chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
-      auto write_task = cte_clientcopy.AsyncWrite(hipc::MemContext(), bdev_block,
-                                               data_ptr, write_size);
+      auto write_task = cte_clientcopy.AsyncWrite(
+          hipc::MemContext(), bdev_block, data_ptr, write_size);
 
       write_tasks.push_back(write_task);
       expected_write_sizes.push_back(write_size);
@@ -1744,7 +1751,7 @@ chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks,
 
       chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
       auto read_task = cte_clientcopy.AsyncRead(hipc::MemContext(), bdev_block,
-                                             data_ptr, read_size);
+                                                data_ptr, read_size);
 
       read_tasks.push_back(read_task);
       expected_read_sizes.push_back(read_size);
@@ -1929,7 +1936,7 @@ void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
   case chi::MonitorModeId::kGlobalSchedule:
     break;
   case chi::MonitorModeId::kEstLoad:
-    ctx.estimated_completion_time_us = 100.0;
+    ctx.est_load = 100.0;
     break;
   }
   (void)task;
@@ -1993,7 +2000,7 @@ void Runtime::MonitorGetBlobScore(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for blob score lookup
-    ctx.estimated_completion_time_us = 10.0; // 0.01ms for lookup
+    ctx.est_load = 10.0; // 0.01ms for lookup
     break;
   }
 }
@@ -2053,7 +2060,7 @@ void Runtime::MonitorGetBlobSize(chi::MonitorModeId mode,
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for blob size lookup (similar to score lookup)
-    ctx.estimated_completion_time_us = 10.0; // 0.01ms for lookup
+    ctx.est_load = 10.0; // 0.01ms for lookup
     break;
   }
 }
@@ -2110,7 +2117,7 @@ void Runtime::MonitorGetContainedBlobs(
     break;
   case chi::MonitorModeId::kEstLoad:
     // Estimate for blob enumeration - 5μs per blob
-    ctx.estimated_completion_time_us = 100.0; // Base time + per blob
+    ctx.est_load = 100.0; // Base time + per blob
     break;
   }
 }
