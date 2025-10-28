@@ -92,6 +92,11 @@ public:
   static constexpr chi::u32 kTestWorkerCount = 2;
   static constexpr size_t kTestBlobSize = 4096; // 4KB test blobs
 
+  // CTE Core pool configuration - use constants from core_tasks.h
+  // These are kept for backward compatibility but delegate to the canonical constants
+  static inline const chi::PoolId& kCTECorePoolId = wrp_cte::core::kCtePoolId;
+  static inline const char* kCTECorePoolName = wrp_cte::core::kCtePoolName;
+
   std::unique_ptr<wrp_cte::core::Client> core_client_;
   std::string test_storage_path_;
   chi::PoolId core_pool_id_;
@@ -373,7 +378,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
          << params.worker_count_);
 
     // ACTUAL FUNCTIONAL TEST - call the real Create API
-    REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+    REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                         kCTECorePoolId, params));
 
     INFO("SUCCESS: CTE Core pool created with pool ID: "
          << core_pool_id_.ToU64());
@@ -391,7 +397,9 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
          << params.worker_count_);
 
     // ACTUAL FUNCTIONAL TEST - call the real AsyncCreate API
-    auto create_task = core_client_->AsyncCreate(mctx_, pool_query, params);
+    auto create_task = core_client_->AsyncCreate(mctx_, pool_query,
+                                                  kCTECorePoolName,
+                                                  kCTECorePoolId, params);
     REQUIRE(!create_task.IsNull());
 
     INFO("AsyncCreate returned valid task, waiting for completion...");
@@ -429,7 +437,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
   params.worker_count_ = kTestWorkerCount;
 
   INFO("Creating core pool before target registration...");
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
   INFO("Core pool created successfully");
 
   SECTION("FUNCTIONAL - Register file-based bdev target with real file "
@@ -536,7 +545,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
 
   // Use the test_storage_path_ as target_name since that's what matters for
   // bdev creation
@@ -840,7 +850,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
 
   // Use the test_storage_path_ as target_name since that's what matters for
   // bdev creation
@@ -1260,7 +1271,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
 
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
@@ -1810,7 +1822,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   params.worker_count_ = kTestWorkerCount;
 
   INFO("Step 1: Creating core pool...");
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
   INFO("✓ Core pool created successfully");
 
   INFO("Step 2: Registering target...");
@@ -1991,7 +2004,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   params.worker_count_ = kTestWorkerCount;
 
   INFO("Step 1: Setting up CTE environment...");
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
 
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
@@ -2246,7 +2260,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow",
   params.worker_count_ = kTestWorkerCount;
 
   // Step 1: Initialize CTE core pool
-  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, params));
+  REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
+                                       kCTECorePoolId, params));
   INFO("Step 1 completed: CTE core pool initialized");
 
   // Step 2: Register multiple targets

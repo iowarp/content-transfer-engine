@@ -260,10 +260,13 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     std::string bdev_pool_name =
         target_name; // Use target_name as the bdev pool name
 
+    // Generate a unique pool ID for this bdev container
+    chi::PoolId bdev_pool_id = CHI_POOL_MANAGER->GeneratePoolId();
+
     // Create the bdev container using the client
     chi::PoolQuery pool_query = chi::PoolQuery::Local();
-    bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_type,
-                       total_size);
+    bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_pool_id,
+                       bdev_type, total_size);
 
     // Check if creation was successful
     if (bdev_client.return_code_ != 0) {

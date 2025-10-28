@@ -13,6 +13,12 @@
 
 namespace wrp_cte::core {
 
+// CTE Core Pool ID constant (major: 512, minor: 0)
+static constexpr chi::PoolId kCtePoolId(512, 0);
+
+// CTE Core Pool Name constant
+static constexpr const char* kCtePoolName = "wrp_cte_core";
+
 // Timestamp type definition
 using Timestamp = std::chrono::time_point<std::chrono::steady_clock>;
 

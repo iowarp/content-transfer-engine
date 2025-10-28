@@ -16,17 +16,13 @@ public:
    * Synchronous container creation - waits for completion
    */
   void Create(const hipc::MemContext &mctx, const chi::PoolQuery &pool_query,
+              const std::string &pool_name, const chi::PoolId &custom_pool_id,
               const CreateParams &params = CreateParams()) {
-    auto task = AsyncCreate(mctx, pool_query, params);
+    auto task = AsyncCreate(mctx, pool_query, pool_name, custom_pool_id, params);
     task->Wait();
 
-    // Check if CreateTask succeeded and update client's pool_id_ to the actual
-    // pool created/found This is required because CreateTask is a
-    // GetOrCreatePoolTask that may return a different pool ID than what was
-    // requested if the pool already existed
-    if (task->return_code_ == 0) {
-      pool_id_ = task->new_pool_id_;
-    }
+    // CRITICAL: Update client pool_id_ with the actual pool ID from the task
+    pool_id_ = task->new_pool_id_;
 
     CHI_IPC->DelTask(task);
   }
@@ -36,6 +32,7 @@ public:
    */
   hipc::FullPtr<CreateTask>
   AsyncCreate(const hipc::MemContext &mctx, const chi::PoolQuery &pool_query,
+              const std::string &pool_name, const chi::PoolId &custom_pool_id,
               const CreateParams &params = CreateParams()) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
@@ -43,12 +40,12 @@ public:
     // CRITICAL: CreateTask MUST use admin pool for GetOrCreatePool processing
     auto task = ipc_manager->NewTask<CreateTask>(
         chi::CreateTaskId(),
-        chi::kAdminPoolId, // Always use admin pool for CreateTask
+        chi::kAdminPoolId,              // Always use admin pool for CreateTask
         pool_query,
-        "wrp_cte_core", // ChiMod name
-        "wrp_cte_core", // Pool name as string
-        pool_id_,       // Target pool ID
-        params);        // CreateParams with configuration
+        CreateParams::chimod_lib_name,  // ChiMod name from CreateParams
+        pool_name,                      // Pool name from parameter
+        custom_pool_id,                 // Explicit pool ID from parameter
+        params);                        // CreateParams with configuration
 
     // Submit to runtime
     ipc_manager->Enqueue(task);

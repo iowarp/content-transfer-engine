@@ -89,7 +89,10 @@ public:
             create_params.worker_count_ = 2;  // Use 2 workers for testing
 
             try {
-                cte_client_->Create(hipc::MemContext(), chi::PoolQuery::Local(), create_params);
+                // Use CTE Core constants from core_tasks.h
+                cte_client_->Create(hipc::MemContext(), chi::PoolQuery::Local(),
+                                   wrp_cte::core::kCtePoolName,
+                                   wrp_cte::core::kCtePoolId, create_params);
                 std::cout << "   CTE container created successfully" << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "Failed to create CTE container: " << e.what() << std::endl;
