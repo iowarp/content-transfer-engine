@@ -36,7 +36,7 @@ bool ContentTransferEngine::ClientInit() {
   auto *cte_config = WRP_CTE_CONFIG;
 
   // Create CTE Core container using constants from core_tasks.h
-  cte_client->Create(hipc::MemContext(), chi::PoolQuery::Local(),
+  cte_client->Create(hipc::MemContext(), chi::PoolQuery::Dynamic(),
                      wrp_cte::core::kCtePoolName, wrp_cte::core::kCtePoolId);
 
   // Suppress unused variable warnings

@@ -132,10 +132,10 @@ TEST_CASE_METHOD(CTECoreTestFixture, "Create CTE Core Pool", "[cte][core][pool]"
   }
   
   SECTION("Pool query validation") {
-    // Verify local pool query usage (never null as per CLAUDE.md)
-    chi::PoolQuery local_query = chi::PoolQuery::Local();
-    
-    // Pool query should be valid and local
+    // Verify dynamic pool query usage (never null as per CLAUDE.md)
+    chi::PoolQuery dynamic_query = chi::PoolQuery::Dynamic();
+
+    // Pool query should be valid and dynamic
     INFO("Pool query validation completed - using Local() as required");
     INFO("This test demonstrates proper pool query usage");
   }

@@ -367,8 +367,8 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   SECTION("FUNCTIONAL - Synchronous pool creation with real runtime") {
     INFO("=== Testing REAL core_client_->Create() call ===");
 
-    // Create pool using local query (never null as per CLAUDE.md)
-    chi::PoolQuery pool_query = chi::PoolQuery::Local();
+    // Create pool using dynamic query (never null as per CLAUDE.md)
+    chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
 
     // Create parameters with test configuration
     wrp_cte::core::CreateParams params;
@@ -389,7 +389,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   SECTION("FUNCTIONAL - Asynchronous pool creation with real task management") {
     INFO("=== Testing REAL core_client_->AsyncCreate() call ===");
 
-    chi::PoolQuery pool_query = chi::PoolQuery::Local();
+    chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
     wrp_cte::core::CreateParams params;
     params.worker_count_ = kTestWorkerCount;
 
@@ -432,7 +432,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
                  "[cte][core][target][registration]") {
   // First create the core pool using REAL API calls
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
@@ -541,7 +541,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                  "FUNCTIONAL - PutBlob Operations",
                  "[cte][core][blob][put][functional]") {
   // Setup: Create core pool and register target
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
@@ -846,7 +846,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                  "FUNCTIONAL - GetBlob Operations",
                  "[cte][core][blob][get][functional]") {
   // Setup: Create core pool, register target, create tag
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
@@ -1267,7 +1267,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
                  "FUNCTIONAL - PutBlob-GetBlob Integration Cycles",
                  "[cte][core][blob][integration][put-get]") {
   // Setup: Create core pool and register target
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
@@ -1817,7 +1817,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   INFO("=== COMPREHENSIVE PutBlob-GetBlob Integration Test ===");
 
   // Setup: Create core pool, register target, create tag
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
@@ -1999,7 +1999,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   INFO("=== FUNCTIONAL ReorganizeBlobs Test ===");
 
   // Setup: Create core pool, register target, create tag
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 
@@ -2255,7 +2255,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
  */
 TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow",
                  "[cte][core][integration]") {
-  chi::PoolQuery pool_query = chi::PoolQuery::Local();
+  chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
   params.worker_count_ = kTestWorkerCount;
 

@@ -232,7 +232,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     chi::PoolId bdev_pool_id = CHI_POOL_MANAGER->GeneratePoolId();
 
     // Create the bdev container using the client
-    chi::PoolQuery pool_query = chi::PoolQuery::Local();
+    chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
     bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_pool_id,
                        bdev_type, total_size);
 

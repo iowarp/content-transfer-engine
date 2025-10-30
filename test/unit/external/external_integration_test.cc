@@ -90,7 +90,7 @@ public:
 
             try {
                 // Use CTE Core constants from core_tasks.h
-                cte_client_->Create(hipc::MemContext(), chi::PoolQuery::Local(),
+                cte_client_->Create(hipc::MemContext(), chi::PoolQuery::Dynamic(),
                                    wrp_cte::core::kCtePoolName,
                                    wrp_cte::core::kCtePoolId, create_params);
                 std::cout << "   CTE container created successfully" << std::endl;
