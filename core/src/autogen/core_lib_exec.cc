@@ -93,82 +93,13 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
   }
 }
 
-void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method, 
+void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
                        hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx) {
-  switch (method) {
-    case Method::kCreate: {
-      MonitorCreate(mode, task_ptr.Cast<CreateTask>(), rctx);
-      break;
-    }
-    case Method::kDestroy: {
-      MonitorDestroy(mode, task_ptr.Cast<DestroyTask>(), rctx);
-      break;
-    }
-    case Method::kRegisterTarget: {
-      MonitorRegisterTarget(mode, task_ptr.Cast<RegisterTargetTask>(), rctx);
-      break;
-    }
-    case Method::kUnregisterTarget: {
-      MonitorUnregisterTarget(mode, task_ptr.Cast<UnregisterTargetTask>(), rctx);
-      break;
-    }
-    case Method::kListTargets: {
-      MonitorListTargets(mode, task_ptr.Cast<ListTargetsTask>(), rctx);
-      break;
-    }
-    case Method::kStatTargets: {
-      MonitorStatTargets(mode, task_ptr.Cast<StatTargetsTask>(), rctx);
-      break;
-    }
-    case Method::kGetOrCreateTag: {
-      MonitorGetOrCreateTag(mode, task_ptr.Cast<core::GetOrCreateTagTask<core::CreateParams>>(), rctx);
-      break;
-    }
-    case Method::kPutBlob: {
-      MonitorPutBlob(mode, task_ptr.Cast<PutBlobTask>(), rctx);
-      break;
-    }
-    case Method::kGetBlob: {
-      MonitorGetBlob(mode, task_ptr.Cast<GetBlobTask>(), rctx);
-      break;
-    }
-    case Method::kReorganizeBlobs: {
-      MonitorReorganizeBlobs(mode, task_ptr.Cast<ReorganizeBlobsTask>(), rctx);
-      break;
-    }
-    case Method::kDelBlob: {
-      MonitorDelBlob(mode, task_ptr.Cast<DelBlobTask>(), rctx);
-      break;
-    }
-    case Method::kDelTag: {
-      MonitorDelTag(mode, task_ptr.Cast<DelTagTask>(), rctx);
-      break;
-    }
-    case Method::kGetTagSize: {
-      MonitorGetTagSize(mode, task_ptr.Cast<GetTagSizeTask>(), rctx);
-      break;
-    }
-    case Method::kPollTelemetryLog: {
-      MonitorPollTelemetryLog(mode, task_ptr.Cast<PollTelemetryLogTask>(), rctx);
-      break;
-    }
-    case Method::kGetBlobScore: {
-      MonitorGetBlobScore(mode, task_ptr.Cast<GetBlobScoreTask>(), rctx);
-      break;
-    }
-    case Method::kGetBlobSize: {
-      MonitorGetBlobSize(mode, task_ptr.Cast<GetBlobSizeTask>(), rctx);
-      break;
-    }
-    case Method::kGetContainedBlobs: {
-      MonitorGetContainedBlobs(mode, task_ptr.Cast<GetContainedBlobsTask>(), rctx);
-      break;
-    }
-    default: {
-      // Unknown method - do nothing
-      break;
-    }
-  }
+  // Monitor methods have been removed - using default framework behavior
+  (void)mode;
+  (void)method;
+  (void)task_ptr;
+  (void)rctx;
 }
 
 void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {

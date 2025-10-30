@@ -185,22 +185,6 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   }
 }
 
-void Runtime::MonitorCreate(chi::MonitorModeId mode,
-                            hipc::FullPtr<CreateTask> task,
-                            chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule: {
-    // Optional: Global coordination for distributed setup
-    break;
-  }
-  case chi::MonitorModeId::kEstLoad: {
-    // Estimate container creation time
-    ctx.est_load = 5000.0; // 5ms for container creation
-    break;
-  }
-  }
-}
-
 void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
   try {
     // Clear all registered targets and their associated data
@@ -229,22 +213,6 @@ void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
 
   } catch (const std::exception &e) {
     task->return_code_ = 1;
-  }
-}
-
-void Runtime::MonitorDestroy(chi::MonitorModeId mode,
-                             hipc::FullPtr<DestroyTask> task,
-                             chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule: {
-    // Optional: Global coordination for distributed cleanup
-    break;
-  }
-  case chi::MonitorModeId::kEstLoad: {
-    // Estimate container destruction time
-    ctx.est_load = 1000.0; // 1ms for container cleanup
-    break;
-  }
   }
 }
 
@@ -347,20 +315,6 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
   }
 }
 
-void Runtime::MonitorRegisterTarget(chi::MonitorModeId mode,
-                                    hipc::FullPtr<RegisterTargetTask> task,
-                                    chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    // Global coordination for distributed target registration
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate execution time for target registration
-    ctx.est_load = 10000.0; // 10ms for bdev creation
-    break;
-  }
-}
-
 void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
                                chi::RunContext &ctx) {
   try {
@@ -396,20 +350,6 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
   }
 }
 
-void Runtime::MonitorUnregisterTarget(chi::MonitorModeId mode,
-                                      hipc::FullPtr<UnregisterTargetTask> task,
-                                      chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    // Global coordination for distributed target management
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate execution time for target unregistration
-    ctx.est_load = 1000.0; // 1ms for unlinking
-    break;
-  }
-}
-
 void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
                           chi::RunContext &ctx) {
   try {
@@ -435,20 +375,6 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
   }
 }
 
-void Runtime::MonitorListTargets(chi::MonitorModeId mode,
-                                 hipc::FullPtr<ListTargetsTask> task,
-                                 chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    // Global coordination for distributed target listing
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate execution time for target listing
-    ctx.est_load = 500.0; // 0.5ms for listing
-    break;
-  }
-}
-
 void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
                           chi::RunContext &ctx) {
   try {
@@ -469,20 +395,6 @@ void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);
-  }
-}
-
-void Runtime::MonitorStatTargets(chi::MonitorModeId mode,
-                                 hipc::FullPtr<StatTargetsTask> task,
-                                 chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    // Global coordination for distributed stats collection
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate execution time for stats update
-    ctx.est_load = 2000.0; // 2ms for stats polling
-    break;
   }
 }
 
@@ -518,22 +430,6 @@ void Runtime::GetOrCreateTag(
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);
-  }
-}
-
-template <typename CreateParamsT>
-void Runtime::MonitorGetOrCreateTag(
-    chi::MonitorModeId mode,
-    hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task,
-    chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    // Global coordination for distributed tag management
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate execution time for tag operations
-    ctx.est_load = 1000.0; // 1ms for tag lookup/creation
-    break;
   }
 }
 
@@ -667,19 +563,6 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
   }
 }
 
-void Runtime::MonitorPutBlob(chi::MonitorModeId mode,
-                             hipc::FullPtr<PutBlobTask> task,
-                             chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate based on blob size
-    ctx.est_load = task->size_ / 1000.0; // 1 us per KB
-    break;
-  }
-}
-
 void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
   try {
     // Extract input parameters
@@ -760,19 +643,6 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);
-  }
-}
-
-void Runtime::MonitorGetBlob(chi::MonitorModeId mode,
-                             hipc::FullPtr<GetBlobTask> task,
-                             chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate based on blob size
-    ctx.est_load = task->size_ / 2000.0; // 0.5 us per KB (read is faster)
-    break;
   }
 }
 
@@ -1000,19 +870,6 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
   }
 }
 
-void Runtime::MonitorReorganizeBlobs(chi::MonitorModeId mode,
-                                     hipc::FullPtr<ReorganizeBlobsTask> task,
-                                     chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for multiple score updates - 100μs per blob
-    ctx.est_load = task->blob_names_.size() * 100.0;
-    break;
-  }
-}
-
 void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
   try {
     // Extract input parameters
@@ -1089,19 +946,6 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);
-  }
-}
-
-void Runtime::MonitorDelBlob(chi::MonitorModeId mode,
-                             hipc::FullPtr<DelBlobTask> task,
-                             chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for blob deletion
-    ctx.est_load = 50.0; // 0.05ms for deletion
-    break;
   }
 }
 
@@ -1228,19 +1072,6 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
   }
 }
 
-void Runtime::MonitorDelTag(chi::MonitorModeId mode,
-                            hipc::FullPtr<DelTagTask> task,
-                            chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for tag deletion (depends on number of blobs)
-    ctx.est_load = 100.0; // 0.1ms base cost
-    break;
-  }
-}
-
 void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
                          chi::RunContext &ctx) {
   try {
@@ -1271,19 +1102,6 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
   } catch (const std::exception &e) {
     task->return_code_.store(1);
     task->tag_size_ = 0;
-  }
-}
-
-void Runtime::MonitorGetTagSize(chi::MonitorModeId mode,
-                                hipc::FullPtr<GetTagSizeTask> task,
-                                chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for tag size lookup
-    ctx.est_load = 10.0; // 0.01ms for lookup
-    break;
   }
 }
 
@@ -1445,10 +1263,6 @@ size_t Runtime::GetBlobLockIndex(const BlobId &blob_id) const {
 
 // Explicit template instantiations for required template methods
 template void Runtime::GetOrCreateTag<CreateParams>(
-    hipc::FullPtr<GetOrCreateTagTask<CreateParams>> task, chi::RunContext &ctx);
-
-template void Runtime::MonitorGetOrCreateTag<CreateParams>(
-    chi::MonitorModeId mode,
     hipc::FullPtr<GetOrCreateTagTask<CreateParams>> task, chi::RunContext &ctx);
 
 // Blob management helper functions
@@ -1932,19 +1746,6 @@ void Runtime::PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task,
   (void)ctx;
 }
 
-void Runtime::MonitorPollTelemetryLog(chi::MonitorModeId mode,
-                                      hipc::FullPtr<PollTelemetryLogTask> task,
-                                      chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    ctx.est_load = 100.0;
-    break;
-  }
-  (void)task;
-}
-
 void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
                            chi::RunContext &ctx) {
   try {
@@ -1995,19 +1796,6 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
   }
 }
 
-void Runtime::MonitorGetBlobScore(chi::MonitorModeId mode,
-                                  hipc::FullPtr<GetBlobScoreTask> task,
-                                  chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for blob score lookup
-    ctx.est_load = 10.0; // 0.01ms for lookup
-    break;
-  }
-}
-
 void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
                           chi::RunContext &ctx) {
   try {
@@ -2055,19 +1843,6 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
   }
 }
 
-void Runtime::MonitorGetBlobSize(chi::MonitorModeId mode,
-                                 hipc::FullPtr<GetBlobSizeTask> task,
-                                 chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for blob size lookup (similar to score lookup)
-    ctx.est_load = 10.0; // 0.01ms for lookup
-    break;
-  }
-}
-
 void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
                                 chi::RunContext &ctx) {
   try {
@@ -2109,19 +1884,6 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
   } catch (const std::exception &e) {
     task->return_code_.store(1); // Error during operation
     HILOG(kError, "GetContainedBlobs failed: {}", e.what());
-  }
-}
-
-void Runtime::MonitorGetContainedBlobs(
-    chi::MonitorModeId mode, hipc::FullPtr<GetContainedBlobsTask> task,
-    chi::RunContext &ctx) {
-  switch (mode) {
-  case chi::MonitorModeId::kGlobalSchedule:
-    break;
-  case chi::MonitorModeId::kEstLoad:
-    // Estimate for blob enumeration - 5μs per blob
-    ctx.est_load = 100.0; // Base time + per blob
-    break;
   }
 }
 

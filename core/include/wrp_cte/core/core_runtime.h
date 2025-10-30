@@ -36,21 +36,9 @@ class Runtime : public chi::Container {
   void Create(hipc::FullPtr<CreateTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor create progress
-   */
-  void MonitorCreate(chi::MonitorModeId mode, hipc::FullPtr<CreateTask> task,
-                     chi::RunContext& ctx);
-
-  /**
    * Destroy the container (Method::kDestroy)
    */
   void Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor destroy progress
-   */
-  void MonitorDestroy(chi::MonitorModeId mode, hipc::FullPtr<DestroyTask> task,
-                      chi::RunContext& ctx);
 
   /**
    * Register a target (Method::kRegisterTarget)
@@ -58,23 +46,9 @@ class Runtime : public chi::Container {
   void RegisterTarget(hipc::FullPtr<RegisterTargetTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor register target operation
-   */
-  void MonitorRegisterTarget(chi::MonitorModeId mode, 
-                           hipc::FullPtr<RegisterTargetTask> task,
-                           chi::RunContext& ctx);
-
-  /**
    * Unregister a target (Method::kUnregisterTarget)
    */
   void UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor unregister target operation
-   */
-  void MonitorUnregisterTarget(chi::MonitorModeId mode, 
-                             hipc::FullPtr<UnregisterTargetTask> task,
-                             chi::RunContext& ctx);
 
   /**
    * List registered targets (Method::kListTargets)
@@ -82,23 +56,9 @@ class Runtime : public chi::Container {
   void ListTargets(hipc::FullPtr<ListTargetsTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor list targets operation
-   */
-  void MonitorListTargets(chi::MonitorModeId mode, 
-                        hipc::FullPtr<ListTargetsTask> task,
-                        chi::RunContext& ctx);
-
-  /**
    * Update target statistics (Method::kStatTargets)
    */
   void StatTargets(hipc::FullPtr<StatTargetsTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor stat targets operation
-   */
-  void MonitorStatTargets(chi::MonitorModeId mode, 
-                        hipc::FullPtr<StatTargetsTask> task,
-                        chi::RunContext& ctx);
 
   /**
    * Get or create a tag (Method::kGetOrCreateTag)
@@ -107,24 +67,9 @@ class Runtime : public chi::Container {
   void GetOrCreateTag(hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task, chi::RunContext& ctx);
 
   /**
-   * Monitor get or create tag operation
-   */
-  template<typename CreateParamsT = CreateParams>
-  void MonitorGetOrCreateTag(chi::MonitorModeId mode, 
-                           hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task,
-                           chi::RunContext& ctx);
-
-  /**
    * Put blob (Method::kPutBlob) - unimplemented for now
    */
   void PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor put blob operation
-   */
-  void MonitorPutBlob(chi::MonitorModeId mode, 
-                    hipc::FullPtr<PutBlobTask> task,
-                    chi::RunContext& ctx);
 
   /**
    * Get blob (Method::kGetBlob) - unimplemented for now
@@ -132,23 +77,9 @@ class Runtime : public chi::Container {
   void GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor get blob operation
-   */
-  void MonitorGetBlob(chi::MonitorModeId mode, 
-                    hipc::FullPtr<GetBlobTask> task,
-                    chi::RunContext& ctx);
-
-  /**
    * Reorganize multiple blobs (Method::kReorganizeBlobs) - update scores for multiple blobs
    */
   void ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor reorganize blobs operation
-   */
-  void MonitorReorganizeBlobs(chi::MonitorModeId mode, 
-                            hipc::FullPtr<ReorganizeBlobsTask> task,
-                            chi::RunContext& ctx);
 
   /**
    * Delete blob operation - removes blob and decrements tag size
@@ -156,40 +87,19 @@ class Runtime : public chi::Container {
   void DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor delete blob operation
-   */
-  void MonitorDelBlob(chi::MonitorModeId mode, 
-                      hipc::FullPtr<DelBlobTask> task,
-                      chi::RunContext& ctx);
-
-  /**
    * Delete tag operation - removes all blobs from tag and removes tag
    */
   void DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor delete tag operation
-   */
-  void MonitorDelTag(chi::MonitorModeId mode, 
-                     hipc::FullPtr<DelTagTask> task,
-                     chi::RunContext& ctx);
 
   /**
    * Get tag size operation - returns total size of all blobs in tag
    */
   void GetTagSize(hipc::FullPtr<GetTagSizeTask> task, chi::RunContext& ctx);
 
-  /**
-   * Monitor get tag size operation
-   */
-  void MonitorGetTagSize(chi::MonitorModeId mode, 
-                         hipc::FullPtr<GetTagSizeTask> task,
-                         chi::RunContext& ctx);
-
   // Pure virtual methods - implementations are in autogen/core_lib_exec.cc
   void Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx) override;
   void Monitor(chi::MonitorModeId mode, chi::u32 method,
-               hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx) override;
+               hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx);
   void Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) override;
   chi::u64 GetWorkRemaining() const override;
   void SaveTask(chi::u32 method, chi::SaveTaskArchive& archive,
@@ -410,31 +320,11 @@ class Runtime : public chi::Container {
   void PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor poll telemetry log operation
-   * @param mode Monitor mode ID
-   * @param task PollTelemetryLog task to monitor
-   * @param ctx Runtime context for monitoring
-   */
-  void MonitorPollTelemetryLog(chi::MonitorModeId mode, 
-                              hipc::FullPtr<PollTelemetryLogTask> task,
-                              chi::RunContext& ctx);
-
-  /**
    * Get blob score operation - returns the score of a blob
    * @param task GetBlobScore task containing blob lookup parameters and results
    * @param ctx Runtime context for task execution
    */
   void GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor get blob score operation
-   * @param mode Monitor mode ID
-   * @param task GetBlobScore task to monitor
-   * @param ctx Runtime context for monitoring
-   */
-  void MonitorGetBlobScore(chi::MonitorModeId mode, 
-                          hipc::FullPtr<GetBlobScoreTask> task,
-                          chi::RunContext& ctx);
 
   /**
    * Get blob size operation - returns the size of a blob in bytes
@@ -444,31 +334,11 @@ class Runtime : public chi::Container {
   void GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task, chi::RunContext& ctx);
 
   /**
-   * Monitor get blob size operation
-   * @param mode Monitor mode ID
-   * @param task GetBlobSize task to monitor
-   * @param ctx Runtime context for monitoring
-   */
-  void MonitorGetBlobSize(chi::MonitorModeId mode, 
-                         hipc::FullPtr<GetBlobSizeTask> task,
-                         chi::RunContext& ctx);
-
-  /**
    * Get contained blobs operation - returns all blob names in a tag
    * @param task GetContainedBlobs task containing tag ID and results
    * @param ctx Runtime context for task execution
    */
   void GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task, chi::RunContext& ctx);
-
-  /**
-   * Monitor get contained blobs operation
-   * @param mode Monitor mode ID
-   * @param task GetContainedBlobs task to monitor
-   * @param ctx Runtime context for monitoring
-   */
-  void MonitorGetContainedBlobs(chi::MonitorModeId mode, 
-                               hipc::FullPtr<GetContainedBlobsTask> task,
-                               chi::RunContext& ctx);
 };
 
 }  // namespace wrp_cte::core
