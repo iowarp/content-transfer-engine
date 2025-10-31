@@ -12,9 +12,10 @@ This directory contains configuration for running Content Transfer Engine (CTE) 
 
 ## Files
 
-- `docker-compose.yaml` - Docker Compose configuration for 4-node cluster
+- `docker compose.yaml` - Docker Compose configuration for 4-node cluster
 - `cte_config.yaml` - CTE configuration defining 4 storage targets
 - `hostfile` - List of hostnames for distributed runtime
+- `run_tests.sh` - Automated test runner script (recommended)
 - `README.md` - This file
 
 ## Prerequisites
@@ -26,17 +27,48 @@ This directory contains configuration for running Content Transfer Engine (CTE) 
 
 ## Usage
 
-### Starting the Distributed Test Environment
+### Quick Start (Recommended)
+
+Use the automated test runner script:
+
+```bash
+# Navigate to the distributed test directory
+cd test/unit/distributed
+
+# Run tests with automatic setup and cleanup
+./run_tests.sh
+
+# Run tests and keep containers for debugging
+./run_tests.sh --keep
+
+# Show full logs after tests
+./run_tests.sh --logs
+
+# See all options
+./run_tests.sh --help
+```
+
+The script automatically:
+1. Checks prerequisites
+2. Cleans up any previous test runs
+3. Starts all 4 nodes
+4. Monitors test execution
+5. Displays results
+6. Cleans up containers (unless `--keep` is used)
+
+### Manual Test Execution
+
+If you prefer manual control:
 
 ```bash
 # Navigate to the distributed test directory
 cd test/unit/distributed
 
 # Start all 4 nodes
-docker-compose up
+docker compose up
 
 # Or run in detached mode
-docker-compose up -d
+docker compose up -d
 ```
 
 ### What Happens Automatically
@@ -62,13 +94,13 @@ docker-compose up -d
 
 ```bash
 # View logs from all nodes
-docker-compose logs -f
+docker compose logs -f
 
 # View logs from specific node
-docker-compose logs -f cte-node1
+docker compose logs -f cte-node1
 
 # Check test execution status
-docker-compose logs cte-node1 | grep -A 20 "Running unit tests"
+docker compose logs cte-node1 | grep -A 20 "Running unit tests"
 ```
 
 ### Executing Commands in Containers
@@ -85,10 +117,10 @@ docker exec -it cte-distributed-node2 bash
 
 ```bash
 # Stop all containers
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (cleans up storage)
-docker-compose down -v
+docker compose down -v
 ```
 
 ## Network Configuration
@@ -127,11 +159,11 @@ All targets have equal manual scores (0.25) to ensure balanced data distribution
 If the build fails on node 1:
 ```bash
 # Check build logs
-docker-compose logs cte-node1 | grep -i error
+docker compose logs cte-node1 | grep -i error
 
 # Restart with clean volumes
-docker-compose down -v
-docker-compose up
+docker compose down -v
+docker compose up
 ```
 
 ### Runtime Connection Issues
@@ -152,7 +184,7 @@ docker exec cte-distributed-node1 cat /etc/iowarp/hostfile
 If tests fail:
 ```bash
 # View detailed test output
-docker-compose logs cte-node1 | grep -A 100 "Running unit tests"
+docker compose logs cte-node1 | grep -A 100 "Running unit tests"
 
 # Run tests manually
 docker exec -it cte-distributed-node1 bash
@@ -178,7 +210,7 @@ docker exec cte-distributed-node1 touch /mnt/hdd1/test_file
 
 To add or remove nodes:
 1. Update `hostfile` with new node names
-2. Add/remove node services in `docker-compose.yaml`
+2. Add/remove node services in `docker compose.yaml`
 3. Update `cte_config.yaml` to add/remove storage targets
 4. Adjust network IP addresses accordingly
 

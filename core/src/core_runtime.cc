@@ -75,7 +75,8 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
       chi::unordered_map_ll<std::string, chi::PoolId>(kMaxLocks);
   tag_name_to_id_ = chi::unordered_map_ll<std::string, TagId>(kMaxLocks);
   tag_id_to_info_ = chi::unordered_map_ll<TagId, TagInfo>(kMaxLocks);
-  tag_blob_name_to_info_ = chi::unordered_map_ll<std::string, BlobInfo>(kMaxLocks);
+  tag_blob_name_to_info_ =
+      chi::unordered_map_ll<std::string, BlobInfo>(kMaxLocks);
 
   // Initialize lock vectors for concurrent access
   target_locks_.reserve(kMaxLocks);
@@ -231,8 +232,8 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
     // Create the bdev container using the client
     chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
-    bdev_client.Create(hipc::MemContext(), pool_query, target_name, bdev_pool_id,
-                       bdev_type, total_size);
+    bdev_client.Create(hipc::MemContext(), pool_query, target_name,
+                       bdev_pool_id, bdev_type, total_size);
 
     // Check if creation was successful
     if (bdev_client.return_code_ != 0) {
@@ -438,8 +439,33 @@ void Runtime::GetOrCreateTag(
   try {
     std::string tag_name = task->tag_name_.str();
     TagId preferred_id = task->tag_id_;
+    auto *ipc_manager = CHI_IPC;
+    chi::u32 local_node_id = ipc_manager->GetNodeId();
 
-    // Get or assign tag ID
+    // Check if this is a returning task from a remote canonical node
+    // If preferred_id is already set and not local, we're receiving a remote
+    // tag
+    bool is_remote_tag =
+        (preferred_id.major_ != 0 && preferred_id.major_ != local_node_id);
+
+    if (is_remote_tag) {
+      // Non-canonical node: Only cache the name→TagId mapping
+      size_t tag_lock_index = GetTagLockIndex(tag_name);
+      chi::ScopedCoRwWriteLock write_lock(*tag_locks_[tag_lock_index]);
+
+      // Check if already cached
+      TagId *existing_tag_id_ptr = tag_name_to_id_.find(tag_name);
+      if (existing_tag_id_ptr == nullptr) {
+        // Cache the mapping without creating TagInfo
+        tag_name_to_id_.insert_or_assign(tag_name, preferred_id);
+      }
+
+      task->tag_id_ = preferred_id;
+      task->return_code_.store(0);
+      return;
+    }
+
+    // Canonical node: Create full TagInfo structure
     TagId tag_id = GetOrAssignTagId(tag_name, preferred_id);
     task->tag_id_ = tag_id;
 
@@ -469,7 +495,8 @@ void Runtime::GetOrCreateTag(
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
-    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    task->pool_query_ =
+        HashBlobToContainer(task->tag_id_, task->blob_name_.str());
     return;
   }
 
@@ -597,7 +624,8 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
-    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    task->pool_query_ =
+        HashBlobToContainer(task->tag_id_, task->blob_name_.str());
     return;
   }
 
@@ -658,8 +686,7 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
                  blob_info_ptr->last_modified_, now);
 
     task->return_code_.store(0);
-    HILOG(kInfo,
-          "GetBlob successful: name={}, offset={}, size={}, blocks={}",
+    HILOG(kInfo, "GetBlob successful: name={}, offset={}, size={}, blocks={}",
           blob_name, offset, size, num_blocks);
 
   } catch (const std::exception &e) {
@@ -727,7 +754,8 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
     if (score_diff < score_difference_threshold) {
       // Score difference too small, no reorganization needed
       task->return_code_.store(0);
-      HILOG(kInfo, "ReorganizeBlob: score difference below threshold, skipping");
+      HILOG(kInfo,
+            "ReorganizeBlob: score difference below threshold, skipping");
       return;
     }
 
@@ -767,15 +795,15 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
     hipc::FullPtr<char> blob_data_buffer =
         ipc_manager->AllocateBuffer(blob_size);
     if (blob_data_buffer.IsNull()) {
-      HILOG(kError,
-            "Failed to allocate buffer for blob during reorganization");
+      HILOG(kError, "Failed to allocate buffer for blob during reorganization");
       task->return_code_.store(5); // Buffer allocation failed
       return;
     }
 
     // Step 6: Get blob data
-    auto get_task = client_.AsyncGetBlob(hipc::MemContext(), tag_id, blob_name,
-                                         0, blob_size, 0, blob_data_buffer.shm_);
+    auto get_task =
+        client_.AsyncGetBlob(hipc::MemContext(), tag_id, blob_name, 0,
+                             blob_size, 0, blob_data_buffer.shm_);
     get_task->Wait();
 
     if (get_task->return_code_.load() != 0) {
@@ -787,11 +815,12 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
     CHI_IPC->DelTask(get_task);
 
     // Step 7: Put blob with new score (data reorganization)
-    HILOG(kInfo, "ReorganizeBlob calling AsyncPutBlob for blob={}, new_score={}",
+    HILOG(kInfo,
+          "ReorganizeBlob calling AsyncPutBlob for blob={}, new_score={}",
           blob_name, new_score);
     auto put_task =
         client_.AsyncPutBlob(hipc::MemContext(), tag_id, blob_name, 0,
-                            blob_size, blob_data_buffer.shm_, new_score, 0);
+                             blob_size, blob_data_buffer.shm_, new_score, 0);
     put_task->Wait();
 
     if (put_task->return_code_.load() != 0) {
@@ -810,7 +839,8 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
                  std::chrono::steady_clock::now(),
                  std::chrono::steady_clock::now());
 
-    HILOG(kInfo, "ReorganizeBlob completed: tag_id={},{}, blob={}, new_score={}",
+    HILOG(kInfo,
+          "ReorganizeBlob completed: tag_id={},{}, blob={}, new_score={}",
           tag_id.major_, tag_id.minor_, blob_name, new_score);
 
   } catch (const std::exception &e) {
@@ -822,7 +852,8 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
 void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
-    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    task->pool_query_ =
+        HashBlobToContainer(task->tag_id_, task->blob_name_.str());
     return;
   }
 
@@ -871,8 +902,7 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
 
     // Step 5: Remove blob from tag_blob_name_to_info_ map
     std::string compound_key = std::to_string(tag_id.major_) + "." +
-                               std::to_string(tag_id.minor_) + "." +
-                               blob_name;
+                               std::to_string(tag_id.minor_) + "." + blob_name;
     tag_blob_name_to_info_.erase(compound_key);
 
     // Step 6: Log telemetry for DelBlob operation
@@ -881,7 +911,8 @@ void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
 
     // Success
     task->return_code_.store(0);
-    HILOG(kInfo, "DelBlob successful: name={}, blob_size={}", blob_name, blob_size);
+    HILOG(kInfo, "DelBlob successful: name={}, blob_size={}", blob_name,
+          blob_size);
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);
@@ -945,8 +976,8 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
         const std::string &blob_name = blob_names_to_delete[j];
 
         // Call AsyncDelBlob from client
-        auto async_task = client_.AsyncDelBlob(
-            hipc::MemContext(), tag_id, blob_name);
+        auto async_task =
+            client_.AsyncDelBlob(hipc::MemContext(), tag_id, blob_name);
         async_tasks.push_back(async_task);
       }
 
@@ -972,7 +1003,7 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
     std::vector<std::string> keys_to_erase;
     tag_blob_name_to_info_.for_each(
         [&tag_prefix, &keys_to_erase](const std::string &compound_key,
-                                     const BlobInfo &blob_info) {
+                                      const BlobInfo &blob_info) {
           if (compound_key.compare(0, tag_prefix.length(), tag_prefix) == 0) {
             keys_to_erase.push_back(compound_key);
           }
@@ -1034,8 +1065,8 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
     task->return_code_.store(0);
 
     // Log telemetry for GetTagSize operation
-    LogTelemetry(CteOp::kGetTagSize, 0, tag_info_ptr->total_size_,
-                 tag_id, tag_info_ptr->last_modified_, now);
+    LogTelemetry(CteOp::kGetTagSize, 0, tag_info_ptr->total_size_, tag_id,
+                 tag_info_ptr->last_modified_, now);
 
     HILOG(kInfo, "GetTagSize successful: tag_id={},{}, total_size={}",
           tag_id.major_, tag_id.minor_, task->tag_size_);
@@ -1562,15 +1593,14 @@ chi::u32 Runtime::FreeAllBlobBlocks(BlobInfo &blob_info) {
 }
 
 void Runtime::LogTelemetry(CteOp op, size_t off, size_t size,
-                           const TagId &tag_id,
-                           const Timestamp &mod_time,
+                           const TagId &tag_id, const Timestamp &mod_time,
                            const Timestamp &read_time) {
   // Increment atomic counter and get current logical time
   std::uint64_t logical_time = telemetry_counter_.fetch_add(1) + 1;
 
   // Create telemetry entry with logical time and enqueue it
-  CteTelemetry telemetry_entry(op, off, size, tag_id, mod_time,
-                               read_time, logical_time);
+  CteTelemetry telemetry_entry(op, off, size, tag_id, mod_time, read_time,
+                               logical_time);
 
   // Circular queue automatically overwrites oldest entries when full
   telemetry_log_.push(telemetry_entry);
@@ -1646,7 +1676,8 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
                            chi::RunContext &ctx) {
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
-    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    task->pool_query_ =
+        HashBlobToContainer(task->tag_id_, task->blob_name_.str());
     return;
   }
 
@@ -1678,13 +1709,13 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
 
     // No specific telemetry enum for GetBlobScore, using GetBlob as closest
     // match
-    LogTelemetry(CteOp::kGetBlob, 0, 0, tag_id,
-                 blob_info_ptr->last_modified_, now);
+    LogTelemetry(CteOp::kGetBlob, 0, 0, tag_id, blob_info_ptr->last_modified_,
+                 now);
 
     // Success
     task->return_code_.store(0);
-    HILOG(kInfo, "GetBlobScore successful: name={}, score={}",
-          blob_name, blob_info_ptr->score_);
+    HILOG(kInfo, "GetBlobScore successful: name={}, score={}", blob_name,
+          blob_info_ptr->score_);
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);
@@ -1695,7 +1726,8 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
                           chi::RunContext &ctx) {
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
-    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    task->pool_query_ =
+        HashBlobToContainer(task->tag_id_, task->blob_name_.str());
     return;
   }
 
@@ -1726,13 +1758,13 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
 
     // No specific telemetry enum for GetBlobSize, using GetBlob as closest
     // match
-    LogTelemetry(CteOp::kGetBlob, 0, 0, tag_id,
-                 blob_info_ptr->last_modified_, now);
+    LogTelemetry(CteOp::kGetBlob, 0, 0, tag_id, blob_info_ptr->last_modified_,
+                 now);
 
     // Success
     task->return_code_.store(0);
-    HILOG(kInfo, "GetBlobSize successful: name={}, size={}",
-          blob_name, task->size_);
+    HILOG(kInfo, "GetBlobSize successful: name={}, size={}", blob_name,
+          task->size_);
 
   } catch (const std::exception &e) {
     task->return_code_.store(1);

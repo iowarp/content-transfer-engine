@@ -8,7 +8,6 @@ services:
       cte-cluster:
         ipv4_address: 172.26.0.10
     volumes:
-      - ~/.ppi-jarvis:/root/.ppi-jarvis
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
@@ -24,39 +23,59 @@ services:
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
       "
+        set -x &&
+        echo '========================================' &&
+        echo 'Node 1: Starting initialization' &&
+        echo '========================================' &&
+        echo 'Node 1: Cleaning /usr/local to avoid conflicts...' &&
+        rm -rf /usr/local/games /usr/local/etc &&
         echo 'Node 1: Loading spack environment...' &&
         export SPACK_ROOT=/root/spack &&
         source /root/spack/share/spack/setup-env.sh &&
         spack load iowarp-runtime &&
-        echo 'Node 1: Spack environment loaded' &&
+        echo 'Node 1: Spack environment loaded successfully' &&
+        echo '========================================' &&
+        echo 'Node 1: Building Content Transfer Engine' &&
+        echo '========================================' &&
+        cd /content-transfer-engine &&
+        rm -rf build &&
+        echo 'Node 1: Running cmake with debug preset...' &&
+        cmake --preset debug-docker 2>&1 | tee /tmp/cmake.log || (echo 'CMAKE FAILED:' && cat /tmp/cmake.log && exit 1) &&
+        echo 'Node 1: Checking if build directory was created...' &&
+        ls -la build/ &&
+        echo 'Node 1: CMake complete. Building CTE and tests...' &&
+        cmake --build build --config Debug -j8 2>&1 | tee /tmp/build.log || (echo 'BUILD FAILED:' && cat /tmp/build.log && exit 1) &&
+        echo 'Node 1: Build complete. Installing to /usr/local...' &&
+        cmake --install build 2>&1 | tee /tmp/install.log || (echo 'INSTALL FAILED:' && cat /tmp/install.log && exit 1) &&
+        echo 'Node 1: Verifying launch_cte installation...' &&
+        ls -la /usr/local/bin/launch_cte &&
+        echo '========================================' &&
+        echo 'Node 1: Build and install complete' &&
+        echo '========================================' &&
         echo 'Node 1: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
         sleep 5 &&
-        echo 'Node 1: Cleaning old build directory...' &&
-        cd /content-transfer-engine &&
-        rm -rf build-docker &&
-        echo 'Node 1: Building Content Transfer Engine...' &&
-        mkdir -p build-docker && cd build-docker &&
-        echo 'Node 1: Running cmake...' &&
-        cmake --preset docker .. &&
-        echo 'Node 1: CMake complete. Building CTE and tests...' &&
-        cmake --build . -j8 &&
-        echo 'Node 1: Build complete. Installing...' &&
-        cmake --install . &&
-        echo 'Node 1: Install complete. Creating storage directories...' &&
+        echo 'Node 1: Creating storage directories...' &&
         mkdir -p /mnt/hdd1 &&
         echo 'Node 1: Waiting for all nodes to be ready...' &&
         sleep 10 &&
-        echo 'Node 1: Launching CTE using utility script...' &&
-        cd /content-transfer-engine &&
-        bash util/launch_cte.sh /etc/iowarp/cte_config.yaml &&
-        echo 'Node 1: CTE launched. Running distributed unit tests...' &&
-        cd build-docker &&
-        ./test/unit/test_core_functionality_dist &&
-        echo 'Node 1: Tests complete. Keeping container alive...' &&
+        echo '========================================' &&
+        echo 'Node 1: Launching CTE' &&
+        echo '========================================' &&
+        export CTE_CONFIG_FILE=/etc/iowarp/cte_config.yaml &&
+        /usr/local/bin/launch_cte &&
+        echo 'Node 1: CTE launched successfully' &&
+        echo '========================================' &&
+        echo 'Node 1: Running distributed unit tests' &&
+        echo '========================================' &&
+        cd /content-transfer-engine/build &&
+        ./test/unit/test_core_functionality &&
+        echo '========================================' &&
+        echo 'Node 1: Tests complete' &&
+        echo '========================================' &&
         tail -f /dev/null
       "
 
@@ -69,7 +88,6 @@ services:
       cte-cluster:
         ipv4_address: 172.26.0.11
     volumes:
-      - ~/.ppi-jarvis:/root/.ppi-jarvis
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
@@ -85,23 +103,33 @@ services:
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
       "
+        set -x &&
+        echo '========================================' &&
+        echo 'Node 2: Starting initialization' &&
+        echo '========================================' &&
         echo 'Node 2: Waiting for build to complete...' &&
         while [ ! -f /usr/local/bin/launch_cte ]; do
           sleep 2
           echo 'Node 2: Still waiting for binaries...'
         done &&
-        echo 'Node 2: Binaries found. Loading spack environment...' &&
+        echo 'Node 2: Binaries found!' &&
+        echo 'Node 2: Loading spack environment...' &&
         export SPACK_ROOT=/root/spack &&
         source /root/spack/share/spack/setup-env.sh &&
         spack load iowarp-runtime &&
-        echo 'Node 2: Spack environment loaded' &&
-        echo 'Node 2: Creating storage directories...' &&
+        echo 'Node 2: Spack environment loaded successfully' &&
+        echo '========================================' &&
+        echo 'Node 2: Setting up storage and runtime' &&
+        echo '========================================' &&
         mkdir -p /mnt/hdd2 &&
-        echo 'Node 2: Starting runtime...' &&
+        echo 'Node 2: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
-        echo \"Node 2: Runtime started (PID $$RUNTIME_PID). Waiting for tests...\" &&
+        echo \"Node 2: Runtime started (PID $$RUNTIME_PID)\" &&
+        echo '========================================' &&
+        echo 'Node 2: Ready. Waiting for tests...' &&
+        echo '========================================' &&
         tail -f /dev/null
       "
 
@@ -114,7 +142,6 @@ services:
       cte-cluster:
         ipv4_address: 172.26.0.12
     volumes:
-      - ~/.ppi-jarvis:/root/.ppi-jarvis
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
@@ -130,23 +157,33 @@ services:
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
       "
+        set -x &&
+        echo '========================================' &&
+        echo 'Node 3: Starting initialization' &&
+        echo '========================================' &&
         echo 'Node 3: Waiting for build to complete...' &&
         while [ ! -f /usr/local/bin/launch_cte ]; do
           sleep 2
           echo 'Node 3: Still waiting for binaries...'
         done &&
-        echo 'Node 3: Binaries found. Loading spack environment...' &&
+        echo 'Node 3: Binaries found!' &&
+        echo 'Node 3: Loading spack environment...' &&
         export SPACK_ROOT=/root/spack &&
         source /root/spack/share/spack/setup-env.sh &&
         spack load iowarp-runtime &&
-        echo 'Node 3: Spack environment loaded' &&
-        echo 'Node 3: Creating storage directories...' &&
+        echo 'Node 3: Spack environment loaded successfully' &&
+        echo '========================================' &&
+        echo 'Node 3: Setting up storage and runtime' &&
+        echo '========================================' &&
         mkdir -p /mnt/hdd3 &&
-        echo 'Node 3: Starting runtime...' &&
+        echo 'Node 3: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
-        echo \"Node 3: Runtime started (PID $$RUNTIME_PID). Waiting for tests...\" &&
+        echo \"Node 3: Runtime started (PID $$RUNTIME_PID)\" &&
+        echo '========================================' &&
+        echo 'Node 3: Ready. Waiting for tests...' &&
+        echo '========================================' &&
         tail -f /dev/null
       "
 
@@ -159,7 +196,6 @@ services:
       cte-cluster:
         ipv4_address: 172.26.0.13
     volumes:
-      - ~/.ppi-jarvis:/root/.ppi-jarvis
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
@@ -175,23 +211,33 @@ services:
     entrypoint: [ "/bin/bash", "-c" ]
     command: >
       "
+        set -x &&
+        echo '========================================' &&
+        echo 'Node 4: Starting initialization' &&
+        echo '========================================' &&
         echo 'Node 4: Waiting for build to complete...' &&
         while [ ! -f /usr/local/bin/launch_cte ]; do
           sleep 2
           echo 'Node 4: Still waiting for binaries...'
         done &&
-        echo 'Node 4: Binaries found. Loading spack environment...' &&
+        echo 'Node 4: Binaries found!' &&
+        echo 'Node 4: Loading spack environment...' &&
         export SPACK_ROOT=/root/spack &&
         source /root/spack/share/spack/setup-env.sh &&
         spack load iowarp-runtime &&
-        echo 'Node 4: Spack environment loaded' &&
-        echo 'Node 4: Creating storage directories...' &&
+        echo 'Node 4: Spack environment loaded successfully' &&
+        echo '========================================' &&
+        echo 'Node 4: Setting up storage and runtime' &&
+        echo '========================================' &&
         mkdir -p /mnt/hdd4 &&
-        echo 'Node 4: Starting runtime...' &&
+        echo 'Node 4: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
-        echo \"Node 4: Runtime started (PID $$RUNTIME_PID). Waiting for tests...\" &&
+        echo \"Node 4: Runtime started (PID $$RUNTIME_PID)\" &&
+        echo '========================================' &&
+        echo 'Node 4: Ready. Waiting for tests...' &&
+        echo '========================================' &&
         tail -f /dev/null
       "
 
