@@ -17,13 +17,15 @@ kUnregisterTarget: 11   # Unregister a target from this node
 kListTargets: 12        # List registered targets on this node
 kStatTargets: 13        # Update performance stats for all targets
 kGetOrCreateTag: 14     # Get or create a tag for blob grouping
-kPutBlob: 15            # Store a blob (unimplemented for now)
-kGetBlob: 16            # Retrieve a blob (unimplemented for now)
+kGetTagSize: 20        # Get the size of a tag
+kDelTag: 19            # Delete a tag
+
+kGetContainedBlobs: 24  # Get all blob names contained in a tag
+kPutBlob: 15            # Store a blob
+kGetBlob: 16            # Retrieve a blob
 kReorganizeBlobs: 17     # Change scores for multiple blobs
-kDelBlob: 18            # Delete a blob (unimplemented for now)
-kDelTag: 19            # Delete a tag (unimplemented for now)
-kGetTagSize: 20        # Get the size of a tag (unimplemented for now)
-kPollTelemetryLog: 21  # Poll telemetry log with minimum logical time filter
+kDelBlob: 18            # Delete a blob
 kGetBlobScore: 22      # Get the score of a blob
 kGetBlobSize: 23       # Get the size of a blob
-kGetContainedBlobs: 24  # Get all blob names contained in a tag
+
+kPollTelemetryLog: 21  # Poll telemetry log with minimum logical time filter

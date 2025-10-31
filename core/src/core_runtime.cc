@@ -218,6 +218,12 @@ void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
 
 void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
                              chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Local();
+    return;
+  }
+
   try {
     std::string target_name = task->target_name_.str();
     chimaera::bdev::BdevType bdev_type = task->bdev_type_;
@@ -317,6 +323,12 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
 void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
                                chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Local();
+    return;
+  }
+
   try {
     std::string target_name = task->target_name_.str();
 
@@ -352,6 +364,12 @@ void Runtime::UnregisterTarget(hipc::FullPtr<UnregisterTargetTask> task,
 
 void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
                           chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Local();
+    return;
+  }
+
   try {
     // Clear the output vector and populate with current target names
     task->target_names_.clear();
@@ -377,6 +395,12 @@ void Runtime::ListTargets(hipc::FullPtr<ListTargetsTask> task,
 
 void Runtime::StatTargets(hipc::FullPtr<StatTargetsTask> task,
                           chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Local();
+    return;
+  }
+
   try {
     // Update performance stats for all registered targets
     // Use a single lock based on hash of operation type for stats
@@ -402,6 +426,21 @@ template <typename CreateParamsT>
 void Runtime::GetOrCreateTag(
     hipc::FullPtr<GetOrCreateTagTask<CreateParamsT>> task,
     chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    std::string tag_name = task->tag_name_.str();
+    // Check if tag exists locally
+    TagId *existing_tag_id = tag_name_to_id_.find(tag_name);
+    if (existing_tag_id != nullptr) {
+      // Tag exists locally, route locally
+      task->pool_query_ = chi::PoolQuery::Local();
+    } else {
+      // Tag doesn't exist locally, broadcast to find it or create on all nodes
+      task->pool_query_ = chi::PoolQuery::Broadcast();
+    }
+    return;
+  }
+
   try {
     std::string tag_name = task->tag_name_.str();
     TagId preferred_id = task->tag_id_;
@@ -434,6 +473,12 @@ void Runtime::GetOrCreateTag(
 }
 
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    return;
+  }
+
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -564,6 +609,12 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 }
 
 void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    return;
+  }
+
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -648,6 +699,12 @@ void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
 
 void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
                               chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Local();
+    return;
+  }
+
   HILOG(kInfo,
         "=== ReorganizeBlobs ENTRY: {} blobs ===", task->blob_names_.size());
   try {
@@ -871,6 +928,12 @@ void Runtime::ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task,
 }
 
 void Runtime::DelBlob(hipc::FullPtr<DelBlobTask> task, chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    return;
+  }
+
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -1074,6 +1137,12 @@ void Runtime::DelTag(hipc::FullPtr<DelTagTask> task, chi::RunContext &ctx) {
 
 void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
                          chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Broadcast();
+    return;
+  }
+
   try {
     TagId tag_id = task->tag_id_;
 
@@ -1748,6 +1817,12 @@ void Runtime::PollTelemetryLog(hipc::FullPtr<PollTelemetryLogTask> task,
 
 void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
                            chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    return;
+  }
+
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -1798,6 +1873,12 @@ void Runtime::GetBlobScore(hipc::FullPtr<GetBlobScoreTask> task,
 
 void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
                           chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = HashBlobToContainer(task->tag_id_, task->blob_name_.str());
+    return;
+  }
+
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -1845,6 +1926,12 @@ void Runtime::GetBlobSize(hipc::FullPtr<GetBlobSizeTask> task,
 
 void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
                                 chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Broadcast();
+    return;
+  }
+
   try {
     // Extract input parameters
     TagId tag_id = task->tag_id_;
@@ -1885,6 +1972,26 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
     task->return_code_.store(1); // Error during operation
     HILOG(kError, "GetContainedBlobs failed: {}", e.what());
   }
+}
+
+// ==============================================================================
+// Helper Functions for Dynamic Scheduling
+// ==============================================================================
+
+chi::PoolQuery Runtime::HashBlobToContainer(const TagId &tag_id,
+                                            const std::string &blob_name) {
+  // Compute hash from tag_id and blob_name
+  std::hash<std::string> string_hasher;
+  std::hash<chi::u32> u32_hasher;
+
+  // Combine tag_id major, minor, and blob_name into a single hash
+  chi::u32 hash_value = u32_hasher(tag_id.major_);
+  hash_value ^= u32_hasher(tag_id.minor_) + 0x9e3779b9 + (hash_value << 6) +
+                (hash_value >> 2);
+  hash_value ^= static_cast<chi::u32>(string_hasher(blob_name)) + 0x9e3779b9 +
+                (hash_value << 6) + (hash_value >> 2);
+
+  return chi::PoolQuery::DirectHash(hash_value);
 }
 
 } // namespace wrp_cte::core

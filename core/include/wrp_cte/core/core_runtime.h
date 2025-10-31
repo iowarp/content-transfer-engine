@@ -339,6 +339,15 @@ class Runtime : public chi::Container {
    * @param ctx Runtime context for task execution
    */
   void GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task, chi::RunContext& ctx);
+
+ private:
+  /**
+   * Helper function to compute hash-based pool query for blob operations
+   * @param tag_id Tag ID for the blob
+   * @param blob_name Blob name
+   * @return PoolQuery with DirectHash based on tag_id and blob_name
+   */
+  chi::PoolQuery HashBlobToContainer(const TagId& tag_id, const std::string& blob_name);
 };
 
 }  // namespace wrp_cte::core

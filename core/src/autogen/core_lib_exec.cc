@@ -95,11 +95,67 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
 
 void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
                        hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx) {
-  // Monitor methods have been removed - using default framework behavior
-  (void)mode;
-  (void)method;
-  (void)task_ptr;
-  (void)rctx;
+  // Monitor calls the same methods as Run - the methods check exec_mode internally
+  switch (method) {
+    case Method::kRegisterTarget: {
+      RegisterTarget(task_ptr.Cast<RegisterTargetTask>(), rctx);
+      break;
+    }
+    case Method::kUnregisterTarget: {
+      UnregisterTarget(task_ptr.Cast<UnregisterTargetTask>(), rctx);
+      break;
+    }
+    case Method::kListTargets: {
+      ListTargets(task_ptr.Cast<ListTargetsTask>(), rctx);
+      break;
+    }
+    case Method::kStatTargets: {
+      StatTargets(task_ptr.Cast<StatTargetsTask>(), rctx);
+      break;
+    }
+    case Method::kGetOrCreateTag: {
+      GetOrCreateTag(task_ptr.Cast<core::GetOrCreateTagTask<core::CreateParams>>(), rctx);
+      break;
+    }
+    case Method::kPutBlob: {
+      PutBlob(task_ptr.Cast<PutBlobTask>(), rctx);
+      break;
+    }
+    case Method::kGetBlob: {
+      GetBlob(task_ptr.Cast<GetBlobTask>(), rctx);
+      break;
+    }
+    case Method::kReorganizeBlobs: {
+      ReorganizeBlobs(task_ptr.Cast<ReorganizeBlobsTask>(), rctx);
+      break;
+    }
+    case Method::kDelBlob: {
+      DelBlob(task_ptr.Cast<DelBlobTask>(), rctx);
+      break;
+    }
+    case Method::kGetTagSize: {
+      GetTagSize(task_ptr.Cast<GetTagSizeTask>(), rctx);
+      break;
+    }
+    case Method::kGetBlobScore: {
+      GetBlobScore(task_ptr.Cast<GetBlobScoreTask>(), rctx);
+      break;
+    }
+    case Method::kGetBlobSize: {
+      GetBlobSize(task_ptr.Cast<GetBlobSizeTask>(), rctx);
+      break;
+    }
+    case Method::kGetContainedBlobs: {
+      GetContainedBlobs(task_ptr.Cast<GetContainedBlobsTask>(), rctx);
+      break;
+    }
+    default: {
+      // Unknown method or methods without Monitor implementation - do nothing
+      break;
+    }
+  }
+
+  (void)mode;  // Suppress unused parameter warning
 }
 
 void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
