@@ -21,18 +21,17 @@ This will update locally. If dynamic is used, just set the pool query to local.
 # Tag Operations
 
 ## kGetOrCreateTag: 14
-If dynamic is used, first check if the tag exists locally in the container's map. If so, set pool query to local.
-Otherwise, set to Bcast().
-
-## kUpdateTagSize: 15
-A local operation. Dynamic will always resolve to PoolQuery::Local().
+If dynamic is used, resolve to local.
 
 ## kGetTagSize: 16
 A broadcast operation. Dynamic will always resolve to PoolQuery::Bcast().
+Ensure that the task implements an Aggregate method.
+The aggregator should sum the sizes of the two tags.
 
 ## kGetContainedBlobs: 24
 A broadcast operation. Dynamic will always resolve to PoolQuery::Bcast(). 
-
+Ensures the task implements an Aggregate method.
+The aggregator should merge the two blob vectors.
 
 
 

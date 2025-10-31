@@ -424,11 +424,13 @@ void Runtime::GetOrCreateTag(
     // Check if tag exists locally
     TagId *existing_tag_id = tag_name_to_id_.find(tag_name);
     if (existing_tag_id != nullptr) {
-      // Tag exists locally, route locally
+      // Tag exists locally, resolve locally
       task->pool_query_ = chi::PoolQuery::Local();
     } else {
-      // Tag doesn't exist locally, broadcast to find it or create on all nodes
-      task->pool_query_ = chi::PoolQuery::Broadcast();
+      // Tag doesn't exist locally, route to canonical node using DirectHash
+      std::hash<std::string> string_hasher;
+      chi::u32 hash_value = static_cast<chi::u32>(string_hasher(tag_name));
+      task->pool_query_ = chi::PoolQuery::DirectHash(hash_value);
     }
     return;
   }

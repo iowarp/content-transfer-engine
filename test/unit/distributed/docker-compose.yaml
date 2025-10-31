@@ -1,0 +1,215 @@
+services:
+  # Node 1 - Primary node that builds, creates CTE, and runs tests
+  cte-node1:
+    image: iowarp/iowarp-deps:ai
+    container_name: cte-distributed-node1
+    hostname: iowarp-node1
+    networks:
+      cte-cluster:
+        ipv4_address: 172.26.0.10
+    volumes:
+      - ~/.ppi-jarvis:/root/.ppi-jarvis
+      - ../../../:/content-transfer-engine
+      - ./hostfile:/etc/iowarp/hostfile:ro
+      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - cte-install:/usr/local
+      - hdd1-storage:/mnt/hdd1
+    environment:
+      - NODE_ID=1
+      - NODE_IP=172.26.0.10
+      - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+    shm_size: '16gb'
+    mem_limit: 16g
+    working_dir: /content-transfer-engine
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "
+        echo 'Node 1: Loading spack environment...' &&
+        export SPACK_ROOT=/root/spack &&
+        source /root/spack/share/spack/setup-env.sh &&
+        spack load iowarp-runtime &&
+        echo 'Node 1: Spack environment loaded' &&
+        echo 'Node 1: Starting IOWarp runtime...' &&
+        export PATH=/usr/local/bin:$$PATH &&
+        chimaera_start_runtime &
+        RUNTIME_PID=$$! &&
+        echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
+        sleep 5 &&
+        echo 'Node 1: Cleaning old build directory...' &&
+        cd /content-transfer-engine &&
+        rm -rf build-docker &&
+        echo 'Node 1: Building Content Transfer Engine...' &&
+        mkdir -p build-docker && cd build-docker &&
+        echo 'Node 1: Running cmake...' &&
+        cmake --preset docker .. &&
+        echo 'Node 1: CMake complete. Building CTE and tests...' &&
+        cmake --build . -j8 &&
+        echo 'Node 1: Build complete. Installing...' &&
+        cmake --install . &&
+        echo 'Node 1: Install complete. Creating storage directories...' &&
+        mkdir -p /mnt/hdd1 &&
+        echo 'Node 1: Waiting for all nodes to be ready...' &&
+        sleep 10 &&
+        echo 'Node 1: Launching CTE using utility script...' &&
+        cd /content-transfer-engine &&
+        bash util/launch_cte.sh /etc/iowarp/cte_config.yaml &&
+        echo 'Node 1: CTE launched. Running distributed unit tests...' &&
+        cd build-docker &&
+        ./test/unit/test_core_functionality_dist &&
+        echo 'Node 1: Tests complete. Keeping container alive...' &&
+        tail -f /dev/null
+      "
+
+  # Node 2 - Secondary node
+  cte-node2:
+    image: iowarp/iowarp-deps:ai
+    container_name: cte-distributed-node2
+    hostname: iowarp-node2
+    networks:
+      cte-cluster:
+        ipv4_address: 172.26.0.11
+    volumes:
+      - ~/.ppi-jarvis:/root/.ppi-jarvis
+      - ../../../:/content-transfer-engine
+      - ./hostfile:/etc/iowarp/hostfile:ro
+      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - cte-install:/usr/local
+      - hdd2-storage:/mnt/hdd2
+    environment:
+      - NODE_ID=2
+      - NODE_IP=172.26.0.11
+      - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+    shm_size: '16gb'
+    mem_limit: 16g
+    working_dir: /content-transfer-engine
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "
+        echo 'Node 2: Waiting for build to complete...' &&
+        while [ ! -f /usr/local/bin/launch_cte ]; do
+          sleep 2
+          echo 'Node 2: Still waiting for binaries...'
+        done &&
+        echo 'Node 2: Binaries found. Loading spack environment...' &&
+        export SPACK_ROOT=/root/spack &&
+        source /root/spack/share/spack/setup-env.sh &&
+        spack load iowarp-runtime &&
+        echo 'Node 2: Spack environment loaded' &&
+        echo 'Node 2: Creating storage directories...' &&
+        mkdir -p /mnt/hdd2 &&
+        echo 'Node 2: Starting runtime...' &&
+        export PATH=/usr/local/bin:$$PATH &&
+        chimaera_start_runtime &
+        RUNTIME_PID=$$! &&
+        echo \"Node 2: Runtime started (PID $$RUNTIME_PID). Waiting for tests...\" &&
+        tail -f /dev/null
+      "
+
+  # Node 3 - Secondary node
+  cte-node3:
+    image: iowarp/iowarp-deps:ai
+    container_name: cte-distributed-node3
+    hostname: iowarp-node3
+    networks:
+      cte-cluster:
+        ipv4_address: 172.26.0.12
+    volumes:
+      - ~/.ppi-jarvis:/root/.ppi-jarvis
+      - ../../../:/content-transfer-engine
+      - ./hostfile:/etc/iowarp/hostfile:ro
+      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - cte-install:/usr/local
+      - hdd3-storage:/mnt/hdd3
+    environment:
+      - NODE_ID=3
+      - NODE_IP=172.26.0.12
+      - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+    shm_size: '16gb'
+    mem_limit: 16g
+    working_dir: /content-transfer-engine
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "
+        echo 'Node 3: Waiting for build to complete...' &&
+        while [ ! -f /usr/local/bin/launch_cte ]; do
+          sleep 2
+          echo 'Node 3: Still waiting for binaries...'
+        done &&
+        echo 'Node 3: Binaries found. Loading spack environment...' &&
+        export SPACK_ROOT=/root/spack &&
+        source /root/spack/share/spack/setup-env.sh &&
+        spack load iowarp-runtime &&
+        echo 'Node 3: Spack environment loaded' &&
+        echo 'Node 3: Creating storage directories...' &&
+        mkdir -p /mnt/hdd3 &&
+        echo 'Node 3: Starting runtime...' &&
+        export PATH=/usr/local/bin:$$PATH &&
+        chimaera_start_runtime &
+        RUNTIME_PID=$$! &&
+        echo \"Node 3: Runtime started (PID $$RUNTIME_PID). Waiting for tests...\" &&
+        tail -f /dev/null
+      "
+
+  # Node 4 - Secondary node
+  cte-node4:
+    image: iowarp/iowarp-deps:ai
+    container_name: cte-distributed-node4
+    hostname: iowarp-node4
+    networks:
+      cte-cluster:
+        ipv4_address: 172.26.0.13
+    volumes:
+      - ~/.ppi-jarvis:/root/.ppi-jarvis
+      - ../../../:/content-transfer-engine
+      - ./hostfile:/etc/iowarp/hostfile:ro
+      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - cte-install:/usr/local
+      - hdd4-storage:/mnt/hdd4
+    environment:
+      - NODE_ID=4
+      - NODE_IP=172.26.0.13
+      - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+    shm_size: '16gb'
+    mem_limit: 16g
+    working_dir: /content-transfer-engine
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: >
+      "
+        echo 'Node 4: Waiting for build to complete...' &&
+        while [ ! -f /usr/local/bin/launch_cte ]; do
+          sleep 2
+          echo 'Node 4: Still waiting for binaries...'
+        done &&
+        echo 'Node 4: Binaries found. Loading spack environment...' &&
+        export SPACK_ROOT=/root/spack &&
+        source /root/spack/share/spack/setup-env.sh &&
+        spack load iowarp-runtime &&
+        echo 'Node 4: Spack environment loaded' &&
+        echo 'Node 4: Creating storage directories...' &&
+        mkdir -p /mnt/hdd4 &&
+        echo 'Node 4: Starting runtime...' &&
+        export PATH=/usr/local/bin:$$PATH &&
+        chimaera_start_runtime &
+        RUNTIME_PID=$$! &&
+        echo \"Node 4: Runtime started (PID $$RUNTIME_PID). Waiting for tests...\" &&
+        tail -f /dev/null
+      "
+
+volumes:
+  cte-install:
+    driver: local
+  hdd1-storage:
+    driver: local
+  hdd2-storage:
+    driver: local
+  hdd3-storage:
+    driver: local
+  hdd4-storage:
+    driver: local
+
+networks:
+  cte-cluster:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16

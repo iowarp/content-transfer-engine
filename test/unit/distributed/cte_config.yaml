@@ -1,0 +1,27 @@
+# CTE Core Configuration for Distributed Testing
+# This configuration defines 4 storage targets across 4 nodes
+
+devices:
+  - name: "node1_hdd1"
+    mount_point: "/mnt/hdd1"
+    capacity: "10GB"
+    media_type: "HDD"
+    manual_score: 0.25
+
+  - name: "node2_hdd2"
+    mount_point: "/mnt/hdd2"
+    capacity: "10GB"
+    media_type: "HDD"
+    manual_score: 0.25
+
+  - name: "node3_hdd3"
+    mount_point: "/mnt/hdd3"
+    capacity: "10GB"
+    media_type: "HDD"
+    manual_score: 0.25
+
+  - name: "node4_hdd4"
+    mount_point: "/mnt/hdd4"
+    capacity: "10GB"
+    media_type: "HDD"
+    manual_score: 0.25

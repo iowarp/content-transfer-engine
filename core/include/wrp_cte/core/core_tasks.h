@@ -856,6 +856,14 @@ struct GetTagSizeTask : public chi::Task {
     tag_id_ = other->tag_id_;
     tag_size_ = other->tag_size_;
   }
+
+  /**
+   * Aggregate results from a replica task
+   * Sums the tag_size_ values from multiple nodes
+   */
+  void Aggregate(const hipc::FullPtr<GetTagSizeTask> &replica) {
+    tag_size_ += replica->tag_size_;
+  }
 };
 
 /**
@@ -1064,6 +1072,17 @@ struct GetContainedBlobsTask : public chi::Task {
   void Copy(const hipc::FullPtr<GetContainedBlobsTask> &other) {
     tag_id_ = other->tag_id_;
     blob_names_ = other->blob_names_;
+  }
+
+  /**
+   * Aggregate results from a replica task
+   * Merges the blob_names_ vectors from multiple nodes
+   */
+  void Aggregate(const hipc::FullPtr<GetContainedBlobsTask> &replica) {
+    // Merge blob names from replica into this task's blob_names_
+    for (size_t i = 0; i < replica->blob_names_.size(); ++i) {
+      blob_names_.emplace_back(replica->blob_names_[i]);
+    }
   }
 };
 
