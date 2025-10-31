@@ -18,7 +18,8 @@ public:
   void Create(const hipc::MemContext &mctx, const chi::PoolQuery &pool_query,
               const std::string &pool_name, const chi::PoolId &custom_pool_id,
               const CreateParams &params = CreateParams()) {
-    auto task = AsyncCreate(mctx, pool_query, pool_name, custom_pool_id, params);
+    auto task =
+        AsyncCreate(mctx, pool_query, pool_name, custom_pool_id, params);
     task->Wait();
 
     // CRITICAL: Update client pool_id_ with the actual pool ID from the task
@@ -40,12 +41,12 @@ public:
     // CRITICAL: CreateTask MUST use admin pool for GetOrCreatePool processing
     auto task = ipc_manager->NewTask<CreateTask>(
         chi::CreateTaskId(),
-        chi::kAdminPoolId,              // Always use admin pool for CreateTask
+        chi::kAdminPoolId, // Always use admin pool for CreateTask
         pool_query,
-        CreateParams::chimod_lib_name,  // ChiMod name from CreateParams
-        pool_name,                      // Pool name from parameter
-        custom_pool_id,                 // Explicit pool ID from parameter
-        params);                        // CreateParams with configuration
+        CreateParams::chimod_lib_name, // ChiMod name from CreateParams
+        pool_name,                     // Pool name from parameter
+        custom_pool_id,                // Explicit pool ID from parameter
+        params);                       // CreateParams with configuration
 
     // Submit to runtime
     ipc_manager->Enqueue(task);
@@ -206,11 +207,10 @@ public:
    * Synchronous put blob - waits for completion
    */
   bool PutBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name,
-               chi::u64 offset, chi::u64 size, hipc::Pointer blob_data,
-               float score, chi::u32 flags) {
-    auto task = AsyncPutBlob(mctx, tag_id, blob_name, offset, size,
-                             blob_data, score, flags);
+               const std::string &blob_name, chi::u64 offset, chi::u64 size,
+               hipc::Pointer blob_data, float score, chi::u32 flags) {
+    auto task = AsyncPutBlob(mctx, tag_id, blob_name, offset, size, blob_data,
+                             score, flags);
     task->Wait();
     bool result = (task->return_code_.load() == 0);
     if (!result) {
@@ -225,9 +225,8 @@ public:
    */
   hipc::FullPtr<PutBlobTask>
   AsyncPutBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name,
-               chi::u64 offset, chi::u64 size, hipc::Pointer blob_data,
-               float score, chi::u32 flags) {
+               const std::string &blob_name, chi::u64 offset, chi::u64 size,
+               hipc::Pointer blob_data, float score, chi::u32 flags) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
@@ -243,11 +242,10 @@ public:
    * Synchronous get blob - waits for completion
    */
   bool GetBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name,
-               chi::u64 offset, chi::u64 size, chi::u32 flags,
-               hipc::Pointer blob_data) {
-    auto task = AsyncGetBlob(mctx, tag_id, blob_name, offset, size,
-                             flags, blob_data);
+               const std::string &blob_name, chi::u64 offset, chi::u64 size,
+               chi::u32 flags, hipc::Pointer blob_data) {
+    auto task =
+        AsyncGetBlob(mctx, tag_id, blob_name, offset, size, flags, blob_data);
     task->Wait();
     bool result = (task->return_code_.load() == 0);
     CHI_IPC->DelTask(task);
@@ -259,9 +257,8 @@ public:
    */
   hipc::FullPtr<GetBlobTask>
   AsyncGetBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name,
-               chi::u64 offset, chi::u64 size, chi::u32 flags,
-               hipc::Pointer blob_data) {
+               const std::string &blob_name, chi::u64 offset, chi::u64 size,
+               chi::u32 flags, hipc::Pointer blob_data) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
@@ -323,9 +320,9 @@ public:
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
-    auto task = ipc_manager->NewTask<DelBlobTask>(
-        chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_name);
+    auto task = ipc_manager->NewTask<DelBlobTask>(chi::CreateTaskId(), pool_id_,
+                                                  chi::PoolQuery::Dynamic(),
+                                                  tag_id, blob_name);
 
     ipc_manager->Enqueue(task);
     return task;

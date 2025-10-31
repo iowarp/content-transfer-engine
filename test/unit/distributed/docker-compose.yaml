@@ -38,15 +38,17 @@ services:
         echo 'Node 1: Building Content Transfer Engine' &&
         echo '========================================' &&
         cd /content-transfer-engine &&
-        rm -rf build &&
-        echo 'Node 1: Running cmake with debug preset...' &&
+        rm -rf build-docker &&
+        echo 'Node 1: Running cmake with debug-docker preset...' &&
         cmake --preset debug-docker 2>&1 | tee /tmp/cmake.log || (echo 'CMAKE FAILED:' && cat /tmp/cmake.log && exit 1) &&
-        echo 'Node 1: Checking if build directory was created...' &&
-        ls -la build/ &&
+        echo 'Node 1: Checking if build-docker directory was created...' &&
+        ls -la build-docker/ &&
         echo 'Node 1: CMake complete. Building CTE and tests...' &&
-        cmake --build build --config Debug -j8 2>&1 | tee /tmp/build.log || (echo 'BUILD FAILED:' && cat /tmp/build.log && exit 1) &&
-        echo 'Node 1: Build complete. Installing to /usr/local...' &&
-        cmake --install build 2>&1 | tee /tmp/install.log || (echo 'INSTALL FAILED:' && cat /tmp/install.log && exit 1) &&
+        cmake --build build-docker --config Debug -j8 2>&1 | tee /tmp/build.log; test $${PIPESTATUS[0]} -eq 0 || (echo 'BUILD FAILED:' && cat /tmp/build.log && exit 1) &&
+        echo 'Node 1: Build complete. Running make install...' &&
+        cd build-docker &&
+        make install 2>&1 | tee /tmp/install.log; test $${PIPESTATUS[0]} -eq 0 || (echo 'INSTALL FAILED:' && cat /tmp/install.log && exit 1) &&
+        cd /content-transfer-engine &&
         echo 'Node 1: Verifying launch_cte installation...' &&
         ls -la /usr/local/bin/launch_cte &&
         echo '========================================' &&
@@ -71,8 +73,7 @@ services:
         echo '========================================' &&
         echo 'Node 1: Running distributed unit tests' &&
         echo '========================================' &&
-        cd /content-transfer-engine/build &&
-        ./test/unit/test_core_functionality &&
+        test_core_functionality_dist &&
         echo '========================================' &&
         echo 'Node 1: Tests complete' &&
         echo '========================================' &&

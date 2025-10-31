@@ -118,18 +118,11 @@ public:
     }
 
     // Initialize Chimaera runtime and client for functional testing
-    // (only if CTE_INIT_RUNTIME compile flag is enabled)
 #if CTE_INIT_RUNTIME
     REQUIRE(initializeBoth());
 #else
-    INFO("Skipping runtime initialization (CTE_INIT_RUNTIME=0)");
-    // Verify that runtime is already initialized externally
-    REQUIRE(CHI_CHIMAERA_MANAGER != nullptr);
-    REQUIRE(CHI_IPC != nullptr);
-    REQUIRE(CHI_POOL_MANAGER != nullptr);
-    REQUIRE(CHI_MODULE_MANAGER != nullptr);
-    REQUIRE(CHI_IPC->IsInitialized());
-    INFO("Verified external runtime initialization");
+    INFO("Runtime already initialized externally (CTE_INIT_RUNTIME=0)");
+    REQUIRE(initializeClient());
 #endif
 
     // Generate unique pool ID for this test session
