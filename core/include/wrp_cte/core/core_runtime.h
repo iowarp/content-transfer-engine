@@ -77,9 +77,9 @@ class Runtime : public chi::Container {
   void GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext& ctx);
 
   /**
-   * Reorganize multiple blobs (Method::kReorganizeBlobs) - update scores for multiple blobs
+   * Reorganize single blob (Method::kReorganizeBlob) - update score for single blob
    */
-  void ReorganizeBlobs(hipc::FullPtr<ReorganizeBlobsTask> task, chi::RunContext& ctx);
+  void ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task, chi::RunContext& ctx);
 
   /**
    * Delete blob operation - removes blob and decrements tag size
@@ -128,12 +128,10 @@ class Runtime : public chi::Container {
   // Tag management data structures (using chi::unordered_map_ll for thread-safe concurrent access)
   chi::unordered_map_ll<std::string, TagId> tag_name_to_id_;     // tag_name -> tag_id
   chi::unordered_map_ll<TagId, TagInfo> tag_id_to_info_;         // tag_id -> TagInfo
-  chi::unordered_map_ll<std::string, BlobId> tag_blob_name_to_id_;  // "tag_id.blob_name" -> blob_id
-  chi::unordered_map_ll<BlobId, BlobInfo> blob_id_to_info_;      // blob_id -> BlobInfo
-  
+  chi::unordered_map_ll<std::string, BlobInfo> tag_blob_name_to_info_;  // "tag_id.blob_name" -> BlobInfo
+
   // Atomic counters for thread-safe ID generation
   std::atomic<chi::u32> next_tag_id_minor_;   // Minor counter for TagId UniqueId generation
-  std::atomic<chi::u32> next_blob_id_minor_;  // Minor counter for BlobId UniqueId generation
 
   // Synchronization primitives for thread-safe access to data structures
   // Use a set of locks based on maximum number of lanes for better concurrency
@@ -178,16 +176,10 @@ class Runtime : public chi::Container {
   TagId GenerateNewTagId();
 
   /**
-   * Helper function to generate a new BlobId using node_id as major and atomic counter as minor
-   */
-  BlobId GenerateNewBlobId();
-
-  
-  /**
    * Get target lock index based on TargetId hash
    */
   size_t GetTargetLockIndex(const chi::PoolId& target_id) const;
-  
+
   /**
    * Get tag lock index based on tag name hash
    */
@@ -197,11 +189,6 @@ class Runtime : public chi::Container {
    * Get tag lock index based on tag ID hash
    */
   size_t GetTagLockIndex(const TagId& tag_id) const;
-
-  /**
-   * Get blob lock index based on blob ID hash
-   */
-  size_t GetBlobLockIndex(const BlobId& blob_id) const;
   
   /**
    * Allocate space from a target for new blob data
@@ -222,25 +209,21 @@ class Runtime : public chi::Container {
 
   /**
    * Check if blob exists and return pointer to BlobInfo if found
-   * @param blob_id BlobId to search for (can be null)
-   * @param blob_name Blob name to search for (can be empty)
+   * @param blob_name Blob name to search for (required)
    * @param tag_id Tag ID to search within
-   * @param found_blob_id Output parameter for the actual blob ID found
    * @return Pointer to BlobInfo if found, nullptr if not found
    */
-  BlobInfo* CheckBlobExists(const BlobId& blob_id, const std::string& blob_name, 
-                           const TagId& tag_id, BlobId& found_blob_id);
+  BlobInfo* CheckBlobExists(const std::string& blob_name, const TagId& tag_id);
 
   /**
    * Create new blob with given parameters
    * @param blob_name Name for the new blob (required)
    * @param tag_id Tag ID to associate blob with
    * @param blob_score Score/priority for the blob
-   * @param created_blob_id Output parameter for the generated blob ID
    * @return Pointer to created BlobInfo, nullptr on failure
    */
-  BlobInfo* CreateNewBlob(const std::string& blob_name, const TagId& tag_id, 
-                         float blob_score, BlobId& created_blob_id);
+  BlobInfo* CreateNewBlob(const std::string& blob_name, const TagId& tag_id,
+                         float blob_score);
 
   /**
    * Allocate new data blocks for blob expansion
@@ -282,13 +265,12 @@ class Runtime : public chi::Container {
    * @param op Operation type
    * @param off Offset within blob
    * @param size Size of operation
-   * @param blob_id Blob ID involved
    * @param tag_id Tag ID involved
    * @param mod_time Last modification time
    * @param read_time Last read time
    */
-  void LogTelemetry(CteOp op, size_t off, size_t size, 
-                   const BlobId& blob_id, const TagId& tag_id,
+  void LogTelemetry(CteOp op, size_t off, size_t size,
+                   const TagId& tag_id,
                    const Timestamp& mod_time, const Timestamp& read_time);
   
   /**

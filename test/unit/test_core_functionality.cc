@@ -1977,26 +1977,26 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 }
 
 /**
- * FUNCTIONAL Test Case: ReorganizeBlobs Operations
+ * FUNCTIONAL Test Case: ReorganizeBlob Operations
  *
- * This test verifies the complete ReorganizeBlobs functionality:
+ * This test verifies the complete ReorganizeBlob functionality:
  * 1. Setup core pool, register target, create tag
  * 2. Store 10 blobs with initial score of 0.5
- * 3. Use ReorganizeBlobs to update all blobs to score 1.0
+ * 3. Use ReorganizeBlob to update all blobs to score 1.0
  * 4. Verify that scores have been updated correctly
  * 5. Test score difference threshold filtering
- * 6. Verify batch processing works correctly
+ * 6. Verify processing multiple blobs works correctly
  *
  * Following CLAUDE.md requirements:
  * - Use real API calls with proper runtime initialization
- * - Test the actual ReorganizeBlobs implementation with controlled async operations
+ * - Test the actual ReorganizeBlob implementation with controlled async operations
  * - Verify score filtering based on score_difference_threshold configuration
- * - Test batch processing of up to 32 blobs at a time
+ * - Test processing multiple blobs (updated from batch API to per-blob API)
  */
 TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
-                 "FUNCTIONAL - ReorganizeBlobs Operations",
+                 "FUNCTIONAL - ReorganizeBlob Operations",
                  "[cte][core][blob][reorganize][functional]") {
-  INFO("=== FUNCTIONAL ReorganizeBlobs Test ===");
+  INFO("=== FUNCTIONAL ReorganizeBlob Test ===");
 
   // Setup: Create core pool, register target, create tag
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
@@ -2066,21 +2066,21 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       INFO("✓ Blob " << i << " initial score verified: " << score);
     }
 
-    // Phase 3: Use ReorganizeBlobs to update all scores to 1.0
-    INFO("Phase 3: Executing ReorganizeBlobs operation...");
+    // Phase 3: Use ReorganizeBlob to update all scores to 1.0
+    INFO("Phase 3: Executing ReorganizeBlob operations...");
 
-    // The ReorganizeBlobs API accepts std::vector types directly
+    // Call ReorganizeBlob once per blob (updated from batched operation)
+    for (size_t i = 0; i < num_blobs; ++i) {
+      auto reorganize_task = core_client_->AsyncReorganizeBlob(
+          mctx_, tag_id, blob_names[i], target_score);
 
-    // Create and execute ReorganizeBlobs task
-    auto reorganize_task = core_client_->AsyncReorganizeBlobs(
-        mctx_, tag_id, blob_names, std::vector<float>(num_blobs, target_score));
-
-    REQUIRE(!reorganize_task.IsNull());
-    INFO("Waiting for ReorganizeBlobs completion...");
-    REQUIRE(WaitForTaskCompletion(reorganize_task, 30000)); // Longer timeout for batch operation
-    REQUIRE(reorganize_task->return_code_.load() == 0);
-    INFO("✓ ReorganizeBlobs completed successfully");
-    CHI_IPC->DelTask(reorganize_task);
+      REQUIRE(!reorganize_task.IsNull());
+      REQUIRE(WaitForTaskCompletion(reorganize_task, 10000));
+      REQUIRE(reorganize_task->return_code_.load() == 0);
+      CHI_IPC->DelTask(reorganize_task);
+      INFO("✓ Blob " << i << " reorganized successfully");
+    }
+    INFO("✓ All blobs reorganized successfully");
 
     // Phase 4: Verify updated scores are 1.0
     INFO("Phase 4: Verifying updated scores...");
@@ -2144,15 +2144,17 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       INFO("✓ Test blob " << i << " stored with score " << initial_scores[i]);
     }
 
-    // Execute ReorganizeBlobs with mixed score differences
-    INFO("Executing ReorganizeBlobs with mixed score differences...");
-    auto threshold_reorganize_task = core_client_->AsyncReorganizeBlobs(
-        mctx_, tag_id, test_blob_names, target_scores);
+    // Execute ReorganizeBlob with mixed score differences (one per blob)
+    INFO("Executing ReorganizeBlob operations with mixed score differences...");
+    for (size_t i = 0; i < num_test_blobs; ++i) {
+      auto threshold_reorganize_task = core_client_->AsyncReorganizeBlob(
+          mctx_, tag_id, test_blob_names[i], target_scores[i]);
 
-    REQUIRE(!threshold_reorganize_task.IsNull());
-    REQUIRE(WaitForTaskCompletion(threshold_reorganize_task, 20000));
-    REQUIRE(threshold_reorganize_task->return_code_.load() == 0);
-    CHI_IPC->DelTask(threshold_reorganize_task);
+      REQUIRE(!threshold_reorganize_task.IsNull());
+      REQUIRE(WaitForTaskCompletion(threshold_reorganize_task, 10000));
+      REQUIRE(threshold_reorganize_task->return_code_.load() == 0);
+      CHI_IPC->DelTask(threshold_reorganize_task);
+    }
 
     // Verify that blobs with significant score differences were updated
     // Note: Default score_difference_threshold is 0.05 based on implementation
@@ -2175,17 +2177,17 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     INFO("SUCCESS: Score difference threshold filtering verified!");
   }
 
-  SECTION("FUNCTIONAL - Batch processing verification") {
-    INFO("=== Testing batch processing with exactly 32 blobs ===");
+  SECTION("FUNCTIONAL - Multiple blob processing verification") {
+    INFO("=== Testing processing multiple blobs (32 blobs) ===");
 
-    const size_t batch_size = 32; // Exactly the batch size limit
+    const size_t batch_size = 32;
     const float initial_score = 0.3f;
     const float target_score = 0.8f;
     const chi::u64 blob_size = 512; // Smaller blobs for batch test
 
     std::vector<std::string> batch_blob_names;
     
-    INFO("Creating " << batch_size << " blobs for batch processing test...");
+    INFO("Creating " << batch_size << " blobs for multiple blob processing test...");
     for (size_t i = 0; i < batch_size; ++i) {
       std::string blob_name = "batch_blob_" + std::to_string(i);
       batch_blob_names.push_back(blob_name);
@@ -2209,18 +2211,22 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
       }
     }
 
-    // Execute batch reorganization
-    INFO("Executing batch ReorganizeBlobs operation...");
-    std::vector<float> batch_target_scores(batch_size, target_score);
-    
-    auto batch_reorganize_task = core_client_->AsyncReorganizeBlobs(
-        mctx_, tag_id, batch_blob_names, batch_target_scores);
+    // Execute reorganization for each blob (updated from batched operation)
+    INFO("Executing ReorganizeBlob operations for " << batch_size << " blobs...");
+    for (size_t i = 0; i < batch_size; ++i) {
+      auto batch_reorganize_task = core_client_->AsyncReorganizeBlob(
+          mctx_, tag_id, batch_blob_names[i], target_score);
 
-    REQUIRE(!batch_reorganize_task.IsNull());
-    INFO("Waiting for batch reorganization (may take longer for 32 blobs)...");
-    REQUIRE(WaitForTaskCompletion(batch_reorganize_task, 60000)); // Extended timeout
-    REQUIRE(batch_reorganize_task->return_code_.load() == 0);
-    CHI_IPC->DelTask(batch_reorganize_task);
+      REQUIRE(!batch_reorganize_task.IsNull());
+      REQUIRE(WaitForTaskCompletion(batch_reorganize_task, 10000));
+      REQUIRE(batch_reorganize_task->return_code_.load() == 0);
+      CHI_IPC->DelTask(batch_reorganize_task);
+
+      if ((i + 1) % 8 == 0) {
+        INFO("✓ Reorganized " << (i + 1) << "/" << batch_size << " blobs");
+      }
+    }
+    INFO("✓ All " << batch_size << " blobs reorganized successfully");
 
     // Verify all blobs in batch were updated
     INFO("Verifying all " << batch_size << " blobs were reorganized...");
@@ -2236,10 +2242,10 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
     }
 
     REQUIRE(verified_count == batch_size);
-    INFO("SUCCESS: Batch processing of " << batch_size << " blobs completed successfully!");
+    INFO("SUCCESS: Processing of " << batch_size << " blobs completed successfully!");
   }
 
-  INFO("=== ReorganizeBlobs FUNCTIONAL Test Completed Successfully ===");
+  INFO("=== ReorganizeBlob FUNCTIONAL Test Completed Successfully ===");
 }
 
 /**

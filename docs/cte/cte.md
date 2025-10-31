@@ -188,10 +188,10 @@ public:
   bool DelBlob(const hipc::MemContext &mctx, const TagId &tag_id,
                const std::string &blob_name, const BlobId &blob_id);
 
-  chi::u32 ReorganizeBlobs(const hipc::MemContext &mctx,
-                           const TagId &tag_id,
-                           const std::vector<std::string> &blob_names,
-                           const std::vector<float> &new_scores);
+  chi::u32 ReorganizeBlob(const hipc::MemContext &mctx,
+                          const TagId &tag_id,
+                          const std::string &blob_name,
+                          float new_score);
 
   // Blob score operations
   float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
@@ -210,7 +210,7 @@ public:
   // Async variants (all methods have Async versions)
   hipc::FullPtr<CreateTask> AsyncCreate(...);
   hipc::FullPtr<RegisterTargetTask> AsyncRegisterTarget(...);
-  hipc::FullPtr<ReorganizeBlobsTask> AsyncReorganizeBlobs(...);
+  hipc::FullPtr<ReorganizeBlobTask> AsyncReorganizeBlob(...);
   hipc::FullPtr<GetBlobScoreTask> AsyncGetBlobScore(...);
   hipc::FullPtr<GetBlobSizeTask> AsyncGetBlobSize(...);
   // ... etc
@@ -882,26 +882,24 @@ for (const auto& target : targets) {
 ### Blob Reorganization
 
 ```cpp
-// Reorganize multiple blobs based on new access patterns
+// Reorganize blobs based on new access patterns
 // Higher scores (closer to 1.0) indicate hotter data
 
 TagId tag_id = tag_info.tag_id_;
 
-// Prepare blob names and their new scores
+// Reorganize multiple blobs by calling ReorganizeBlob once per blob
 std::vector<std::string> blob_names = {"blob_001", "blob_002", "blob_003"};
 std::vector<float> new_scores = {0.95f, 0.7f, 0.3f};  // Hot, warm, cold
 
-chi::u32 result = cte_client.ReorganizeBlobs(mctx, tag_id, blob_names, new_scores);
-
-if (result == 0) {
-    std::cout << "Blobs reorganized successfully\n";
+for (size_t i = 0; i < blob_names.size(); ++i) {
+    chi::u32 result = cte_client.ReorganizeBlob(mctx, tag_id, blob_names[i], new_scores[i]);
+    if (result == 0) {
+        std::cout << "Blob " << blob_names[i] << " reorganized successfully\n";
+    }
 }
 
-// Example: Reorganize single blob by using vectors with one element
-std::vector<std::string> single_blob = {"important_blob"};
-std::vector<float> single_score = {0.95f};
-
-result = cte_client.ReorganizeBlobs(mctx, tag_id, single_blob, single_score);
+// Example: Reorganize single blob
+chi::u32 result = cte_client.ReorganizeBlob(mctx, tag_id, "important_blob", 0.95f);
 if (result == 0) {
     std::cout << "Single blob reorganized successfully\n";
 }
@@ -1117,11 +1115,13 @@ tag_id.minor_ = 1
 blob_names = ["blob_001", "blob_002", "blob_003"]
 new_scores = [0.95, 0.85, 0.75]  # Different tier assignments
 
-result = client.ReorganizeBlobs(mctx, tag_id, blob_names, new_scores)
-if result == 0:
-    print(f"Blobs reorganized successfully")
-else:
-    print(f"Reorganization failed with error code: {result}")
+# Call ReorganizeBlob once per blob
+for blob_name, new_score in zip(blob_names, new_scores):
+    result = client.ReorganizeBlob(mctx, tag_id, blob_name, new_score)
+    if result == 0:
+        print(f"Blob {blob_name} reorganized successfully")
+    else:
+        print(f"Reorganization of {blob_name} failed with error code: {result}")
 ```
 
 ### Python Data Types
@@ -1146,7 +1146,7 @@ print(cte.CteOp.kDelBlob)    # Delete blob operation
 
 ### Python Blob Reorganization
 
-The Python bindings support batch blob reorganization for dynamic data placement optimization using the `ReorganizeBlobs` method:
+The Python bindings support blob reorganization for dynamic data placement optimization using the `ReorganizeBlob` method:
 
 ```python
 import wrp_cte_core_ext as cte
@@ -1166,11 +1166,13 @@ tag_id.minor_ = 1
 blob_names = ["hot_data", "warm_data", "cold_archive"]
 new_scores = [0.95, 0.6, 0.2]  # Hot, warm, and cold tiers
 
-result = client.ReorganizeBlobs(mctx, tag_id, blob_names, new_scores)
-if result == 0:
-    print("Blobs reorganized successfully")
-else:
-    print(f"Reorganization failed with error code: {result}")
+# Call ReorganizeBlob once per blob
+for blob_name, new_score in zip(blob_names, new_scores):
+    result = client.ReorganizeBlob(mctx, tag_id, blob_name, new_score)
+    if result == 0:
+        print(f"Blob {blob_name} reorganized successfully")
+    else:
+        print(f"Reorganization of {blob_name} failed with error code: {result}")
 
 # Example 2: Promote frequently accessed blobs based on telemetry
 telemetry = client.PollTelemetryLog(mctx, 0)
@@ -1204,38 +1206,38 @@ for blob_key, count in access_counts.items():
         score = min(0.5 + (count / 100.0), 1.0)
         new_scores_list.append(score)
 
-# Perform batch reorganization
+# Perform reorganization for each blob
 if blobs_to_reorganize:
-    result = client.ReorganizeBlobs(mctx, tag_id, blobs_to_reorganize, new_scores_list)
-    if result == 0:
-        print(f"Reorganized {len(blobs_to_reorganize)} blobs successfully")
+    for blob_name, new_score in zip(blobs_to_reorganize, new_scores_list):
+        result = client.ReorganizeBlob(mctx, tag_id, blob_name, new_score)
+        if result == 0:
+            print(f"Reorganized blob {blob_name} successfully")
 
 # Example 3: Tier-based reorganization strategy
 # Organize blobs into three tiers based on size and access patterns
 
 # Small, frequently accessed -> Hot tier (0.9)
 small_hot_blobs = ["config", "index", "metadata"]
-small_hot_scores = [0.9] * len(small_hot_blobs)
-
-result = client.ReorganizeBlobs(mctx, tag_id, small_hot_blobs, small_hot_scores)
-if result == 0:
-    print("Hot tier blobs reorganized")
+for blob_name in small_hot_blobs:
+    result = client.ReorganizeBlob(mctx, tag_id, blob_name, 0.9)
+    if result == 0:
+        print(f"Hot tier blob {blob_name} reorganized")
 
 # Medium, occasionally accessed -> Warm tier (0.5-0.7)
 warm_blobs = ["dataset_recent_01", "dataset_recent_02"]
 warm_scores = [0.6, 0.5]
-
-result = client.ReorganizeBlobs(mctx, tag_id, warm_blobs, warm_scores)
-if result == 0:
-    print("Warm tier blobs reorganized")
+for blob_name, score in zip(warm_blobs, warm_scores):
+    result = client.ReorganizeBlob(mctx, tag_id, blob_name, score)
+    if result == 0:
+        print(f"Warm tier blob {blob_name} reorganized")
 
 # Large, rarely accessed -> Cold tier (0.1-0.3)
 cold_blobs = ["archive_2023", "backup_full"]
 cold_scores = [0.2, 0.1]
-
-result = client.ReorganizeBlobs(mctx, tag_id, cold_blobs, cold_scores)
-if result == 0:
-    print("Cold tier blobs reorganized")
+for blob_name, score in zip(cold_blobs, cold_scores):
+    result = client.ReorganizeBlob(mctx, tag_id, blob_name, score)
+    if result == 0:
+        print(f"Cold tier blob {blob_name} reorganized")
 ```
 
 **Score Guidelines for Python:**
@@ -1247,23 +1249,23 @@ if result == 0:
 
 **Method Signature:**
 ```python
-result = client.ReorganizeBlobs(
+result = client.ReorganizeBlob(
     mctx,           # Memory context
-    tag_id,         # Tag ID containing the blobs
-    blob_names,     # List of blob names (list of strings)
-    new_scores      # List of new scores (list of floats, same length as blob_names)
+    tag_id,         # Tag ID containing the blob
+    blob_name,      # Blob name (string)
+    new_score       # New score (float, 0.0 to 1.0)
 )
 ```
 
 **Return Codes:**
-- `0`: Success - all blobs reorganized successfully
+- `0`: Success - blob reorganized successfully
 - `Non-zero`: Error - reorganization failed (tag not found, blob not found, insufficient space, etc.)
 
 **Important Notes:**
-- `blob_names` and `new_scores` lists must have the same length
+- Call `ReorganizeBlob` once per blob to reorganize multiple blobs
 - All blobs must belong to the specified `tag_id`
 - Scores must be in the range `[0.0, 1.0]`
-- Batch reorganization is more efficient than reorganizing blobs individually
+- Higher scores indicate hotter data that should be placed on faster storage tiers
 
 ## Advanced Topics
 

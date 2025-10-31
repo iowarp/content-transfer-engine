@@ -54,8 +54,8 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
       GetBlob(task_ptr.Cast<GetBlobTask>(), rctx);
       break;
     }
-    case Method::kReorganizeBlobs: {
-      ReorganizeBlobs(task_ptr.Cast<ReorganizeBlobsTask>(), rctx);
+    case Method::kReorganizeBlob: {
+      ReorganizeBlob(task_ptr.Cast<ReorganizeBlobTask>(), rctx);
       break;
     }
     case Method::kDelBlob: {
@@ -95,67 +95,11 @@ void Runtime::Run(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr, chi::RunCo
 
 void Runtime::Monitor(chi::MonitorModeId mode, chi::u32 method,
                        hipc::FullPtr<chi::Task> task_ptr, chi::RunContext& rctx) {
-  // Monitor calls the same methods as Run - the methods check exec_mode internally
-  switch (method) {
-    case Method::kRegisterTarget: {
-      RegisterTarget(task_ptr.Cast<RegisterTargetTask>(), rctx);
-      break;
-    }
-    case Method::kUnregisterTarget: {
-      UnregisterTarget(task_ptr.Cast<UnregisterTargetTask>(), rctx);
-      break;
-    }
-    case Method::kListTargets: {
-      ListTargets(task_ptr.Cast<ListTargetsTask>(), rctx);
-      break;
-    }
-    case Method::kStatTargets: {
-      StatTargets(task_ptr.Cast<StatTargetsTask>(), rctx);
-      break;
-    }
-    case Method::kGetOrCreateTag: {
-      GetOrCreateTag(task_ptr.Cast<core::GetOrCreateTagTask<core::CreateParams>>(), rctx);
-      break;
-    }
-    case Method::kPutBlob: {
-      PutBlob(task_ptr.Cast<PutBlobTask>(), rctx);
-      break;
-    }
-    case Method::kGetBlob: {
-      GetBlob(task_ptr.Cast<GetBlobTask>(), rctx);
-      break;
-    }
-    case Method::kReorganizeBlobs: {
-      ReorganizeBlobs(task_ptr.Cast<ReorganizeBlobsTask>(), rctx);
-      break;
-    }
-    case Method::kDelBlob: {
-      DelBlob(task_ptr.Cast<DelBlobTask>(), rctx);
-      break;
-    }
-    case Method::kGetTagSize: {
-      GetTagSize(task_ptr.Cast<GetTagSizeTask>(), rctx);
-      break;
-    }
-    case Method::kGetBlobScore: {
-      GetBlobScore(task_ptr.Cast<GetBlobScoreTask>(), rctx);
-      break;
-    }
-    case Method::kGetBlobSize: {
-      GetBlobSize(task_ptr.Cast<GetBlobSizeTask>(), rctx);
-      break;
-    }
-    case Method::kGetContainedBlobs: {
-      GetContainedBlobs(task_ptr.Cast<GetContainedBlobsTask>(), rctx);
-      break;
-    }
-    default: {
-      // Unknown method or methods without Monitor implementation - do nothing
-      break;
-    }
-  }
-
-  (void)mode;  // Suppress unused parameter warning
+  // Monitor methods are optional - no custom monitoring implemented
+  (void)mode;
+  (void)method;
+  (void)task_ptr;
+  (void)rctx;
 }
 
 void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
@@ -199,8 +143,8 @@ void Runtime::Del(chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
       ipc_manager->DelTask(task_ptr.Cast<GetBlobTask>());
       break;
     }
-    case Method::kReorganizeBlobs: {
-      ipc_manager->DelTask(task_ptr.Cast<ReorganizeBlobsTask>());
+    case Method::kReorganizeBlob: {
+      ipc_manager->DelTask(task_ptr.Cast<ReorganizeBlobTask>());
       break;
     }
     case Method::kDelBlob: {
@@ -287,8 +231,8 @@ void Runtime::SaveTask(chi::u32 method, chi::SaveTaskArchive& archive,
       archive << *typed_task;
       break;
     }
-    case Method::kReorganizeBlobs: {
-      auto typed_task = task_ptr.Cast<ReorganizeBlobsTask>();
+    case Method::kReorganizeBlob: {
+      auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
       archive << *typed_task;
       break;
     }
@@ -420,12 +364,12 @@ void Runtime::LoadTask(chi::u32 method, chi::LoadTaskArchive& archive,
       archive >> *typed_task;
       break;
     }
-    case Method::kReorganizeBlobs: {
+    case Method::kReorganizeBlob: {
       // Allocate task using typed NewTask if not already allocated
       if (task_ptr.IsNull()) {
-        task_ptr = ipc_manager->NewTask<ReorganizeBlobsTask>().template Cast<chi::Task>();
+        task_ptr = ipc_manager->NewTask<ReorganizeBlobTask>().template Cast<chi::Task>();
       }
-      auto typed_task = task_ptr.Cast<ReorganizeBlobsTask>();
+      auto typed_task = task_ptr.Cast<ReorganizeBlobTask>();
       archive >> *typed_task;
       break;
     }
@@ -624,14 +568,14 @@ void Runtime::NewCopy(chi::u32 method, const hipc::FullPtr<chi::Task>& orig_task
       }
       break;
     }
-    case Method::kReorganizeBlobs: {
+    case Method::kReorganizeBlob: {
       // Allocate new task using SHM default constructor
-      auto typed_task = ipc_manager->NewTask<ReorganizeBlobsTask>();
+      auto typed_task = ipc_manager->NewTask<ReorganizeBlobTask>();
       if (!typed_task.IsNull()) {
         // Copy base Task fields first
         typed_task.template Cast<chi::Task>()->Copy(orig_task);
         // Then copy task-specific fields
-        typed_task->Copy(orig_task.Cast<ReorganizeBlobsTask>());
+        typed_task->Copy(orig_task.Cast<ReorganizeBlobTask>());
         // Cast to base Task type for return
         dup_task = typed_task.template Cast<chi::Task>();
       }
@@ -808,9 +752,9 @@ void Runtime::Aggregate(chi::u32 method, hipc::FullPtr<chi::Task> origin_task,
       CHI_AGGREGATE_OR_COPY(typed_origin, typed_replica);
       break;
     }
-    case Method::kReorganizeBlobs: {
-      auto typed_origin = origin_task.Cast<ReorganizeBlobsTask>();
-      auto typed_replica = replica_task.Cast<ReorganizeBlobsTask>();
+    case Method::kReorganizeBlob: {
+      auto typed_origin = origin_task.Cast<ReorganizeBlobTask>();
+      auto typed_replica = replica_task.Cast<ReorganizeBlobTask>();
       // Use SFINAE-based macro to call Aggregate if available, otherwise Copy
       CHI_AGGREGATE_OR_COPY(typed_origin, typed_replica);
       break;

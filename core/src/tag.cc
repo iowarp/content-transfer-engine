@@ -34,11 +34,11 @@ void Tag::PutBlob(const std::string &blob_name, const char *data, size_t data_si
   ipc_manager->FreeBuffer(shm_fullptr);
 }
 
-void Tag::PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_t data_size, 
+void Tag::PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_t data_size,
                   size_t off, float score) {
   auto *cte_client = WRP_CTE_CLIENT;
-  bool result = cte_client->PutBlob(hipc::MemContext(), tag_id_, blob_name, 
-                                    BlobId::GetNull(), off, data_size, data, score, 0);
+  bool result = cte_client->PutBlob(hipc::MemContext(), tag_id_, blob_name,
+                                    off, data_size, data, score, 0);
   if (!result) {
     throw std::runtime_error("PutBlob operation failed");
   }
@@ -51,11 +51,11 @@ void Tag::PutBlob(const std::string &blob_name, const hipc::Pointer &data, size_
 // 3. Calling: AsyncPutBlob(blob_name, shm_ptr.shm_, data_size, off, score);
 // 4. Keeping shm_ptr alive until task completes
 
-hipc::FullPtr<PutBlobTask> Tag::AsyncPutBlob(const std::string &blob_name, const hipc::Pointer &data, 
+hipc::FullPtr<PutBlobTask> Tag::AsyncPutBlob(const std::string &blob_name, const hipc::Pointer &data,
                                              size_t data_size, size_t off, float score) {
   auto *cte_client = WRP_CTE_CLIENT;
-  return cte_client->AsyncPutBlob(hipc::MemContext(), tag_id_, blob_name, 
-                                  BlobId::GetNull(), off, data_size, data, score, 0);
+  return cte_client->AsyncPutBlob(hipc::MemContext(), tag_id_, blob_name,
+                                  off, data_size, data, score, 0);
 }
 
 void Tag::GetBlob(const std::string &blob_name, char *data, size_t data_size, size_t off) {
@@ -101,8 +101,8 @@ void Tag::GetBlob(const std::string &blob_name, hipc::Pointer data, size_t data_
   }
   
   auto *cte_client = WRP_CTE_CLIENT;
-  bool result = cte_client->GetBlob(hipc::MemContext(), tag_id_, blob_name, 
-                                    BlobId::GetNull(), off, data_size, 0, data);
+  bool result = cte_client->GetBlob(hipc::MemContext(), tag_id_, blob_name,
+                                    off, data_size, 0, data);
   if (!result) {
     throw std::runtime_error("GetBlob operation failed");
   }

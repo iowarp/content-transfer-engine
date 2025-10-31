@@ -198,20 +198,19 @@ private:
             memcpy(shared_data.ptr_, test_data.data(), kTestDataSize);
 
             // Create or get tag
-            wrp_cte::core::TagInfo tag_info = cte_client_->GetOrCreateTag(
+            wrp_cte::core::TagId tag_id = cte_client_->GetOrCreateTag(
                 hipc::MemContext(),
                 kTestTagName,
                 wrp_cte::core::TagId::GetNull()
             );
 
-            std::cout << "✅ Tag created/retrieved: " << tag_info.tag_name_ << std::endl;
+            std::cout << "✅ Tag created/retrieved with ID: " << tag_id << std::endl;
 
             // Store blob data
             bool put_result = cte_client_->PutBlob(
                 hipc::MemContext(),
-                tag_info.tag_id_,
+                tag_id,
                 kTestBlobName,
-                wrp_cte::core::BlobId::GetNull(),
                 0,  // offset
                 kTestDataSize,
                 shared_data.shm_,  // Use .shm_ to get the Pointer
@@ -237,8 +236,8 @@ private:
         std::cout << "\n--- Test 3: Retrieve Blob Data ---" << std::endl;
 
         try {
-            // Get the tag info first
-            wrp_cte::core::TagInfo tag_info = cte_client_->GetOrCreateTag(
+            // Get the tag ID first
+            wrp_cte::core::TagId tag_id = cte_client_->GetOrCreateTag(
                 hipc::MemContext(),
                 kTestTagName,
                 wrp_cte::core::TagId::GetNull()
@@ -254,9 +253,8 @@ private:
             // Retrieve blob data
             bool get_result = cte_client_->GetBlob(
                 hipc::MemContext(),
-                tag_info.tag_id_,
+                tag_id,
                 kTestBlobName,
-                wrp_cte::core::BlobId::GetNull(),
                 0,  // offset
                 kTestDataSize,
                 0,  // flags
@@ -324,15 +322,14 @@ private:
         std::cout << "\n--- Test 5: List Storage Targets ---" << std::endl;
 
         try {
-            std::vector<wrp_cte::core::TargetInfo> targets = 
+            std::vector<std::string> targets =
                 cte_client_->ListTargets(hipc::MemContext());
 
             std::cout << "✅ Found " << targets.size() << " registered targets" << std::endl;
 
             for (size_t i = 0; i < targets.size(); ++i) {
-                const auto& target = targets[i];
-                std::cout << "   Target " << i << ": " << target.target_name_ 
-                          << " (score: " << target.target_score_ << ")" << std::endl;
+                const auto& target_name = targets[i];
+                std::cout << "   Target " << i << ": " << target_name << std::endl;
             }
 
             return true;
@@ -347,14 +344,14 @@ private:
         std::cout << "\n--- Test 6: Get Tag Size ---" << std::endl;
 
         try {
-            // Get the tag info first
-            wrp_cte::core::TagInfo tag_info = cte_client_->GetOrCreateTag(
+            // Get the tag ID first
+            wrp_cte::core::TagId tag_id = cte_client_->GetOrCreateTag(
                 hipc::MemContext(),
                 kTestTagName,
                 wrp_cte::core::TagId::GetNull()
             );
 
-            size_t tag_size = cte_client_->GetTagSize(hipc::MemContext(), tag_info.tag_id_);
+            size_t tag_size = cte_client_->GetTagSize(hipc::MemContext(), tag_id);
 
             std::cout << "✅ Tag size: " << tag_size << " bytes" << std::endl;
 
@@ -378,8 +375,8 @@ private:
         std::cout << "\n--- Test 7: Cleanup Operations ---" << std::endl;
 
         try {
-            // Get the tag info
-            wrp_cte::core::TagInfo tag_info = cte_client_->GetOrCreateTag(
+            // Get the tag ID
+            wrp_cte::core::TagId tag_id = cte_client_->GetOrCreateTag(
                 hipc::MemContext(),
                 kTestTagName,
                 wrp_cte::core::TagId::GetNull()
@@ -388,9 +385,8 @@ private:
             // Delete the blob
             bool del_blob_result = cte_client_->DelBlob(
                 hipc::MemContext(),
-                tag_info.tag_id_,
-                kTestBlobName,
-                wrp_cte::core::BlobId::GetNull()
+                tag_id,
+                kTestBlobName
             );
 
             if (del_blob_result) {

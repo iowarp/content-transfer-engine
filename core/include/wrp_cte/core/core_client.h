@@ -206,10 +206,10 @@ public:
    * Synchronous put blob - waits for completion
    */
   bool PutBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id,
+               const std::string &blob_name,
                chi::u64 offset, chi::u64 size, hipc::Pointer blob_data,
                float score, chi::u32 flags) {
-    auto task = AsyncPutBlob(mctx, tag_id, blob_name, blob_id, offset, size,
+    auto task = AsyncPutBlob(mctx, tag_id, blob_name, offset, size,
                              blob_data, score, flags);
     task->Wait();
     bool result = (task->return_code_.load() == 0);
@@ -225,7 +225,7 @@ public:
    */
   hipc::FullPtr<PutBlobTask>
   AsyncPutBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id,
+               const std::string &blob_name,
                chi::u64 offset, chi::u64 size, hipc::Pointer blob_data,
                float score, chi::u32 flags) {
     (void)mctx; // Suppress unused parameter warning
@@ -233,7 +233,7 @@ public:
 
     auto task = ipc_manager->NewTask<PutBlobTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_name, blob_id, offset, size, blob_data, score, flags);
+        blob_name, offset, size, blob_data, score, flags);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -243,10 +243,10 @@ public:
    * Synchronous get blob - waits for completion
    */
   bool GetBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id,
+               const std::string &blob_name,
                chi::u64 offset, chi::u64 size, chi::u32 flags,
                hipc::Pointer blob_data) {
-    auto task = AsyncGetBlob(mctx, tag_id, blob_name, blob_id, offset, size,
+    auto task = AsyncGetBlob(mctx, tag_id, blob_name, offset, size,
                              flags, blob_data);
     task->Wait();
     bool result = (task->return_code_.load() == 0);
@@ -259,7 +259,7 @@ public:
    */
   hipc::FullPtr<GetBlobTask>
   AsyncGetBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id,
+               const std::string &blob_name,
                chi::u64 offset, chi::u64 size, chi::u32 flags,
                hipc::Pointer blob_data) {
     (void)mctx; // Suppress unused parameter warning
@@ -267,19 +267,18 @@ public:
 
     auto task = ipc_manager->NewTask<GetBlobTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_name, blob_id, offset, size, flags, blob_data);
+        blob_name, offset, size, flags, blob_data);
 
     ipc_manager->Enqueue(task);
     return task;
   }
 
   /**
-   * Synchronous reorganize blobs - waits for completion
+   * Synchronous reorganize blob - waits for completion
    */
-  chi::u32 ReorganizeBlobs(const hipc::MemContext &mctx, const TagId &tag_id,
-                           const std::vector<std::string> &blob_names,
-                           const std::vector<float> &new_scores) {
-    auto task = AsyncReorganizeBlobs(mctx, tag_id, blob_names, new_scores);
+  chi::u32 ReorganizeBlob(const hipc::MemContext &mctx, const TagId &tag_id,
+                          const std::string &blob_name, float new_score) {
+    auto task = AsyncReorganizeBlob(mctx, tag_id, blob_name, new_score);
     task->Wait();
     chi::u32 result = task->return_code_.load();
     CHI_IPC->DelTask(task);
@@ -287,18 +286,17 @@ public:
   }
 
   /**
-   * Asynchronous reorganize blobs - returns immediately
+   * Asynchronous reorganize blob - returns immediately
    */
-  hipc::FullPtr<ReorganizeBlobsTask>
-  AsyncReorganizeBlobs(const hipc::MemContext &mctx, const TagId &tag_id,
-                       const std::vector<std::string> &blob_names,
-                       const std::vector<float> &new_scores) {
+  hipc::FullPtr<ReorganizeBlobTask>
+  AsyncReorganizeBlob(const hipc::MemContext &mctx, const TagId &tag_id,
+                      const std::string &blob_name, float new_score) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
-    auto task = ipc_manager->NewTask<ReorganizeBlobsTask>(
+    auto task = ipc_manager->NewTask<ReorganizeBlobTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_names, new_scores);
+        blob_name, new_score);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -308,8 +306,8 @@ public:
    * Synchronous delete blob - waits for completion
    */
   bool DelBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id) {
-    auto task = AsyncDelBlob(mctx, tag_id, blob_name, blob_id);
+               const std::string &blob_name) {
+    auto task = AsyncDelBlob(mctx, tag_id, blob_name);
     task->Wait();
     bool result = (task->return_code_.load() == 0);
     CHI_IPC->DelTask(task);
@@ -321,14 +319,13 @@ public:
    */
   hipc::FullPtr<DelBlobTask> AsyncDelBlob(const hipc::MemContext &mctx,
                                           const TagId &tag_id,
-                                          const std::string &blob_name,
-                                          const BlobId &blob_id) {
+                                          const std::string &blob_name) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<DelBlobTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_name, blob_id);
+        blob_name);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -453,9 +450,8 @@ public:
    * Synchronous get blob score - waits for completion
    */
   float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
-                     const std::string &blob_name,
-                     const BlobId &blob_id = BlobId::GetNull()) {
-    auto task = AsyncGetBlobScore(mctx, tag_id, blob_name, blob_id);
+                     const std::string &blob_name) {
+    auto task = AsyncGetBlobScore(mctx, tag_id, blob_name);
     task->Wait();
     float result = (task->return_code_.load() == 0) ? task->score_ : 0.0f;
     CHI_IPC->DelTask(task);
@@ -467,14 +463,13 @@ public:
    */
   hipc::FullPtr<GetBlobScoreTask>
   AsyncGetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
-                    const std::string &blob_name,
-                    const BlobId &blob_id = BlobId::GetNull()) {
+                    const std::string &blob_name) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetBlobScoreTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_name, blob_id);
+        blob_name);
 
     ipc_manager->Enqueue(task);
     return task;
@@ -484,9 +479,8 @@ public:
    * Synchronous get blob size - waits for completion
    */
   chi::u64 GetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
-                       const std::string &blob_name,
-                       const BlobId &blob_id = BlobId::GetNull()) {
-    auto task = AsyncGetBlobSize(mctx, tag_id, blob_name, blob_id);
+                       const std::string &blob_name) {
+    auto task = AsyncGetBlobSize(mctx, tag_id, blob_name);
     task->Wait();
     chi::u64 result = (task->return_code_.load() == 0) ? task->size_ : 0;
     CHI_IPC->DelTask(task);
@@ -498,14 +492,13 @@ public:
    */
   hipc::FullPtr<GetBlobSizeTask>
   AsyncGetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
-                   const std::string &blob_name,
-                   const BlobId &blob_id = BlobId::GetNull()) {
+                   const std::string &blob_name) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<GetBlobSizeTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), tag_id,
-        blob_name, blob_id);
+        blob_name);
 
     ipc_manager->Enqueue(task);
     return task;
