@@ -20,6 +20,7 @@ build
 cufile.log
 myfile.txt
 
+build-docker
 build/
 benchmarks/HermesVFD
 
