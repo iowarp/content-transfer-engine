@@ -11,6 +11,7 @@ services:
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
       - cte-install:/usr/local
       - hdd1-storage:/mnt/hdd1
     environment:
@@ -56,6 +57,7 @@ services:
         echo '========================================' &&
         echo 'Node 1: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
+        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
@@ -92,6 +94,7 @@ services:
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
       - cte-install:/usr/local
       - hdd2-storage:/mnt/hdd2
     environment:
@@ -125,6 +128,7 @@ services:
         mkdir -p /mnt/hdd2 &&
         echo 'Node 2: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
+        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 2: Runtime started (PID $$RUNTIME_PID)\" &&
@@ -146,6 +150,7 @@ services:
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
       - cte-install:/usr/local
       - hdd3-storage:/mnt/hdd3
     environment:
@@ -179,6 +184,7 @@ services:
         mkdir -p /mnt/hdd3 &&
         echo 'Node 3: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
+        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 3: Runtime started (PID $$RUNTIME_PID)\" &&
@@ -200,6 +206,7 @@ services:
       - ../../../:/content-transfer-engine
       - ./hostfile:/etc/iowarp/hostfile:ro
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
       - cte-install:/usr/local
       - hdd4-storage:/mnt/hdd4
     environment:
@@ -233,6 +240,7 @@ services:
         mkdir -p /mnt/hdd4 &&
         echo 'Node 4: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
+        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 4: Runtime started (PID $$RUNTIME_PID)\" &&
