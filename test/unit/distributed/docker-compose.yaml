@@ -57,7 +57,7 @@ services:
         echo '========================================' &&
         echo 'Node 1: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
+        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
@@ -128,7 +128,7 @@ services:
         mkdir -p /mnt/hdd2 &&
         echo 'Node 2: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
+        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 2: Runtime started (PID $$RUNTIME_PID)\" &&
@@ -184,7 +184,7 @@ services:
         mkdir -p /mnt/hdd3 &&
         echo 'Node 3: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
+        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 3: Runtime started (PID $$RUNTIME_PID)\" &&
@@ -240,7 +240,7 @@ services:
         mkdir -p /mnt/hdd4 &&
         echo 'Node 4: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHIMAERA_CONFIG=/etc/iowarp/chimaera_config.yaml &&
+        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
         chimaera_start_runtime &
         RUNTIME_PID=$$! &&
         echo \"Node 4: Runtime started (PID $$RUNTIME_PID)\" &&

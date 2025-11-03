@@ -4,7 +4,7 @@ Threads: 4
 Duration: 10 seconds
 Max file size: 1073741824 bytes
 /mnt/home/Projects/iowarp/iowarp-runtime/src/chimaera_manager.cc:79 INFO 317405 ClientInit Chimaera::ClientInit
-/mnt/home/Projects/iowarp/iowarp-runtime/src/config_manager.cc:22 INFO 317405 ClientInit Config at: /home/llogan/.ppi-jarvis/shared/benchmark_throughput/runtime/chimaera_config.yaml
+/mnt/home/Projects/iowarp/iowarp-runtime/src/config_manager.cc:22 INFO 317405 ClientInit Config at: /home/llogan/.ppi-jarvis/shared/benchmark_throughput/runtime/CHI_SERVER_CONF.yaml
 Lane policy: round_robin (override)
 
 Starting benchmark...
