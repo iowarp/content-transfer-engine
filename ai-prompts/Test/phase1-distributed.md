@@ -9,7 +9,7 @@ Below is an example docker compose from the iowarp runtime for its unit tests. W
 services:
   # Node 1
   iowarp-node1:
-    image: iowarp/iowarp-deps:ai
+    image: iowarp/iowarp:latest
     container_name: iowarp-distributed-node1
     hostname: iowarp-node1
     networks:
@@ -57,7 +57,7 @@ services:
 
   # Node 2
   iowarp-node2:
-    image: iowarp/iowarp-deps:ai
+    image: iowarp/iowarp:latest
     container_name: iowarp-distributed-node2
     hostname: iowarp-node2
     networks:
@@ -99,7 +99,7 @@ services:
 
   # Node 3
   iowarp-node3:
-    image: iowarp/iowarp-deps:ai
+    image: iowarp/iowarp:latest
     container_name: iowarp-distributed-node3
     hostname: iowarp-node3
     networks:
@@ -141,7 +141,7 @@ services:
 
   # Node 4
   iowarp-node4:
-    image: iowarp/iowarp-deps:ai
+    image: iowarp/iowarp:latest
     container_name: iowarp-distributed-node4
     hostname: iowarp-node4
     networks:
