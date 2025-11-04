@@ -1,0 +1,60 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 19,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "debug",
+            "hidden": false,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CTE_ENABLE_CUDA": "OFF",
+                "CTE_ENABLE_ROCM": "OFF",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON"
+            }
+        },
+        {
+            "name": "cuda-debug",
+            "hidden": false,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CTE_ENABLE_CUDA": "ON",
+                "CTE_ENABLE_ROCM": "OFF",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON",
+                "CMAKE_CUDA_ARCHITECTURES": "86"
+            }
+        },
+        {
+            "name": "rocm-debug",
+            "hidden": false,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CTE_ENABLE_CUDA": "OFF",
+                "CTE_ENABLE_ROCM": "ON",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "hidden": false,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_INSTALL_PREFIX": "/home/llogan/.ppi-jarvis-mods/packages/content-transfer-engine",
+                "CTE_ENABLE_CUDA": "OFF",
+                "CTE_ENABLE_ROCM": "OFF",
+                "CTE_ENABLE_CMAKE_DOTENV": "ON"
+            }
+        }
+    ]
+}
