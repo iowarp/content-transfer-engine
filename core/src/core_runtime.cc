@@ -64,9 +64,6 @@ chi::u64 Runtime::ParseCapacityToBytes(const std::string &capacity_str) {
 }
 
 void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
-  // Initialize the container with pool information and pool name
-  chi::Container::Init(task->new_pool_id_, task->pool_name_.str());
-
   // Initialize unordered_map_ll instances with 64 buckets to match lock count
   // This ensures each bucket can have its own lock for maximum concurrency
   registered_targets_ =
@@ -143,6 +140,8 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
       }
 
       // Call RegisterTarget using client member variable
+      HILOG(kInfo, "Registering target ({}): {} ({}, {} bytes)",
+            client_.pool_id_, target_path, device.bdev_type_, capacity_bytes);
       chi::u32 result = client_.RegisterTarget(hipc::MemContext(), target_path,
                                                bdev_type, capacity_bytes);
 
@@ -221,6 +220,8 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     std::string target_name = task->target_name_.str();
     chimaera::bdev::BdevType bdev_type = task->bdev_type_;
     chi::u64 total_size = task->total_size_;
+    HILOG(kInfo, "Registering target2 ({}): {} ({} bytes)", client_.pool_id_,
+          target_name, total_size);
 
     // Create bdev client and container first to get the TargetId (pool_id)
     chimaera::bdev::Client bdev_client;

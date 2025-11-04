@@ -69,13 +69,13 @@ services:
         echo '========================================' &&
         echo 'Node 1: Launching CTE' &&
         echo '========================================' &&
-        export CTE_CONFIG_FILE=/etc/iowarp/cte_config.yaml &&
+        export WRP_CTE_CONF=/etc/iowarp/cte_config.yaml &&
         /usr/local/bin/launch_cte &&
         echo 'Node 1: CTE launched successfully' &&
         echo '========================================' &&
         echo 'Node 1: Running distributed unit tests' &&
         echo '========================================' &&
-        test_core_functionality_dist &&
+        test_core_functionality_dist --reporter console --success --verbosity high &&
         echo '========================================' &&
         echo 'Node 1: Tests complete' &&
         echo '========================================' &&
