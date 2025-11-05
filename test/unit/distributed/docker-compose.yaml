@@ -12,10 +12,17 @@ services:
       - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
       - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
       - hdd1-storage:/mnt/hdd1
+      - hdd2-storage:/mnt/hdd2
+      - hdd3-storage:/mnt/hdd3
+      - hdd4-storage:/mnt/hdd4
     environment:
       - NODE_ID=1
       - NODE_IP=172.26.0.10
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+      - TEST_FILTER=${TEST_FILTER:-}
+      - SECTION_FILTER=${SECTION_FILTER:-}
+      - CTE_INIT_RUNTIME=0
+      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: [ "/bin/bash", "-c" ]
@@ -25,6 +32,10 @@ services:
         echo '========================================' &&
         echo 'Node 1: Starting initialization' &&
         echo '========================================' &&
+        echo 'Node 1: Setting up permissions...' &&
+        sudo chown -R iowarp:iowarp /mnt &&
+        echo 'Node 1: Creating storage directories...' &&
+        mkdir -p /mnt/hdd1 /mnt/hdd2 /mnt/hdd3 /mnt/hdd4 &&
         echo 'Node 1: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
@@ -32,8 +43,6 @@ services:
         RUNTIME_PID=$$! &&
         echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
         sleep 5 &&
-        echo 'Node 1: Creating storage directories...' &&
-        mkdir -p /mnt/hdd1 &&
         echo 'Node 1: Waiting for all nodes to be ready...' &&
         sleep 10 &&
         echo '========================================' &&
@@ -45,11 +54,28 @@ services:
         echo '========================================' &&
         echo 'Node 1: Running distributed unit tests' &&
         echo '========================================' &&
-        test_core_functionality_dist --reporter console --success --verbosity high &&
-        echo '========================================' &&
-        echo 'Node 1: Tests complete' &&
-        echo '========================================' &&
-        tail -f /dev/null
+        if [ -z \"$$TEST_FILTER\" ] && [ -z \"$$SECTION_FILTER\" ]; then
+          echo 'Running all tests (no filter)'
+          test_core_functionality --reporter console
+          TEST_EXIT_CODE=$$?
+        elif [ -n \"$$TEST_FILTER\" ] && [ -z \"$$SECTION_FILTER\" ]; then
+          echo \"Test filter: $$TEST_FILTER\"
+          test_core_functionality --reporter console \"$$TEST_FILTER\"
+          TEST_EXIT_CODE=$$?
+        elif [ -z \"$$TEST_FILTER\" ] && [ -n \"$$SECTION_FILTER\" ]; then
+          echo \"Section filter: $$SECTION_FILTER\"
+          test_core_functionality --reporter console -c \"$$SECTION_FILTER\"
+          TEST_EXIT_CODE=$$?
+        else
+          echo \"Test filter: $$TEST_FILTER\"
+          echo \"Section filter: $$SECTION_FILTER\"
+          test_core_functionality --reporter console \"$$TEST_FILTER\" -c \"$$SECTION_FILTER\"
+          TEST_EXIT_CODE=$$?
+        fi
+        echo '========================================'
+        echo 'Node 1: Tests complete'
+        echo '========================================'
+        exit $$TEST_EXIT_CODE
       "
 
   # Node 2 - Secondary node
@@ -69,6 +95,7 @@ services:
       - NODE_ID=2
       - NODE_IP=172.26.0.11
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: [ "/bin/bash", "-c" ]
@@ -81,17 +108,15 @@ services:
         echo '========================================' &&
         echo 'Node 2: Setting up storage and runtime' &&
         echo '========================================' &&
+        sudo chown -R iowarp:iowarp /mnt &&
         mkdir -p /mnt/hdd2 &&
         echo 'Node 2: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
-        chimaera_start_runtime &
-        RUNTIME_PID=$$! &&
-        echo \"Node 2: Runtime started (PID $$RUNTIME_PID)\" &&
         echo '========================================' &&
-        echo 'Node 2: Ready. Waiting for tests...' &&
+        echo 'Node 2: Runtime running in foreground' &&
         echo '========================================' &&
-        tail -f /dev/null
+        chimaera_start_runtime
       "
 
   # Node 3 - Secondary node
@@ -111,6 +136,7 @@ services:
       - NODE_ID=3
       - NODE_IP=172.26.0.12
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: [ "/bin/bash", "-c" ]
@@ -123,17 +149,15 @@ services:
         echo '========================================' &&
         echo 'Node 3: Setting up storage and runtime' &&
         echo '========================================' &&
+        sudo chown -R iowarp:iowarp /mnt &&
         mkdir -p /mnt/hdd3 &&
         echo 'Node 3: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
-        chimaera_start_runtime &
-        RUNTIME_PID=$$! &&
-        echo \"Node 3: Runtime started (PID $$RUNTIME_PID)\" &&
         echo '========================================' &&
-        echo 'Node 3: Ready. Waiting for tests...' &&
+        echo 'Node 3: Runtime running in foreground' &&
         echo '========================================' &&
-        tail -f /dev/null
+        chimaera_start_runtime
       "
 
   # Node 4 - Secondary node
@@ -153,6 +177,7 @@ services:
       - NODE_ID=4
       - NODE_IP=172.26.0.13
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
+      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: [ "/bin/bash", "-c" ]
@@ -165,17 +190,15 @@ services:
         echo '========================================' &&
         echo 'Node 4: Setting up storage and runtime' &&
         echo '========================================' &&
+        sudo chown -R iowarp:iowarp /mnt &&
         mkdir -p /mnt/hdd4 &&
         echo 'Node 4: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
         export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
-        chimaera_start_runtime &
-        RUNTIME_PID=$$! &&
-        echo \"Node 4: Runtime started (PID $$RUNTIME_PID)\" &&
         echo '========================================' &&
-        echo 'Node 4: Ready. Waiting for tests...' &&
+        echo 'Node 4: Runtime running in foreground' &&
         echo '========================================' &&
-        tail -f /dev/null
+        chimaera_start_runtime
       "
 
 volumes:

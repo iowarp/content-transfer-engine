@@ -36,13 +36,15 @@ struct PerformanceConfig {
   chi::u32 max_concurrent_operations_;  // Max concurrent I/O operations
   float score_threshold_;               // Threshold for blob reorganization
   float score_difference_threshold_;    // Minimum score difference for reorganization
-  
-  PerformanceConfig() 
+  chi::u32 neighborhood_;               // Number of nodes CTE can buffer to
+
+  PerformanceConfig()
       : target_stat_interval_ms_(5000),
         blob_cache_size_mb_(256),
         max_concurrent_operations_(64),
         score_threshold_(0.7f),
-        score_difference_threshold_(0.05f) {}
+        score_difference_threshold_(0.05f),
+        neighborhood_(4) {}
 };
 
 /**

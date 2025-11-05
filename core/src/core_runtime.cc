@@ -120,15 +120,23 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   // Initialize the client with the pool ID
   client_.Init(task->new_pool_id_);
 
-  // Register targets for each configured storage device during initialization
+  // Register targets for each configured storage device and neighborhood node
   if (!storage_devices_.empty()) {
-    HILOG(kInfo, "Registering targets for storage devices:");
+    // Get neighborhood size from configuration
+    chi::u32 neighborhood_size = config.performance_.neighborhood_;
 
-    for (size_t i = 0; i < storage_devices_.size(); ++i) {
-      const auto &device = storage_devices_[i];
+    // Get number of nodes from IPC manager
+    chi::u32 num_nodes = ipc_manager->GetNumHosts();
 
-      // Append hermes_data.bin to the device path
-      std::string target_path = device.path_;
+    // Set actual neighborhood size to minimum of configured size and available nodes
+    chi::u32 actual_neighborhood = std::min(neighborhood_size, num_nodes);
+
+    HILOG(kInfo, "Registering targets for storage devices across neighborhood (size: {} nodes):",
+          actual_neighborhood);
+
+    // Iterate over storage devices
+    for (size_t device_idx = 0; device_idx < storage_devices_.size(); ++device_idx) {
+      const auto &device = storage_devices_[device_idx];
 
       // Capacity is already in bytes
       chi::u64 capacity_bytes = device.capacity_limit_;
@@ -139,18 +147,27 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
         bdev_type = chimaera::bdev::BdevType::kRam;
       }
 
-      // Call RegisterTarget using client member variable
-      HILOG(kInfo, "Registering target ({}): {} ({}, {} bytes)",
-            client_.pool_id_, target_path, device.bdev_type_, capacity_bytes);
-      chi::u32 result = client_.RegisterTarget(hipc::MemContext(), target_path,
-                                               bdev_type, capacity_bytes);
+      // Iterate over neighborhood nodes (container hashes from 0 to actual_neighborhood-1)
+      for (chi::u32 container_hash = 0; container_hash < actual_neighborhood; ++container_hash) {
+        // Generate unique target path for this device-node combination
+        std::string target_path = device.path_ + "_node" + std::to_string(container_hash);
 
-      if (result == 0) {
-        HILOG(kInfo, "  - Registered target: {} ({}, {} bytes)", target_path,
-              device.bdev_type_, capacity_bytes);
-      } else {
-        HILOG(kWarning, "  - Failed to register target {} (error code: {})",
-              target_path, result);
+        // Create target query using DirectHash for this specific container
+        chi::PoolQuery target_query = chi::PoolQuery::DirectHash(container_hash);
+
+        // Call RegisterTarget using client member variable with target_query
+        HILOG(kInfo, "Registering target ({}): {} ({}, {} bytes) on node {}",
+              client_.pool_id_, target_path, device.bdev_type_, capacity_bytes, container_hash);
+        chi::u32 result = client_.RegisterTarget(hipc::MemContext(), target_path,
+                                                 bdev_type, capacity_bytes, target_query);
+
+        if (result == 0) {
+          HILOG(kInfo, "  - Registered target: {} ({}, {} bytes) on node {}",
+                target_path, device.bdev_type_, capacity_bytes, container_hash);
+        } else {
+          HILOG(kWarning, "  - Failed to register target {} on node {} (error code: {})",
+                target_path, container_hash, result);
+        }
       }
     }
   } else {
@@ -267,6 +284,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     target_info.target_name_ = target_name;
     target_info.bdev_pool_name_ = bdev_pool_name;
     target_info.bdev_client_ = std::move(bdev_client);
+    target_info.target_query_ = task->target_query_; // Store target query for bdev API calls
     target_info.bytes_read_ = 0;
     target_info.bytes_written_ = 0;
     target_info.ops_read_ = 0;
@@ -494,6 +512,7 @@ void Runtime::GetOrCreateTag(
 }
 
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
+  HILOG(kInfo, "PUTBLOB BEGINNING");
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
     task->pool_query_ =
@@ -554,6 +573,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
 
     if (allocation_result != 0) {
+      HILOG(kError, "Allocation failure: {}", allocation_result);
       task->return_code_.store(
           10 + allocation_result); // Error: Allocation failure (10-19 range)
       return;
@@ -561,6 +581,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Step 4: Write data to blob blocks
     // (no lock held during expensive I/O operations)
+    HILOG(kInfo, "Writing data to blob blocks: {}", blob_info_ptr->blocks_.size());
     chi::u32 write_result =
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
 
@@ -623,6 +644,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 }
 
 void Runtime::GetBlob(hipc::FullPtr<GetBlobTask> task, chi::RunContext &ctx) {
+  HILOG(kInfo, "GETBLOB BEGINNING");
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
     task->pool_query_ =
@@ -1278,6 +1300,7 @@ BlobInfo *Runtime::CreateNewBlob(const std::string &blob_name,
 
 chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
                                   chi::u64 size, float blob_score) {
+  HILOG(kInfo, "AllocateNewData");
   // Calculate required additional space
   chi::u64 current_blob_size = blob_info.GetTotalSize();
   chi::u64 required_size = offset + size;
@@ -1297,7 +1320,8 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
                            const TargetInfo &target_info) {
         available_targets.push_back(target_info);
       });
-
+  HILOG(kInfo, "AllocateNewData: Ordered targets: {}",
+        available_targets.size());
   if (available_targets.empty()) {
     return 1;
   }
@@ -1337,6 +1361,7 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
 
     if (allocate_size == 0) {
       // No space available, try next target
+      HILOG(kInfo, "No space available, trying next target?");
       continue;
     }
 
@@ -1348,8 +1373,8 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
     }
 
     // Create new block for the allocated space
-    BlobBlock new_block(target_info->bdev_client_, allocated_offset,
-                        allocate_size);
+    BlobBlock new_block(target_info->bdev_client_, target_info->target_query_,
+                        allocated_offset, allocate_size);
     blob_info.blocks_.emplace_back(new_block);
 
     remaining_to_allocate -= allocate_size;
@@ -1367,6 +1392,9 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
 chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
                                      hipc::Pointer data, size_t data_size,
                                      size_t data_offset_in_blob) {
+  HILOG(kInfo, "ModifyExistingData: blocks={}, data_size={}, data_offset_in_blob={}",
+        blocks.size(), data_size, data_offset_in_blob);
+
   // Step 1: Initially store the remaining_size equal to data_size
   size_t remaining_size = data_size;
 
@@ -1381,6 +1409,9 @@ chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
   // Iterate over every block in the blob
   for (size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
     const BlobBlock &block = blocks[block_idx];
+    HILOG(kInfo, "ModifyExistingData: block[{}] - target_offset={}, size={}, pool_id={}",
+          block_idx, block.target_offset_, block.size_, block.bdev_client_.pool_id_.ToU64());
+
     // Step 7: If remaining size is 0, quit the for loop
     if (remaining_size == 0) {
       break;
@@ -1407,14 +1438,28 @@ chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
       // Calculate offset into the data buffer
       size_t data_buffer_offset = write_start_in_blob - data_offset_in_blob;
 
+      HILOG(kInfo, "ModifyExistingData: block[{}] - writing write_size={}, write_start_in_block={}, data_buffer_offset={}",
+            block_idx, write_size, write_start_in_block, data_buffer_offset);
+
       // Step 5: Perform async write on the updated range
       chimaera::bdev::Block bdev_block(
           block.target_offset_ + write_start_in_block, write_size, 0);
       hipc::Pointer data_ptr = data + data_buffer_offset;
 
+      // Log first few bytes of data being written for debugging
+      char* write_data = CHI_IPC->GetMainAllocator()->Convert<char>(data_ptr);
+      std::string data_preview = "data=[";
+      for (size_t i = 0; i < std::min(write_size, static_cast<size_t>(16)); ++i) {
+        if (i > 0) data_preview += ",";
+        data_preview += std::to_string(static_cast<unsigned char>(write_data[i]));
+      }
+      if (write_size > 16) data_preview += ",...";
+      data_preview += "]";
+      HILOG(kInfo, "ModifyExistingData: block[{}] - {}", block_idx, data_preview);
+
       chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
       auto write_task = cte_clientcopy.AsyncWrite(
-          hipc::MemContext(), bdev_block, data_ptr, write_size);
+          hipc::MemContext(), block.target_query_, bdev_block, data_ptr, write_size);
 
       write_tasks.push_back(write_task);
       expected_write_sizes.push_back(write_size);
@@ -1429,26 +1474,37 @@ chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
   }
 
   // Step 7: Wait for all Async write operations to complete
+  HILOG(kInfo, "ModifyExistingData: Waiting for {} async write tasks to complete", write_tasks.size());
   for (size_t task_idx = 0; task_idx < write_tasks.size(); ++task_idx) {
     auto task = write_tasks[task_idx];
     size_t expected_size = expected_write_sizes[task_idx];
 
     task->Wait();
 
+    HILOG(kInfo, "ModifyExistingData: task[{}] completed - bytes_written={}, expected={}, status={}",
+          task_idx, task->bytes_written_, expected_size,
+          (task->bytes_written_ == expected_size ? "SUCCESS" : "FAILED"));
+
     if (task->bytes_written_ != expected_size) {
       CHI_IPC->DelTask(task);
+      HILOG(kError, "ModifyExistingData: WRITE FAILED - task[{}] wrote {} bytes, expected {}",
+            task_idx, task->bytes_written_, expected_size);
       return 1;
     }
 
     CHI_IPC->DelTask(task);
   }
 
+  HILOG(kInfo, "ModifyExistingData: All write tasks completed successfully");
   return 0; // Success
 }
 
 chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks,
                            hipc::Pointer data, size_t data_size,
                            size_t data_offset_in_blob) {
+  HILOG(kInfo, "ReadData: blocks={}, data_size={}, data_offset_in_blob={}",
+        blocks.size(), data_size, data_offset_in_blob);
+
   // Step 1: Initially store the remaining_size equal to data_size
   size_t remaining_size = data_size;
 
@@ -1463,6 +1519,9 @@ chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks,
   // Iterate over every block in the blob
   for (size_t block_idx = 0; block_idx < blocks.size(); ++block_idx) {
     const BlobBlock &block = blocks[block_idx];
+    HILOG(kInfo, "ReadData: block[{}] - target_offset={}, size={}, pool_id={}",
+          block_idx, block.target_offset_, block.size_, block.bdev_client_.pool_id_.ToU64());
+
     // Step 7: If remaining size is 0, quit the for loop
     if (remaining_size == 0) {
       break;
@@ -1489,14 +1548,17 @@ chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks,
       // Calculate offset into the data buffer
       size_t data_buffer_offset = read_start_in_blob - data_offset_in_blob;
 
+      HILOG(kInfo, "ReadData: block[{}] - reading read_size={}, read_start_in_block={}, data_buffer_offset={}",
+            block_idx, read_size, read_start_in_block, data_buffer_offset);
+
       // Step 5: Perform async read on the range
       chimaera::bdev::Block bdev_block(
           block.target_offset_ + read_start_in_block, read_size, 0);
       hipc::Pointer data_ptr = data + data_buffer_offset;
 
       chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
-      auto read_task = cte_clientcopy.AsyncRead(hipc::MemContext(), bdev_block,
-                                                data_ptr, read_size);
+      auto read_task = cte_clientcopy.AsyncRead(hipc::MemContext(), block.target_query_,
+                                                bdev_block, data_ptr, read_size);
 
       read_tasks.push_back(read_task);
       expected_read_sizes.push_back(read_size);
@@ -1511,20 +1573,42 @@ chi::u32 Runtime::ReadData(const std::vector<BlobBlock> &blocks,
   }
 
   // Step 7: Wait for all Async read operations to complete
+  HILOG(kInfo, "ReadData: Waiting for {} async read tasks to complete", read_tasks.size());
   for (size_t task_idx = 0; task_idx < read_tasks.size(); ++task_idx) {
     auto task = read_tasks[task_idx];
     size_t expected_size = expected_read_sizes[task_idx];
 
     task->Wait();
 
+    HILOG(kInfo, "ReadData: task[{}] completed - bytes_read={}, expected={}, status={}",
+          task_idx, task->bytes_read_, expected_size,
+          (task->bytes_read_ == expected_size ? "SUCCESS" : "FAILED"));
+
+    // Log first few bytes of data that was read for debugging
+    if (task->bytes_read_ > 0) {
+      hipc::Pointer read_data_ptr = data + (task_idx > 0 ? expected_read_sizes[task_idx - 1] : 0);
+      char* read_data = CHI_IPC->GetMainAllocator()->Convert<char>(read_data_ptr);
+      std::string data_preview = "data=[";
+      for (size_t i = 0; i < std::min(static_cast<size_t>(task->bytes_read_), static_cast<size_t>(16)); ++i) {
+        if (i > 0) data_preview += ",";
+        data_preview += std::to_string(static_cast<unsigned char>(read_data[i]));
+      }
+      if (task->bytes_read_ > 16) data_preview += ",...";
+      data_preview += "]";
+      HILOG(kInfo, "ReadData: task[{}] - {}", task_idx, data_preview);
+    }
+
     if (task->bytes_read_ != expected_size) {
       CHI_IPC->DelTask(task);
+      HILOG(kError, "ReadData: READ FAILED - task[{}] read {} bytes, expected {}",
+            task_idx, task->bytes_read_, expected_size);
       return 1;
     }
 
     CHI_IPC->DelTask(task);
   }
 
+  HILOG(kInfo, "ReadData: All read tasks completed successfully");
   return 0; // Success
 }
 
@@ -1540,7 +1624,7 @@ bool Runtime::AllocateFromTarget(TargetInfo &target_info, chi::u64 size,
   try {
     // Use bdev client AllocateBlocks method to get actual offset
     std::vector<chimaera::bdev::Block> allocated_blocks =
-        target_info.bdev_client_.AllocateBlocks(hipc::MemContext(), size);
+        target_info.bdev_client_.AllocateBlocks(hipc::MemContext(), target_info.target_query_, size);
 
     // Check if we got any blocks
     if (allocated_blocks.empty()) {
@@ -1562,8 +1646,8 @@ bool Runtime::AllocateFromTarget(TargetInfo &target_info, chi::u64 size,
 }
 
 chi::u32 Runtime::FreeAllBlobBlocks(BlobInfo &blob_info) {
-  // Map: PoolId -> vector<Block>
-  std::unordered_map<chi::PoolId, std::vector<chimaera::bdev::Block>>
+  // Map: PoolId -> (target_query, vector<Block>)
+  std::unordered_map<chi::PoolId, std::pair<chi::PoolQuery, std::vector<chimaera::bdev::Block>>>
       blocks_by_pool;
 
   // Group blocks by PoolId
@@ -1573,16 +1657,22 @@ chi::u32 Runtime::FreeAllBlobBlocks(BlobInfo &blob_info) {
     block.offset_ = blob_block.target_offset_;
     block.size_ = blob_block.size_;
     block.block_type_ = 0; // Default block type
-    blocks_by_pool[pool_id].push_back(block);
+
+    // Store target_query with blocks for this pool
+    if (blocks_by_pool.find(pool_id) == blocks_by_pool.end()) {
+      blocks_by_pool[pool_id] = std::make_pair(blob_block.target_query_, std::vector<chimaera::bdev::Block>());
+    }
+    blocks_by_pool[pool_id].second.push_back(block);
   }
 
   // Call FreeBlocks once per PoolId
   for (const auto &pool_entry : blocks_by_pool) {
     const chi::PoolId &pool_id = pool_entry.first;
-    const std::vector<chimaera::bdev::Block> &blocks = pool_entry.second;
+    const chi::PoolQuery &target_query = pool_entry.second.first;
+    const std::vector<chimaera::bdev::Block> &blocks = pool_entry.second.second;
     // Get bdev client for this pool from first blob block
     chimaera::bdev::Client bdev_client(pool_id);
-    chi::u32 free_result = bdev_client.FreeBlocks(hipc::MemContext(), blocks);
+    chi::u32 free_result = bdev_client.FreeBlocks(hipc::MemContext(), target_query, blocks);
     if (free_result != 0) {
       HILOG(kWarning, "Failed to free blocks from pool {}", pool_id.major_);
     }

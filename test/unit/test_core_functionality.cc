@@ -55,11 +55,21 @@ using namespace std::chrono_literals;
 
 namespace fs = std::filesystem;
 
-// Compile-time flag to control runtime initialization
-// Set CTE_INIT_RUNTIME=OFF for distributed tests where runtime is already initialized
-#ifndef CTE_INIT_RUNTIME
-#define CTE_INIT_RUNTIME 1
-#endif
+/**
+ * Helper function to check if runtime should be initialized
+ * Reads CTE_INIT_RUNTIME environment variable
+ * Returns true if unset or set to any value except "0", "false", "no", "off"
+ */
+bool ShouldInitializeRuntime() {
+  const char* env_val = std::getenv("CTE_INIT_RUNTIME");
+  if (env_val == nullptr) {
+    return true; // Default: initialize runtime
+  }
+  std::string val(env_val);
+  // Convert to lowercase for case-insensitive comparison
+  std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+  return !(val == "0" || val == "false" || val == "no" || val == "off");
+}
 
 /**
  * FUNCTIONAL Test fixture for CTE Core functionality tests
@@ -118,12 +128,14 @@ public:
     }
 
     // Initialize Chimaera runtime and client for functional testing
-#if CTE_INIT_RUNTIME
-    REQUIRE(initializeBoth());
-#else
-    INFO("Runtime already initialized externally (CTE_INIT_RUNTIME=0)");
-    REQUIRE(initializeClient());
-#endif
+    if (ShouldInitializeRuntime()) {
+      INFO("Initializing runtime (CTE_INIT_RUNTIME not set or enabled)");
+      REQUIRE(initializeBoth());
+    } else {
+      INFO("Runtime already initialized externally (CTE_INIT_RUNTIME="
+           << std::getenv("CTE_INIT_RUNTIME") << ")");
+      REQUIRE(initializeClient());
+    }
 
     // Generate unique pool ID for this test session
     int rand_id = 1000 + rand() % 9000; // Random ID 1000-9999

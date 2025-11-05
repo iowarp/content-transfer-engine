@@ -35,11 +35,19 @@ Use the automated test runner script:
 # Navigate to the distributed test directory
 cd test/unit/distributed
 
-# Run tests with automatic setup and cleanup
+# Run ALL tests with automatic setup and cleanup
 ./run_tests.sh
+
+# Run specific tests by filter
+./run_tests.sh -t "PutBlob"
+./run_tests.sh "GetBlob*"
+./run_tests.sh "*neighborhood*"
 
 # Run tests and keep containers for debugging
 ./run_tests.sh --keep
+
+# Run filtered tests and keep containers
+./run_tests.sh --keep -t "distributed"
 
 # Show full logs after tests
 ./run_tests.sh --logs
@@ -55,6 +63,65 @@ The script automatically:
 4. Monitors test execution
 5. Displays results
 6. Cleans up containers (unless `--keep` is used)
+
+### Test Filtering
+
+The distributed test runner supports filtering tests using Catch2 patterns:
+
+```bash
+# Run all tests (default)
+./run_tests.sh
+
+# Run tests matching exact name
+./run_tests.sh -t "PutBlob Basic Test"
+
+# Run tests with wildcard patterns
+./run_tests.sh "PutBlob*"           # All tests starting with "PutBlob"
+./run_tests.sh "*neighborhood*"     # All tests containing "neighborhood"
+
+# Run multiple test patterns
+./run_tests.sh "PutBlob,GetBlob"    # Tests matching either pattern
+
+# Run tests with specific tags
+./run_tests.sh "[core]"             # Run tests tagged with [core]
+./run_tests.sh "~[slow]"            # Exclude slow tests
+
+# Combine filter with other options
+./run_tests.sh --keep -t "distributed"
+./run_tests.sh --logs "*neighborhood*"
+```
+
+**Note**: By default, if no filter is specified, ALL tests run.
+
+### Test Output Verbosity
+
+Tests are configured with reduced verbosity to keep output clean:
+- **Default behavior**: Only shows test failures and info-level logging
+- **Success messages**: Individual assertion successes are hidden
+- **Failure messages**: All failures are shown with full details
+- **Summary**: Test summary always displayed at the end
+
+This makes it easier to spot issues in distributed test runs while still seeing all CTE info logs.
+
+### Runtime Initialization Control
+
+The `test_core_functionality` executable uses the `CTE_INIT_RUNTIME` environment variable to control whether the Chimaera runtime should be initialized:
+
+- **Default (unset)**: Runtime is initialized by the test executable (standalone mode)
+- **CTE_INIT_RUNTIME=0**: Runtime initialization is skipped (distributed mode)
+- **CTE_INIT_RUNTIME=1**: Runtime is initialized by the test executable (same as default)
+
+In distributed tests, the runtime is already initialized by `chimaera_start_runtime` before tests run, so `CTE_INIT_RUNTIME=0` is set in the docker-compose.yaml configuration.
+
+For local standalone testing:
+```bash
+# Standalone mode (default - runtime initialized by test)
+./test_core_functionality
+
+# Distributed mode (runtime must be initialized externally)
+export CTE_INIT_RUNTIME=0
+./test_core_functionality
+```
 
 ### Manual Test Execution
 

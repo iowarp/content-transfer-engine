@@ -17,14 +17,9 @@ add_executable(cte_core_unit_tests
     test_core_functionality_simple.cc
 )
 
-# Create two versions of test_core_functionality:
-# 1. test_core_functionality - standalone with runtime initialization
-# 2. test_core_functionality_dist - for distributed tests without runtime initialization
+# Create single version of test_core_functionality that uses environment variable
+# CTE_INIT_RUNTIME to control whether runtime is initialized (default: yes)
 add_executable(test_core_functionality
-    test_core_functionality.cc
-)
-
-add_executable(test_core_functionality_dist
     test_core_functionality.cc
 )
 
@@ -38,7 +33,7 @@ target_link_libraries(cte_core_unit_tests
     MPI::MPI_CXX                 # MPI support if needed
 )
 
-# Link test_core_functionality (standalone version)
+# Link test_core_functionality
 target_link_libraries(test_core_functionality
     wrp_cte_core_client          # CTE core client library
     wrp_cte_core_runtime         # CTE core runtime library
@@ -48,23 +43,10 @@ target_link_libraries(test_core_functionality
     MPI::MPI_CXX                 # MPI support if needed
 )
 
-# Link test_core_functionality_dist (distributed version)
-target_link_libraries(test_core_functionality_dist
-    wrp_cte_core_client          # CTE core client library
-    wrp_cte_core_runtime         # CTE core runtime library
-    chimaera::cxx                # Modern Chimaera core framework target
-    chimaera::admin_client       # Modern Chimaera admin target (if needed)
-    Catch2::Catch2WithMain       # Catch2 testing framework with main
-    MPI::MPI_CXX                 # MPI support if needed
-)
-
 # Set compile definitions for runtime initialization control
-# Standalone version initializes runtime (CTE_INIT_RUNTIME=1)
+# Note: Runtime initialization is now controlled by CTE_INIT_RUNTIME environment variable
+# at runtime, not at compile time
 target_compile_definitions(cte_core_unit_tests PRIVATE CTE_INIT_RUNTIME=1)
-target_compile_definitions(test_core_functionality PRIVATE CTE_INIT_RUNTIME=1)
-
-# Distributed version expects external runtime (CTE_INIT_RUNTIME=0)
-target_compile_definitions(test_core_functionality_dist PRIVATE CTE_INIT_RUNTIME=0)
 
 # Set compilation standards and warnings
 target_compile_features(cte_core_unit_tests PRIVATE cxx_std_17)
@@ -81,13 +63,6 @@ target_compile_options(test_core_functionality PRIVATE
     $<$<CONFIG:Release>:-O3>     # Optimization for release
 )
 
-target_compile_features(test_core_functionality_dist PRIVATE cxx_std_17)
-target_compile_options(test_core_functionality_dist PRIVATE
-    -Wall -Wextra -Werror        # Strict warnings as per CLAUDE.md
-    $<$<CONFIG:Debug>:-g -O0>    # Debug symbols and no optimization for debug
-    $<$<CONFIG:Release>:-O3>     # Optimization for release
-)
-
 # Include directories
 target_include_directories(cte_core_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/core/include
@@ -95,11 +70,6 @@ target_include_directories(cte_core_unit_tests PRIVATE
 )
 
 target_include_directories(test_core_functionality PRIVATE
-    ${CMAKE_SOURCE_DIR}/core/include
-    ${CMAKE_SOURCE_DIR}/core/src
-)
-
-target_include_directories(test_core_functionality_dist PRIVATE
     ${CMAKE_SOURCE_DIR}/core/include
     ${CMAKE_SOURCE_DIR}/core/src
 )
@@ -149,7 +119,7 @@ endif()
 # ------------------------------------------------------------------------------
 # Install Targets
 # ------------------------------------------------------------------------------
-install(TARGETS cte_core_unit_tests test_core_functionality test_core_functionality_dist
+install(TARGETS cte_core_unit_tests test_core_functionality
     LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
     ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
     RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}

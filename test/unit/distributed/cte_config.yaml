@@ -1,27 +1,26 @@
-# CTE Core Configuration for Distributed Testing
+# Storage block device configuration
 # This configuration defines 4 storage targets across 4 nodes
+storage:
+  - path: "/mnt/hdd1"
+    bdev_type: "file"
+    capacity_limit: "10GB"
+    score: 0.25
 
-devices:
-  - name: "node1_hdd1"
-    mount_point: "/mnt/hdd1"
-    capacity: "10GB"
-    media_type: "HDD"
-    manual_score: 0.25
+  - path: "/mnt/hdd2"
+    bdev_type: "file"
+    capacity_limit: "10GB"
+    score: 0.25
 
-  - name: "node2_hdd2"
-    mount_point: "/mnt/hdd2"
-    capacity: "10GB"
-    media_type: "HDD"
-    manual_score: 0.25
+  - path: "/mnt/hdd3"
+    bdev_type: "file"
+    capacity_limit: "10GB"
+    score: 0.25
 
-  - name: "node3_hdd3"
-    mount_point: "/mnt/hdd3"
-    capacity: "10GB"
-    media_type: "HDD"
-    manual_score: 0.25
+  - path: "/mnt/hdd4"
+    bdev_type: "file"
+    capacity_limit: "10GB"
+    score: 0.25
 
-  - name: "node4_hdd4"
-    mount_point: "/mnt/hdd4"
-    capacity: "10GB"
-    media_type: "HDD"
-    manual_score: 0.25
+# Data Placement Engine configuration
+dpe:
+  dpe_type: "max_bw"  # Options: "random", "round_robin", "max_bw"

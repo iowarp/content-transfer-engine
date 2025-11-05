@@ -88,6 +88,7 @@ struct TargetInfo {
   std::string target_name_;
   std::string bdev_pool_name_;
   chimaera::bdev::Client bdev_client_; // Bdev client for this target
+  chi::PoolQuery target_query_;        // Target pool query for bdev API calls
   chi::u64 bytes_read_;
   chi::u64 bytes_written_;
   chi::u64 ops_read_;
@@ -114,6 +115,7 @@ struct RegisterTargetTask : public chi::Task {
   IN hipc::string target_name_; // Name and file path of the target to register
   IN chimaera::bdev::BdevType bdev_type_; // Block device type enum
   IN chi::u64 total_size_;                // Total size for allocation
+  IN chi::PoolQuery target_query_;        // Target pool query for bdev API calls
 
   // SHM constructor
   explicit RegisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
@@ -127,10 +129,11 @@ struct RegisterTargetTask : public chi::Task {
                               const chi::PoolQuery &pool_query,
                               const std::string &target_name,
                               chimaera::bdev::BdevType bdev_type,
-                              chi::u64 total_size)
+                              chi::u64 total_size,
+                              const chi::PoolQuery &target_query)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kRegisterTarget),
         target_name_(alloc, target_name), bdev_type_(bdev_type),
-        total_size_(total_size) {
+        total_size_(total_size), target_query_(target_query) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kRegisterTarget;
@@ -142,7 +145,7 @@ struct RegisterTargetTask : public chi::Task {
    * Serialize IN and INOUT parameters
    */
   template <typename Archive> void SerializeIn(Archive &ar) {
-    ar(target_name_, bdev_type_, total_size_);
+    ar(target_name_, bdev_type_, total_size_, target_query_);
   }
 
   /**
@@ -159,6 +162,7 @@ struct RegisterTargetTask : public chi::Task {
     target_name_ = other->target_name_;
     bdev_type_ = other->bdev_type_;
     total_size_ = other->total_size_;
+    target_query_ = other->target_query_;
   }
 };
 
@@ -359,14 +363,16 @@ struct TagInfo {
  */
 struct BlobBlock {
   chimaera::bdev::Client bdev_client_; // Bdev client for this block's target
+  chi::PoolQuery target_query_;        // Target pool query for bdev API calls
   chi::u64 target_offset_; // Offset within target where this block is stored
   chi::u64 size_;          // Size of this block in bytes
 
   BlobBlock() = default;
 
-  BlobBlock(const chimaera::bdev::Client &client, chi::u64 offset,
-            chi::u64 size)
-      : bdev_client_(client), target_offset_(offset), size_(size) {}
+  BlobBlock(const chimaera::bdev::Client &client,
+            const chi::PoolQuery &target_query, chi::u64 offset, chi::u64 size)
+      : bdev_client_(client), target_query_(target_query),
+        target_offset_(offset), size_(size) {}
 };
 
 /**

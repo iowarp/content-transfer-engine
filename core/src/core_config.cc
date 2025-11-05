@@ -124,7 +124,12 @@ bool Config::Validate() const {
     HELOG(kError, "Config validation error: Invalid score_difference_threshold {} (must be 0.0-1.0)", performance_.score_difference_threshold_);
     return false;
   }
-  
+
+  if (performance_.neighborhood_ == 0 || performance_.neighborhood_ > 1024) {
+    HELOG(kError, "Config validation error: Invalid neighborhood {} (must be 1-1024)", performance_.neighborhood_);
+    return false;
+  }
+
   // Validate target configuration
   if (targets_.max_targets_ == 0 || targets_.max_targets_ > 1024) {
     HELOG(kError, "Config validation error: Invalid max_targets {} (must be 1-1024)", targets_.max_targets_);
@@ -157,6 +162,9 @@ std::string Config::GetParameterString(const std::string &param_name) const {
   }
   if (param_name == "score_difference_threshold") {
     return std::to_string(performance_.score_difference_threshold_);
+  }
+  if (param_name == "neighborhood") {
+    return std::to_string(performance_.neighborhood_);
   }
   if (param_name == "max_targets") {
     return std::to_string(targets_.max_targets_);
@@ -196,6 +204,10 @@ bool Config::SetParameterFromString(const std::string &param_name,
     }
     if (param_name == "score_difference_threshold") {
       performance_.score_difference_threshold_ = std::stof(value);
+      return true;
+    }
+    if (param_name == "neighborhood") {
+      performance_.neighborhood_ = static_cast<chi::u32>(std::stoul(value));
       return true;
     }
     if (param_name == "max_targets") {
@@ -312,6 +324,7 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
   emitter << YAML::Key << "max_concurrent_operations" << YAML::Value << performance_.max_concurrent_operations_;
   emitter << YAML::Key << "score_threshold" << YAML::Value << performance_.score_threshold_;
   emitter << YAML::Key << "score_difference_threshold" << YAML::Value << performance_.score_difference_threshold_;
+  emitter << YAML::Key << "neighborhood" << YAML::Value << performance_.neighborhood_;
   emitter << YAML::EndMap;
   
   // Emit target configuration
@@ -365,23 +378,27 @@ bool Config::ParsePerformanceConfig(const YAML::Node &node) {
   if (node["target_stat_interval_ms"]) {
     performance_.target_stat_interval_ms_ = node["target_stat_interval_ms"].as<chi::u32>();
   }
-  
+
   if (node["blob_cache_size_mb"]) {
     performance_.blob_cache_size_mb_ = node["blob_cache_size_mb"].as<chi::u32>();
   }
-  
+
   if (node["max_concurrent_operations"]) {
     performance_.max_concurrent_operations_ = node["max_concurrent_operations"].as<chi::u32>();
   }
-  
+
   if (node["score_threshold"]) {
     performance_.score_threshold_ = node["score_threshold"].as<float>();
   }
-  
+
   if (node["score_difference_threshold"]) {
     performance_.score_difference_threshold_ = node["score_difference_threshold"].as<float>();
   }
-  
+
+  if (node["neighborhood"]) {
+    performance_.neighborhood_ = node["neighborhood"].as<chi::u32>();
+  }
+
   return true;
 }
 

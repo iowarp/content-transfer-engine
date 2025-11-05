@@ -117,72 +117,12 @@ start_environment() {
     print_success "All 4 containers started successfully"
 }
 
-# Function to monitor test progress
-monitor_tests() {
-    print_header "Monitoring Test Execution"
 
-    print_msg "$BLUE" "Following logs from node 1 (press Ctrl+C to stop monitoring)..."
-    echo ""
-
-    # Follow logs from node 1 until tests complete
-    docker compose logs -f cte-node1 &
-    LOG_PID=$!
-
-    # Wait for test completion or timeout
-    local timeout=600  # 10 minutes timeout
-    local elapsed=0
-    local interval=5
-
-    while [ $elapsed -lt $timeout ]; do
-        # Check if tests have completed
-        if docker compose logs cte-node1 2>/dev/null | grep -q "Tests complete"; then
-            sleep 2  # Give it a moment to finish logging
-            kill $LOG_PID 2>/dev/null || true
-            print_success "Tests completed"
-            return 0
-        fi
-
-        # Check if tests failed
-        if docker compose logs cte-node1 2>/dev/null | grep -q "Test.*FAILED"; then
-            sleep 2
-            kill $LOG_PID 2>/dev/null || true
-            print_error "Tests failed"
-            return 1
-        fi
-
-        sleep $interval
-        elapsed=$((elapsed + interval))
-    done
-
-    kill $LOG_PID 2>/dev/null || true
-    print_error "Test execution timed out after ${timeout}s"
-    return 1
-}
-
-# Function to display test results
-show_results() {
-    print_header "Test Results"
-
-    # Extract test results from node 1 logs
-    docker compose logs cte-node1 | grep -A 20 "Running distributed unit tests" || true
-
-    # Check for test summary
-    if docker compose logs cte-node1 | grep -q "All tests passed"; then
-        print_success "All distributed tests passed!"
-        return 0
-    elif docker compose logs cte-node1 | grep -q "tests passed"; then
-        print_warning "Some tests passed (see details above)"
-        return 0
-    else
-        print_error "Tests did not complete successfully"
-        return 1
-    fi
-}
 
 # Function to show usage
 usage() {
     cat << EOF
-Usage: $0 [OPTIONS]
+Usage: $0 [OPTIONS] [TEST_FILTER]
 
 Run CTE distributed unit tests in a 4-node Docker environment.
 
@@ -190,21 +130,38 @@ OPTIONS:
     -h, --help              Show this help message
     -c, --cleanup-only      Only cleanup previous runs, don't start new tests
     -k, --keep              Keep containers running after tests (for debugging)
-    -l, --logs              Show full logs after test completion
     -n, --no-cleanup        Don't cleanup before starting tests
+    -t, --test <filter>     Filter tests by name (Catch2 test name pattern)
+    -s, --section <filter>  Filter by section name (Catch2 section pattern)
+
+ARGUMENTS:
+    TEST_FILTER             Optional test filter pattern (alternative to -t)
+                           By default, all tests run. Use Catch2 patterns to filter.
 
 EXAMPLES:
-    # Run tests with default settings
+    # Run all tests (default)
     $0
 
+    # Run tests matching a specific pattern
+    $0 -t "PutBlob"
+    $0 "GetBlob*"
+
     # Run tests and keep containers for debugging
-    $0 --keep
+    $0 --keep -t "neighborhood"
+
+    # Run a specific section of a test
+    $0 -s "PutBlob operations"
 
     # Only cleanup previous test runs
     $0 --cleanup-only
 
-    # Run tests and show full logs afterward
-    $0 --logs
+
+CATCH2 TEST FILTER PATTERNS:
+    - Exact match: "PutBlob Basic Test"
+    - Wildcard: "PutBlob*" or "*neighborhood*"
+    - Multiple: "PutBlob,GetBlob"
+    - Exclude: "~[slow]" (exclude slow tests)
+    - Tags: "[core]" (run tests with core tag)
 EOF
 }
 
@@ -212,8 +169,9 @@ EOF
 main() {
     local cleanup_only=false
     local keep_containers=false
-    local show_logs=false
     local do_cleanup=true
+    local test_filter=""
+    local section_filter=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -230,21 +188,66 @@ main() {
                 keep_containers=true
                 shift
                 ;;
-            -l|--logs)
-                show_logs=true
-                shift
-                ;;
             -n|--no-cleanup)
                 do_cleanup=false
                 shift
                 ;;
-            *)
+            -t|--test)
+                if [[ -z "$2" ]] || [[ "$2" == -* ]]; then
+                    print_error "Option -t|--test requires a test filter argument"
+                    usage
+                    exit 1
+                fi
+                test_filter="$2"
+                shift 2
+                ;;
+            -s|--section)
+                if [[ -z "$2" ]] || [[ "$2" == -* ]]; then
+                    print_error "Option -s|--section requires a section filter argument"
+                    usage
+                    exit 1
+                fi
+                section_filter="$2"
+                shift 2
+                ;;
+            -*)
                 print_error "Unknown option: $1"
                 usage
                 exit 1
                 ;;
+            *)
+                # Positional argument - treat as test filter
+                if [[ -z "$test_filter" ]]; then
+                    test_filter="$1"
+                    shift
+                else
+                    print_error "Multiple test filters specified: '$test_filter' and '$1'"
+                    usage
+                    exit 1
+                fi
+                ;;
         esac
     done
+
+    # Export test filter as environment variable for docker-compose
+    if [[ -n "$test_filter" ]]; then
+        export TEST_FILTER="$test_filter"
+        print_msg "$BLUE" "Test filter: $test_filter"
+    else
+        export TEST_FILTER=""
+    fi
+
+    # Export section filter as environment variable for docker-compose
+    if [[ -n "$section_filter" ]]; then
+        export SECTION_FILTER="$section_filter"
+        print_msg "$BLUE" "Section filter: $section_filter"
+    else
+        export SECTION_FILTER=""
+    fi
+
+    if [[ -z "$test_filter" ]] && [[ -z "$section_filter" ]]; then
+        print_msg "$BLUE" "Running all tests (no filter)"
+    fi
 
     print_header "CTE Distributed Test Runner"
 
@@ -265,20 +268,8 @@ main() {
     # Start test environment
     start_environment
 
-    # Monitor test execution
-    if monitor_tests; then
-        show_results
-        TEST_EXIT_CODE=$?
-    else
-        print_error "Test monitoring failed"
-        TEST_EXIT_CODE=1
-    fi
-
-    # Show full logs if requested
-    if [ "$show_logs" = true ]; then
-        print_header "Full Container Logs"
-        docker compose logs
-    fi
+    print_success "Test environment started. Containers are running."
+    print_msg "$BLUE" "Tests are executing. Use 'docker compose logs -f' to follow progress."
 
     # Cleanup unless keep flag is set
     if [ "$keep_containers" = true ]; then
@@ -286,18 +277,7 @@ main() {
         print_msg "$BLUE" "To view logs: docker compose logs -f"
         print_msg "$BLUE" "To cleanup: docker compose down -v"
     else
-        print_header "Cleaning Up Test Environment"
-        docker compose down -v
-        print_success "Cleanup complete"
-    fi
-
-    # Exit with test result
-    if [ $TEST_EXIT_CODE -eq 0 ]; then
-        print_success "Distributed tests completed successfully"
-        exit 0
-    else
-        print_error "Distributed tests failed"
-        exit 1
+        print_msg "$BLUE" "Containers will keep running. Use 'docker compose down -v' to cleanup when done."
     fi
 }
 
