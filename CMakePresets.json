@@ -15,7 +15,8 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CTE_ENABLE_CUDA": "OFF",
                 "CTE_ENABLE_ROCM": "OFF",
-                "CTE_ENABLE_CMAKE_DOTENV": "ON"
+                "CTE_ENABLE_CMAKE_DOTENV": "ON",
+                "WRP_CTE_ENABLE_PYTHON": "OFF"
             }
         },
         {
