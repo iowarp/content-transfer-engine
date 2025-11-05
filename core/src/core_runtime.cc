@@ -245,8 +245,13 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     std::string bdev_pool_name =
         target_name; // Use target_name as the bdev pool name
 
-    // Generate a unique pool ID for this bdev container
-    chi::PoolId bdev_pool_id = CHI_POOL_MANAGER->GeneratePoolId();
+    // Use fixed pool ID scheme: 513 + node_hash from target_query_
+    // Extract hash from target_query_ using GetHash() method
+    chi::u32 node_hash = task->target_query_.GetHash();
+    chi::PoolId bdev_pool_id = chi::PoolId(513 + node_hash, 0);
+
+    HILOG(kInfo, "Creating bdev with fixed pool ID: major={}, minor={} (node_hash={})",
+          513 + node_hash, 0, node_hash);
 
     // Create the bdev container using the client
     chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
@@ -315,9 +320,10 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
     task->return_code_.store(0); // Success
     HILOG(kInfo,
-          "Target '{}' registered with bdev pool: {} (type={}, path={}, "
+          "Target '{}' registered with ID {} (major={}, minor={}) - bdev pool: {} (type={}, path={}, "
           "size={}, remaining={})",
-          target_name, bdev_pool_name, static_cast<int>(bdev_type), target_name,
+          target_name, target_id.major_, target_id.minor_, target_id.major_, target_id.minor_,
+          bdev_pool_name, static_cast<int>(bdev_type), target_name,
           total_size, remaining_size);
     HILOG(kInfo,
           "  Initial statistics: read_bw={} MB/s, write_bw={} MB/s, "

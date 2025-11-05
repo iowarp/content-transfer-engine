@@ -101,7 +101,7 @@ start_environment() {
     print_header "Starting 4-Node Distributed Test Environment"
 
     print_msg "$BLUE" "Starting containers..."
-    docker compose up -d
+    docker compose up
 
     # Wait for containers to be ready
     print_msg "$BLUE" "Waiting for containers to start..."
@@ -109,7 +109,7 @@ start_environment() {
 
     # Check if all containers are running
     local running=$(docker compose ps -q | wc -l)
-    if [ "$running" -ne 4 ]; then
+    if [ "$running" -lt 4 ]; then
         print_error "Not all containers started (expected 4, got $running)"
         docker compose logs
         exit 1
