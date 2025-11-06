@@ -89,6 +89,9 @@ add_subdirectory(test)
 # Add wrapper components (includes Python bindings if enabled)
 add_subdirectory(wrapper)
 
+# Add benchmarks
+add_subdirectory(benchmark)
+
 message(STATUS "CTE Core and Bdev ChiMods configured for compilation")
 
 jarvis_repo_add(${CMAKE_SOURCE_DIR}/test/jarvis_wrp_cte "")
