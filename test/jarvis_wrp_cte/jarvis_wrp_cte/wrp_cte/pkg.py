@@ -394,12 +394,6 @@ class WrpCte(Service):
         """
         self.log("Starting Content Transfer Engine...")
 
-        if not self.config_file_path or not os.path.exists(self.config_file_path):
-            self.log("Error: CTE configuration file not found. Run configure first.")
-            return False
-
-        self.log(f"Using CTE configuration: {self.config_file_path}")
-
         try:
             # Execute launch_cte using LocalExec
             exec_info = LocalExecInfo(env=self.mod_env)
