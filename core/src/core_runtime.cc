@@ -155,11 +155,15 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
         // Create target query using DirectHash for this specific container
         chi::PoolQuery target_query = chi::PoolQuery::DirectHash(container_hash);
 
-        // Call RegisterTarget using client member variable with target_query
-        HILOG(kInfo, "Registering target ({}): {} ({}, {} bytes) on node {}",
-              client_.pool_id_, target_path, device.bdev_type_, capacity_bytes, container_hash);
+        // Generate unique bdev_id: base major (513) + device index, minor is container hash
+        chi::PoolId bdev_id(513 + static_cast<chi::u32>(device_idx), 0);
+
+        // Call RegisterTarget using client member variable with target_query and bdev_id
+        HILOG(kInfo, "Registering target ({}): {} ({}, {} bytes) on node {} with bdev_id=({},{})",
+              client_.pool_id_, target_path, device.bdev_type_, capacity_bytes, container_hash,
+              bdev_id.major_, bdev_id.minor_);
         chi::u32 result = client_.RegisterTarget(hipc::MemContext(), target_path,
-                                                 bdev_type, capacity_bytes, target_query);
+                                                 bdev_type, capacity_bytes, target_query, bdev_id);
 
         if (result == 0) {
           HILOG(kInfo, "  - Registered target: {} ({}, {} bytes) on node {}",
@@ -237,21 +241,18 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
     std::string target_name = task->target_name_.str();
     chimaera::bdev::BdevType bdev_type = task->bdev_type_;
     chi::u64 total_size = task->total_size_;
-    HILOG(kInfo, "Registering target2 ({}): {} ({} bytes)", client_.pool_id_,
-          target_name, total_size);
+    chi::PoolId bdev_pool_id = task->bdev_id_;
+    HILOG(kInfo, "Registering target ({}): {} ({} bytes) with bdev_id=({},{})",
+          client_.pool_id_, target_name, total_size, bdev_pool_id.major_, bdev_pool_id.minor_);
 
     // Create bdev client and container first to get the TargetId (pool_id)
     chimaera::bdev::Client bdev_client;
     std::string bdev_pool_name =
         target_name; // Use target_name as the bdev pool name
 
-    // Use fixed pool ID scheme: 513 + node_hash from target_query_
-    // Extract hash from target_query_ using GetHash() method
-    chi::u32 node_hash = task->target_query_.GetHash();
-    chi::PoolId bdev_pool_id = chi::PoolId(513 + node_hash, 0);
-
-    HILOG(kInfo, "Creating bdev with fixed pool ID: major={}, minor={} (node_hash={})",
-          513 + node_hash, 0, node_hash);
+    HILOG(kInfo,
+          "Creating bdev with pool ID: major={}, minor={}",
+          bdev_pool_id.major_, bdev_pool_id.minor_);
 
     // Create the bdev container using the client
     chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
@@ -260,6 +261,7 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
     // Check if creation was successful
     if (bdev_client.return_code_ != 0) {
+      HELOG(kError, "Failed to create bdev container {} : {}", target_name, bdev_client.return_code_);
       task->return_code_.store(1);
       return;
     }
@@ -320,9 +322,9 @@ void Runtime::RegisterTarget(hipc::FullPtr<RegisterTargetTask> task,
 
     task->return_code_.store(0); // Success
     HILOG(kInfo,
-          "Target '{}' registered with ID {} (major={}, minor={}) - bdev pool: {} (type={}, path={}, "
+          "Target '{}' registered with ID (major={}, minor={}) - bdev pool: {} (type={}, path={}, "
           "size={}, remaining={})",
-          target_name, target_id.major_, target_id.minor_, target_id.major_, target_id.minor_,
+          target_name, target_id.major_, target_id.minor_,
           bdev_pool_name, static_cast<int>(bdev_type), target_name,
           total_size, remaining_size);
     HILOG(kInfo,
@@ -727,7 +729,8 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
                              chi::RunContext &ctx) {
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
-    task->pool_query_ = chi::PoolQuery::Local();
+    task->pool_query_ =
+        HashBlobToContainer(task->tag_id_, task->blob_name_.str());
     return;
   }
 
@@ -748,32 +751,20 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
       return;
     }
 
-    // Validate tag exists
-    if (!tag_id_to_info_.contains(tag_id)) {
-      task->return_code_.store(2); // Tag not found
-      return;
-    }
-
     // Get configuration for score difference threshold
     const Config &config = GetConfig();
     float score_difference_threshold =
         config.performance_.score_difference_threshold_;
 
-    // Step 1: Get current blob score
-    auto score_task =
-        client_.AsyncGetBlobScore(hipc::MemContext(), tag_id, blob_name);
-    score_task->Wait();
-
-    if (score_task->return_code_.load() != 0) {
-      CHI_IPC->DelTask(score_task);
-      task->return_code_.store(3); // Blob not found or error
+    // Step 1: Get blob info directly from table
+    BlobInfo *blob_info_ptr = CheckBlobExists(blob_name, tag_id);
+    if (blob_info_ptr == nullptr) {
+      task->return_code_.store(3); // Blob not found
       return;
     }
 
-    float current_score = score_task->score_;
-    CHI_IPC->DelTask(score_task);
-
     // Step 2: Check if score needs updating
+    float current_score = blob_info_ptr->score_;
     float score_diff = std::abs(new_score - current_score);
     HILOG(kInfo,
           "SCORE CHECK: blob={}, current={}, new={}, diff={}, threshold={}",
@@ -788,30 +779,15 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
       return;
     }
 
-    // Step 3: Directly update blob score without data reorganization
-    BlobInfo *blob_info_ptr = CheckBlobExists(blob_name, tag_id);
-    if (blob_info_ptr == nullptr) {
-      task->return_code_.store(3); // Blob not found
-      return;
-    }
+    // Step 3: Update blob score
+    BlobInfo &blob_info = *blob_info_ptr;
 
     HILOG(kInfo, "UPDATING SCORE: blob={}, old_score={}, new_score={}",
-          blob_name, blob_info_ptr->score_, new_score);
-    blob_info_ptr->score_ = new_score;
+          blob_name, blob_info.score_, new_score);
+    blob_info.score_ = new_score;
 
-    // Step 4: Get blob size for data reorganization
-    auto size_task =
-        client_.AsyncGetBlobSize(hipc::MemContext(), tag_id, blob_name);
-    size_task->Wait();
-
-    if (size_task->return_code_.load() != 0) {
-      CHI_IPC->DelTask(size_task);
-      task->return_code_.store(4); // Failed to get blob size
-      return;
-    }
-
-    chi::u64 blob_size = size_task->size_;
-    CHI_IPC->DelTask(size_task);
+    // Step 4: Get blob size from blob_info
+    chi::u64 blob_size = blob_info.GetTotalSize();
 
     if (blob_size == 0) {
       // Empty blob, no data to reorganize
@@ -862,11 +838,6 @@ void Runtime::ReorganizeBlob(hipc::FullPtr<ReorganizeBlobTask> task,
 
     // Success
     task->return_code_.store(0);
-
-    // Update telemetry
-    LogTelemetry(CteOp::kGetOrCreateTag, 0, 0, tag_id,
-                 std::chrono::steady_clock::now(),
-                 std::chrono::steady_clock::now());
 
     HILOG(kInfo,
           "ReorganizeBlob completed: tag_id={},{}, blob={}, new_score={}",

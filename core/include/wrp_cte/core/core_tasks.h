@@ -116,11 +116,13 @@ struct RegisterTargetTask : public chi::Task {
   IN chimaera::bdev::BdevType bdev_type_; // Block device type enum
   IN chi::u64 total_size_;                // Total size for allocation
   IN chi::PoolQuery target_query_;        // Target pool query for bdev API calls
+  IN chi::PoolId bdev_id_;                // PoolId to create for the underlying bdev
 
   // SHM constructor
   explicit RegisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
       : chi::Task(alloc), target_name_(alloc),
-        bdev_type_(chimaera::bdev::BdevType::kFile), total_size_(0) {}
+        bdev_type_(chimaera::bdev::BdevType::kFile), total_size_(0),
+        bdev_id_(chi::PoolId::GetNull()) {}
 
   // Emplace constructor
   explicit RegisterTargetTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
@@ -130,10 +132,11 @@ struct RegisterTargetTask : public chi::Task {
                               const std::string &target_name,
                               chimaera::bdev::BdevType bdev_type,
                               chi::u64 total_size,
-                              const chi::PoolQuery &target_query)
+                              const chi::PoolQuery &target_query,
+                              const chi::PoolId &bdev_id)
       : chi::Task(alloc, task_id, pool_id, pool_query, Method::kRegisterTarget),
         target_name_(alloc, target_name), bdev_type_(bdev_type),
-        total_size_(total_size), target_query_(target_query) {
+        total_size_(total_size), target_query_(target_query), bdev_id_(bdev_id) {
     task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kRegisterTarget;
@@ -145,7 +148,7 @@ struct RegisterTargetTask : public chi::Task {
    * Serialize IN and INOUT parameters
    */
   template <typename Archive> void SerializeIn(Archive &ar) {
-    ar(target_name_, bdev_type_, total_size_, target_query_);
+    ar(target_name_, bdev_type_, total_size_, target_query_, bdev_id_);
   }
 
   /**
@@ -163,6 +166,7 @@ struct RegisterTargetTask : public chi::Task {
     bdev_type_ = other->bdev_type_;
     total_size_ = other->total_size_;
     target_query_ = other->target_query_;
+    bdev_id_ = other->bdev_id_;
   }
 };
 
@@ -259,6 +263,16 @@ struct ListTargetsTask : public chi::Task {
    */
   void Copy(const hipc::FullPtr<ListTargetsTask> &other) {
     target_names_ = other->target_names_;
+  }
+
+  /**
+   * Aggregate entries from another ListTargetsTask
+   * Appends all target names from the other task to this one
+   */
+  void Aggregate(const hipc::FullPtr<ListTargetsTask> &other) {
+    for (const auto &target_name : other->target_names_) {
+      target_names_.emplace_back(target_name);
+    }
   }
 };
 

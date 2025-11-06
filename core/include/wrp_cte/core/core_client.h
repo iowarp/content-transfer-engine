@@ -60,8 +60,9 @@ public:
                           const std::string &target_name,
                           chimaera::bdev::BdevType bdev_type,
                           chi::u64 total_size,
-                          const chi::PoolQuery &target_query = chi::PoolQuery::Local()) {
-    auto task = AsyncRegisterTarget(mctx, target_name, bdev_type, total_size, target_query);
+                          const chi::PoolQuery &target_query = chi::PoolQuery::Local(),
+                          const chi::PoolId &bdev_id = chi::PoolId::GetNull()) {
+    auto task = AsyncRegisterTarget(mctx, target_name, bdev_type, total_size, target_query, bdev_id);
     task->Wait();
     chi::u32 result = task->return_code_.load();
     CHI_IPC->DelTask(task);
@@ -75,13 +76,14 @@ public:
   AsyncRegisterTarget(const hipc::MemContext &mctx,
                       const std::string &target_name,
                       chimaera::bdev::BdevType bdev_type, chi::u64 total_size,
-                      const chi::PoolQuery &target_query = chi::PoolQuery::Local()) {
+                      const chi::PoolQuery &target_query = chi::PoolQuery::Local(),
+                      const chi::PoolId &bdev_id = chi::PoolId::GetNull()) {
     (void)mctx; // Suppress unused parameter warning
     auto *ipc_manager = CHI_IPC;
 
     auto task = ipc_manager->NewTask<RegisterTargetTask>(
         chi::CreateTaskId(), pool_id_, chi::PoolQuery::Dynamic(), target_name,
-        bdev_type, total_size, target_query);
+        bdev_type, total_size, target_query, bdev_id);
 
     ipc_manager->Enqueue(task);
     return task;

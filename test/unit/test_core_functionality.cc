@@ -464,7 +464,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
 
     // ACTUAL FUNCTIONAL TEST - call the real RegisterTarget API
     chi::u32 result = core_client_->RegisterTarget(
-        mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+        mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(600, 0));
 
     // Verify successful registration
     REQUIRE(result == 0);
@@ -473,10 +473,12 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
     // FUNCTIONAL TEST - verify target appears in real target list
     INFO("Calling core_client_->ListTargets() to verify registration...");
     auto targets = core_client_->ListTargets(mctx_);
+    INFO("Listed targets: " << targets.size());
     REQUIRE(!targets.empty());
-
+ 
     bool target_found = false;
     for (const auto &target_name_found : targets) {
+      HILOG(kInfo, "target: {} vs {}", target_name_found, target_name);
       if (target_name_found == target_name) {
         target_found = true;
         INFO("SUCCESS: Found registered target: " << target_name);
@@ -515,7 +517,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
 
     // ACTUAL FUNCTIONAL TEST - call the real AsyncRegisterTarget API
     auto register_task = core_client_->AsyncRegisterTarget(
-        mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+        mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(601, 0));
 
     REQUIRE(!register_task.IsNull());
     INFO("AsyncRegisterTarget returned valid task, waiting for completion...");
@@ -563,7 +565,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // bdev creation
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
-      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(602, 0));
   REQUIRE(reg_result == 0);
 
   // Create a test tag for blob grouping
@@ -844,7 +846,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // bdev creation
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
-      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(603, 0));
   REQUIRE(reg_result == 0);
 
   wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, "getblob_test_tag");
@@ -1233,7 +1235,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
-      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(604, 0));
   REQUIRE(reg_result == 0);
 
   // Create test tag for integration testing
@@ -1748,7 +1750,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   INFO("Step 2: Registering target...");
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
-      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(605, 0));
   REQUIRE(reg_result == 0);
   INFO("✓ Target registered successfully");
 
@@ -1907,7 +1909,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
   const std::string target_name = test_storage_path_;
   chi::u32 reg_result = core_client_->RegisterTarget(
-      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+      mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(606, 0));
   REQUIRE(reg_result == 0);
 
   wrp_cte::core::TagId tag_id = core_client_->GetOrCreateTag(mctx_, "reorganize_test_tag");
@@ -2171,7 +2173,7 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow",
     // bdev creation
     std::string target_name = test_storage_path_ + "_" + suffix;
     chi::u32 result = core_client_->RegisterTarget(
-        mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize);
+        mctx_, target_name, chimaera::bdev::BdevType::kFile, kTestTargetSize, chi::PoolQuery::Local(), chi::PoolId(607, 0));
     REQUIRE(result == 0);
   }
   INFO("Step 2 completed: Multiple targets registered");
