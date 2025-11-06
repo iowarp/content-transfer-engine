@@ -36,29 +36,27 @@ struct PerformanceConfig {
   chi::u32 max_concurrent_operations_;  // Max concurrent I/O operations
   float score_threshold_;               // Threshold for blob reorganization
   float score_difference_threshold_;    // Minimum score difference for reorganization
-  chi::u32 neighborhood_;               // Number of nodes CTE can buffer to
 
   PerformanceConfig()
       : target_stat_interval_ms_(5000),
         blob_cache_size_mb_(256),
         max_concurrent_operations_(64),
         score_threshold_(0.7f),
-        score_difference_threshold_(0.05f),
-        neighborhood_(4) {}
+        score_difference_threshold_(0.05f) {}
 };
 
 /**
  * Target management configuration
  */
 struct TargetConfig {
-  chi::u32 max_targets_;                // Maximum number of targets per node
+  chi::u32 neighborhood_;               // Number of targets (nodes CTE can buffer to)
   chi::u32 default_target_timeout_ms_;  // Default timeout for target operations
-  bool auto_unregister_failed_;         // Auto-unregister failed targets
-  
+  chi::u32 poll_period_ms_;             // Period to rescan targets for statistics
+
   TargetConfig()
-      : max_targets_(32),
+      : neighborhood_(4),
         default_target_timeout_ms_(30000),
-        auto_unregister_failed_(true) {}
+        poll_period_ms_(5000) {}
 };
 
 /**

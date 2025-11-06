@@ -21,14 +21,11 @@ pkgs:
   - pkg_type: wrp_cte
     pkg_name: cte_runtime
     devices:
-      - ["/tmp/ram_cache", "4GB", 1.0]      # Fastest tier (RAM)
+      - ["ram::cache", "4GB", 1.0]          # Fastest tier (RAM)
       - ["/mnt/nvme", "1TB", 0.9]           # Fast tier (NVMe)
       - ["/mnt/ssd", "2TB", 0.7]            # Medium tier (SATA SSD)
       - ["/mnt/hdd", "10TB", 0.4]           # Slow tier (HDD)
-    worker_count: 16
-    dpe_type: "weighted_round_robin"
-    enable_prefetching: true
-    prefetch_distance: "100MB"
+    dpe_type: "max_bw"
 
   # Initialization message
   - pkg_type: echo

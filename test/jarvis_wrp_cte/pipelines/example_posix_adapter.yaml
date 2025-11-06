@@ -21,9 +21,8 @@ pkgs:
   - pkg_type: wrp_cte
     pkg_name: cte_runtime
     devices:
-      - ["/tmp/cte_cache", "1GB", 1.0]
+      - ["ram::cte_cache", "1GB", 1.0]
       - ["/mnt/nvme", "500GB", 0.8]
-    worker_count: 4
     dpe_type: "round_robin"
 
   # Setup message

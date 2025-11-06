@@ -125,14 +125,9 @@ bool Config::Validate() const {
     return false;
   }
 
-  if (performance_.neighborhood_ == 0 || performance_.neighborhood_ > 1024) {
-    HELOG(kError, "Config validation error: Invalid neighborhood {} (must be 1-1024)", performance_.neighborhood_);
-    return false;
-  }
-
   // Validate target configuration
-  if (targets_.max_targets_ == 0 || targets_.max_targets_ > 1024) {
-    HELOG(kError, "Config validation error: Invalid max_targets {} (must be 1-1024)", targets_.max_targets_);
+  if (targets_.neighborhood_ == 0 || targets_.neighborhood_ > 1024) {
+    HELOG(kError, "Config validation error: Invalid neighborhood {} (must be 1-1024)", targets_.neighborhood_);
     return false;
   }
   
@@ -164,16 +159,13 @@ std::string Config::GetParameterString(const std::string &param_name) const {
     return std::to_string(performance_.score_difference_threshold_);
   }
   if (param_name == "neighborhood") {
-    return std::to_string(performance_.neighborhood_);
-  }
-  if (param_name == "max_targets") {
-    return std::to_string(targets_.max_targets_);
+    return std::to_string(targets_.neighborhood_);
   }
   if (param_name == "default_target_timeout_ms") {
     return std::to_string(targets_.default_target_timeout_ms_);
   }
-  if (param_name == "auto_unregister_failed") {
-    return targets_.auto_unregister_failed_ ? "true" : "false";
+  if (param_name == "poll_period_ms") {
+    return std::to_string(targets_.poll_period_ms_);
   }
   
   return ""; // Parameter not found
@@ -207,19 +199,15 @@ bool Config::SetParameterFromString(const std::string &param_name,
       return true;
     }
     if (param_name == "neighborhood") {
-      performance_.neighborhood_ = static_cast<chi::u32>(std::stoul(value));
-      return true;
-    }
-    if (param_name == "max_targets") {
-      targets_.max_targets_ = static_cast<chi::u32>(std::stoul(value));
+      targets_.neighborhood_ = static_cast<chi::u32>(std::stoul(value));
       return true;
     }
     if (param_name == "default_target_timeout_ms") {
       targets_.default_target_timeout_ms_ = static_cast<chi::u32>(std::stoul(value));
       return true;
     }
-    if (param_name == "auto_unregister_failed") {
-      targets_.auto_unregister_failed_ = (value == "true" || value == "1");
+    if (param_name == "poll_period_ms") {
+      targets_.poll_period_ms_ = static_cast<chi::u32>(std::stoul(value));
       return true;
     }
     
@@ -324,14 +312,13 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
   emitter << YAML::Key << "max_concurrent_operations" << YAML::Value << performance_.max_concurrent_operations_;
   emitter << YAML::Key << "score_threshold" << YAML::Value << performance_.score_threshold_;
   emitter << YAML::Key << "score_difference_threshold" << YAML::Value << performance_.score_difference_threshold_;
-  emitter << YAML::Key << "neighborhood" << YAML::Value << performance_.neighborhood_;
   emitter << YAML::EndMap;
-  
+
   // Emit target configuration
   emitter << YAML::Key << "targets" << YAML::Value << YAML::BeginMap;
-  emitter << YAML::Key << "max_targets" << YAML::Value << targets_.max_targets_;
+  emitter << YAML::Key << "neighborhood" << YAML::Value << targets_.neighborhood_;
   emitter << YAML::Key << "default_target_timeout_ms" << YAML::Value << targets_.default_target_timeout_ms_;
-  emitter << YAML::Key << "auto_unregister_failed" << YAML::Value << targets_.auto_unregister_failed_;
+  emitter << YAML::Key << "poll_period_ms" << YAML::Value << targets_.poll_period_ms_;
   emitter << YAML::EndMap;
   
   // Emit storage configuration
@@ -395,26 +382,22 @@ bool Config::ParsePerformanceConfig(const YAML::Node &node) {
     performance_.score_difference_threshold_ = node["score_difference_threshold"].as<float>();
   }
 
-  if (node["neighborhood"]) {
-    performance_.neighborhood_ = node["neighborhood"].as<chi::u32>();
-  }
-
   return true;
 }
 
 bool Config::ParseTargetConfig(const YAML::Node &node) {
-  if (node["max_targets"]) {
-    targets_.max_targets_ = node["max_targets"].as<chi::u32>();
+  if (node["neighborhood"]) {
+    targets_.neighborhood_ = node["neighborhood"].as<chi::u32>();
   }
-  
+
   if (node["default_target_timeout_ms"]) {
     targets_.default_target_timeout_ms_ = node["default_target_timeout_ms"].as<chi::u32>();
   }
-  
-  if (node["auto_unregister_failed"]) {
-    targets_.auto_unregister_failed_ = node["auto_unregister_failed"].as<bool>();
+
+  if (node["poll_period_ms"]) {
+    targets_.poll_period_ms_ = node["poll_period_ms"].as<chi::u32>();
   }
-  
+
   return true;
 }
 

@@ -14,8 +14,7 @@ pkgs:
   - pkg_type: jarvis_wrp_cte.wrp_cte
     pkg_name: cte_runtime
     devices:
-      - ["${HOME}/test_hermes/hermes.bin", "1TB", 0.9] 
-    worker_count: 1
+      - ["${HOME}/test_hermes/hermes.bin", "1TB", 0.9]
   - pkg_type: builtin.ior
     pkg_name: benchmark
     interceptors: ["cte_adapters"]

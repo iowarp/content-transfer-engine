@@ -1,39 +1,11 @@
 # Content Transfer Engine (CTE) Configuration File
 # This file defines the configuration for the CTE core module
 
-# Worker configuration
-worker_count: 4
-
 # Target management settings
 targets:
-  max_targets: 100
+  neighborhood: 4  # Number of nodes for horizontal buffering
   default_target_timeout_ms: 30000
-  auto_unregister_failed: true
-
-# Performance tuning
-performance:
-  target_stat_interval_ms: 5000
-  blob_cache_size_mb: 512
-  max_concurrent_operations: 64
-  score_threshold: 0.7
-
-# Queue configuration
-queues:
-  target_management:
-    lane_count: 2
-    priority: "low_latency"
-  
-  tag_management:
-    lane_count: 2
-    priority: "low_latency"
-  
-  blob_operations:
-    lane_count: 4
-    priority: "high_latency"
-  
-  stats:
-    lane_count: 1
-    priority: "high_latency"
+  poll_period_ms: 5000  # Period to rescan targets for statistics (capacity, bandwidth, etc.)
 
 # Storage block device configuration
 storage:
@@ -43,8 +15,8 @@ storage:
     capacity_limit: "1TB"
     score: 0.9           # Manual score override (0.0-1.0) - highest tier
   
-  # RAM-based storage for temporary/cache data
-  - path: "/tmp/cte_cache"
+  # RAM-based storage for temporary/cache data (use ram:: prefix)
+  - path: "ram::cte_cache"
     bdev_type: "ram"
     capacity_limit: "8GB"
     score: 1.0           # Manual score override - fastest tier
@@ -69,8 +41,3 @@ dpe:
 logging:
   level: "info"
   file_path: "/var/log/cte/cte.log"
-
-# Optional: Network configuration
-network:
-  port: 8080
-  max_connections: 1000

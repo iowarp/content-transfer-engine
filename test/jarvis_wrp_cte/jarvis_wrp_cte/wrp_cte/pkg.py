@@ -36,13 +36,7 @@ class WrpCte(Service):
                 'msg': 'List of storage devices as tuples (path, capacity, score)',
                 'type': list,
                 'default': [],
-                'help': 'Example: [("/mnt/nvme", "1TB", 0.9), ("/tmp/ram_cache", "8GB", 1.0)]. Use /tmp/ paths for RAM storage. Supports SizeType format: k/K, m/M, g/G, t/T'
-            },
-            {
-                'name': 'worker_count',
-                'msg': 'Number of worker threads for CTE',
-                'type': int,
-                'default': 4
+                'help': 'Example: [("/mnt/nvme", "1TB", 0.9), ("ram::cache", "8GB", 1.0)]. Use ram:: prefix for RAM storage. Supports SizeType format: k/K, m/M, g/G, t/T'
             },
             {
                 'name': 'dpe_type',
@@ -52,40 +46,22 @@ class WrpCte(Service):
                 'default': 'max_bw'
             },
             {
-                'name': 'blob_cache_size_mb',
-                'msg': 'Blob cache size in megabytes',
+                'name': 'neighborhood',
+                'msg': 'Number of targets (nodes CTE can buffer to)',
                 'type': int,
-                'default': 512
-            },
-            {
-                'name': 'max_concurrent_operations',
-                'msg': 'Maximum concurrent operations',
-                'type': int,
-                'default': 64
-            },
-            {
-                'name': 'target_stat_interval_ms',
-                'msg': 'Target statistics collection interval in milliseconds',
-                'type': int,
-                'default': 5000
-            },
-            {
-                'name': 'score_threshold',
-                'msg': 'Minimum score threshold for device selection',
-                'type': float,
-                'default': 0.7
-            },
-            {
-                'name': 'max_targets',
-                'msg': 'Maximum number of targets',
-                'type': int,
-                'default': 100
+                'default': 4
             },
             {
                 'name': 'default_target_timeout_ms',
                 'msg': 'Default target timeout in milliseconds',
                 'type': int,
                 'default': 30000
+            },
+            {
+                'name': 'poll_period_ms',
+                'msg': 'Period at which targets should be rescanned for statistics (capacity, bandwidth, etc.) in milliseconds',
+                'type': int,
+                'default': 5000
             }
         ]
 
@@ -371,12 +347,12 @@ class WrpCte(Service):
         # Convert devices to storage configuration format
         storage_config = []
         for path, capacity, score in devices:
-            # Determine bdev_type: check if path indicates RAM storage
-            if any(indicator in path.lower() for indicator in ['/tmp/', 'ramdisk', 'tmpfs', 'ram']):
+            # Determine bdev_type: check if path begins with ram:: prefix
+            if path.startswith('ram::'):
                 bdev_type = 'ram'
             else:
                 bdev_type = 'file'
-            
+
             storage_config.append({
                 'path': path,
                 'bdev_type': bdev_type,
@@ -386,54 +362,21 @@ class WrpCte(Service):
         
         # Build complete configuration
         config = {
-            'worker_count': self.config.get('worker_count', 4),
-            
             'targets': {
-                'max_targets': self.config.get('max_targets', 100),
+                'neighborhood': self.config.get('neighborhood', 4),
                 'default_target_timeout_ms': self.config.get('default_target_timeout_ms', 30000),
-                'auto_unregister_failed': True
+                'poll_period_ms': self.config.get('poll_period_ms', 5000)
             },
-            
-            'performance': {
-                'target_stat_interval_ms': self.config.get('target_stat_interval_ms', 5000),
-                'blob_cache_size_mb': self.config.get('blob_cache_size_mb', 512),
-                'max_concurrent_operations': self.config.get('max_concurrent_operations', 64),
-                'score_threshold': self.config.get('score_threshold', 0.7)
-            },
-            
-            'queues': {
-                'target_management': {
-                    'lane_count': 2,
-                    'priority': 'low_latency'
-                },
-                'tag_management': {
-                    'lane_count': 2,
-                    'priority': 'low_latency'
-                },
-                'blob_operations': {
-                    'lane_count': 4,
-                    'priority': 'high_latency'
-                },
-                'stats': {
-                    'lane_count': 1,
-                    'priority': 'high_latency'
-                }
-            },
-            
+
             'storage': storage_config,
-            
+
             'dpe': {
                 'dpe_type': self.config.get('dpe_type', 'max_bw')
             },
-            
+
             'logging': {
                 'level': 'info',
                 'file_path': '/var/log/cte/cte.log'
-            },
-            
-            'network': {
-                'port': 8080,
-                'max_connections': 1000
             }
         }
         

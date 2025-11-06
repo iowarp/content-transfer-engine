@@ -123,7 +123,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   // Register targets for each configured storage device and neighborhood node
   if (!storage_devices_.empty()) {
     // Get neighborhood size from configuration
-    chi::u32 neighborhood_size = config.performance_.neighborhood_;
+    chi::u32 neighborhood_size = config.targets_.neighborhood_;
 
     // Get number of nodes from IPC manager
     chi::u32 num_nodes = ipc_manager->GetNumHosts();
@@ -186,8 +186,8 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
         "CTE Core container created and initialized for pool: {} (ID: {})",
         pool_name_, task->new_pool_id_);
 
-  HILOG(kInfo, "Configuration: worker_count={}, max_targets={}",
-        config.worker_count_, config.targets_.max_targets_);
+  HILOG(kInfo, "Configuration: neighborhood={}, poll_period_ms={}",
+        config.targets_.neighborhood_, config.targets_.poll_period_ms_);
 
   if (config_loaded) {
     if (!config_path.empty()) {

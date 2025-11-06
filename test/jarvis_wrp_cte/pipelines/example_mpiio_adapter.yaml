@@ -21,12 +21,10 @@ pkgs:
   - pkg_type: wrp_cte
     pkg_name: cte_runtime
     devices:
-      - ["/tmp/cte_cache", "2GB", 1.0]      # Fast RAM cache
+      - ["ram::cte_cache", "2GB", 1.0]      # Fast RAM cache
       - ["/mnt/nvme0", "1TB", 0.9]          # NVMe SSD
       - ["/mnt/hdd", "10TB", 0.5]           # HDD storage
-    worker_count: 8
     dpe_type: "round_robin"
-    enable_prefetching: true
 
   # IOR benchmark with MPI-IO
   - pkg_type: builtin.ior
