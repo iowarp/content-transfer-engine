@@ -23,7 +23,7 @@ class WrpCteBench(Application):
 
         This method is called during application initialization.
         """
-        self.benchmark_executable = None
+        self.benchmark_executable = 'wrp_cte_bench'
         self.output_file = None
 
     def _configure_menu(self):
@@ -120,9 +120,6 @@ class WrpCteBench(Application):
         io_size_str = str(self.config['io_size']).lower()
         if not (io_size_str[-1] in ['k', 'm', 'g'] or io_size_str.isdigit()):
             self.log(f"Warning: io_size '{self.config['io_size']}' should end with k/K, m/M, or g/G suffix")
-
-        # Set benchmark executable path (assumed to be in PATH or build directory)
-        self.benchmark_executable = 'wrp_cte_bench'
 
         # Set output file if specified
         if self.config['output_file']:
