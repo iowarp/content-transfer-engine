@@ -1,7 +1,7 @@
 from jarvis_cd.core.pkg import Service
 from jarvis_cd.util import SizeType
 from jarvis_cd.shell.process import Rm, Mkdir
-from jarvis_cd.shell import PsshExecInfo
+from jarvis_cd.shell import PsshExecInfo, Exec, LocalExecInfo
 import yaml
 import os
 
@@ -384,19 +384,35 @@ class WrpCte(Service):
 
     def start(self):
         """
-        Start the WrpCte service.
-        
-        Since this is a configuration-only service, this method just passes.
-        The actual CTE functionality is provided by other components that
-        use the configuration file we generated.
-        
+        Start the WrpCte service by launching CTE using launch_cte.
+
+        This method executes the launch_cte utility to initialize the
+        Content Transfer Engine with the generated configuration.
+
         Returns:
-            bool: Always True since this is configuration-only.
+            bool: True if launch_cte executed successfully, False otherwise.
         """
-        self.log("WrpCte is a configuration service - no persistent process to start")
-        if self.config_file_path and os.path.exists(self.config_file_path):
-            self.log(f"CTE configuration is available at: {self.config_file_path}")
-        return True
+        self.log("Starting Content Transfer Engine...")
+
+        if not self.config_file_path or not os.path.exists(self.config_file_path):
+            self.log("Error: CTE configuration file not found. Run configure first.")
+            return False
+
+        self.log(f"Using CTE configuration: {self.config_file_path}")
+
+        try:
+            # Execute launch_cte using LocalExec
+            exec_info = LocalExecInfo(env=self.mod_env)
+            cmd = "launch_cte"
+
+            self.log(f"Executing: {cmd}")
+            Exec(cmd, exec_info).run()
+            self.log("Content Transfer Engine launched successfully")
+            return True
+
+        except Exception as e:
+            self.log(f"Error launching CTE: {e}")
+            return False
 
     def stop(self):
         """
