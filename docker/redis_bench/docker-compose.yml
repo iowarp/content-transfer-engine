@@ -15,12 +15,10 @@
 #                  Supports: b (bytes), k (KB), m (MB), g (GB)
 #   IO_COUNT     - Number of operations to perform (default: 10000)
 
-version: '3.8'
-
 services:
   # Main Redis benchmark service
   redis-bench:
-    image: iowarp/cte-redis-bench:latest
+    image: iowarp/iowarp-redis-bench:latest
     container_name: redis-bench
 
     # Environment variables for benchmark configuration
@@ -38,9 +36,6 @@ services:
       # Number of operations to perform
       - IO_COUNT=${IO_COUNT:-10000}
 
-    # Override the CMD with environment variables
-    command: ["${TEST_CASE:-All}", "${NUM_CLIENTS:-4}", "${IO_SIZE:-1m}", "${IO_COUNT:-10000}"]
-
     # Resource limits
     mem_limit: 4g
 
@@ -52,7 +47,7 @@ services:
 
   # Set operation benchmark - write-heavy workload
   # redis-bench-set:
-  #   image: iowarp/cte-redis-bench:latest
+  #   image: iowarp/iowarp-redis-bench:latest
   #   container_name: redis-bench-set
   #   command: ["Set", "8", "4k", "100000"]
   #   mem_limit: 4g
@@ -60,7 +55,7 @@ services:
 
   # Get operation benchmark - read-heavy workload
   # redis-bench-get:
-  #   image: iowarp/cte-redis-bench:latest
+  #   image: iowarp/iowarp-redis-bench:latest
   #   container_name: redis-bench-get
   #   command: ["Get", "8", "4k", "100000"]
   #   mem_limit: 4g
@@ -68,7 +63,7 @@ services:
 
   # SetGet operation benchmark - mixed read/write workload
   # redis-bench-setget:
-  #   image: iowarp/cte-redis-bench:latest
+  #   image: iowarp/iowarp-redis-bench:latest
   #   container_name: redis-bench-setget
   #   command: ["SetGet", "4", "1m", "10000"]
   #   mem_limit: 4g
@@ -76,7 +71,7 @@ services:
 
   # Large I/O benchmark - 16MB operations
   # redis-bench-large:
-  #   image: iowarp/cte-redis-bench:latest
+  #   image: iowarp/iowarp-redis-bench:latest
   #   container_name: redis-bench-large
   #   command: ["All", "2", "16m", "1000"]
   #   mem_limit: 8g
@@ -84,7 +79,7 @@ services:
 
   # Small I/O benchmark - 4KB operations (high IOPS)
   # redis-bench-small:
-  #   image: iowarp/cte-redis-bench:latest
+  #   image: iowarp/iowarp-redis-bench:latest
   #   container_name: redis-bench-small
   #   command: ["All", "16", "4k", "1000000"]
   #   mem_limit: 4g

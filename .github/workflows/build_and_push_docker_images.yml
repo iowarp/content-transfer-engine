@@ -100,7 +100,7 @@ jobs:
           file: ./docker/redis_bench.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: iowarp/cte-redis-bench:latest
+          tags: iowarp/iowarp-redis-bench:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
@@ -111,7 +111,7 @@ jobs:
           file: ./docker/wrp_cte_bench.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: iowarp/cte-wrp-bench:latest
+          tags: iowarp/iowarp-cte-bench:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 

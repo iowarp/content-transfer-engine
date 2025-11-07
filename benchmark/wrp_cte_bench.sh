@@ -26,11 +26,8 @@ NC='\033[0m' # No Color
 
 # Script directory and paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_DIR="$PROJECT_ROOT/build"
-BIN_DIR="$BUILD_DIR/bin"
-CONFIG_FILE="$SCRIPT_DIR/cte_config_ram.yaml"
-BENCHMARK_EXE="$BIN_DIR/wrp_cte_bench"
+CONFIG_FILE="${WRP_CTE_CONF:-$SCRIPT_DIR/cte_config_ram.yaml}"
+BENCHMARK_EXE="wrp_cte_bench"
 
 # Parse size string with k/K, m/M, g/G suffixes
 parse_size() {
@@ -129,13 +126,6 @@ main() {
             exit 1
             ;;
     esac
-
-    # Check if benchmark executable exists
-    if [ ! -f "$BENCHMARK_EXE" ]; then
-        echo -e "${RED}Error: Benchmark executable not found: $BENCHMARK_EXE${NC}" >&2
-        echo "Please build the project first" >&2
-        exit 1
-    fi
 
     # Check if configuration file exists
     if [ ! -f "$CONFIG_FILE" ]; then

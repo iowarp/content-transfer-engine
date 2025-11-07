@@ -51,6 +51,9 @@ services:
     shm_size: 8g
     mem_limit: 8g
 
+    # Make IPC namespace shareable so benchmark containers can join
+    ipc: shareable
+
     # Keep container running as a daemon
     stdin_open: true
     tty: true
@@ -69,7 +72,7 @@ services:
   # WRP CTE Benchmark Service
   # Runs benchmark tests against the iowarp runtime
   wrp-cte-bench:
-    image: iowarp/cte-wrp-bench:latest
+    image: iowarp/iowarp-cte-bench:latest
     container_name: wrp-cte-bench
 
     # Depend on the runtime service
@@ -126,7 +129,7 @@ services:
 
   # Put operation benchmark - write-heavy workload
   # wrp-cte-bench-put:
-  #   image: iowarp/cte-wrp-bench:latest
+  #   image: iowarp/iowarp-cte-bench:latest
   #   container_name: wrp-cte-bench-put
   #   depends_on:
   #     iowarp-runtime:
@@ -149,7 +152,7 @@ services:
 
   # Get operation benchmark - read-heavy workload
   # wrp-cte-bench-get:
-  #   image: iowarp/cte-wrp-bench:latest
+  #   image: iowarp/iowarp-cte-bench:latest
   #   container_name: wrp-cte-bench-get
   #   depends_on:
   #     iowarp-runtime:
@@ -172,7 +175,7 @@ services:
 
   # PutGet operation benchmark - mixed read/write workload
   # wrp-cte-bench-putget:
-  #   image: iowarp/cte-wrp-bench:latest
+  #   image: iowarp/iowarp-cte-bench:latest
   #   container_name: wrp-cte-bench-putget
   #   depends_on:
   #     iowarp-runtime:
@@ -195,7 +198,7 @@ services:
 
   # Large I/O benchmark - 16MB operations
   # wrp-cte-bench-large:
-  #   image: iowarp/cte-wrp-bench:latest
+  #   image: iowarp/iowarp-cte-bench:latest
   #   container_name: wrp-cte-bench-large
   #   depends_on:
   #     iowarp-runtime:
@@ -218,7 +221,7 @@ services:
 
   # High concurrency benchmark - many parallel processes
   # wrp-cte-bench-concurrent:
-  #   image: iowarp/cte-wrp-bench:latest
+  #   image: iowarp/iowarp-cte-bench:latest
   #   container_name: wrp-cte-bench-concurrent
   #   depends_on:
   #     iowarp-runtime:

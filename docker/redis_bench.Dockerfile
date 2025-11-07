@@ -29,9 +29,28 @@ RUN sudo chmod +x /benchmarks/redis_bench.sh
 # Set working directory
 WORKDIR /benchmarks
 
-# Set the entrypoint to run the benchmark script
-# Arguments: test_case, num_clients, io_size, io_count
-ENTRYPOINT ["/benchmarks/redis_bench.sh"]
+# Set default environment variables
+ENV TEST_CASE=All
+ENV NUM_CLIENTS=4
+ENV IO_SIZE=1m
+ENV IO_COUNT=10000
 
-# Default arguments for demonstration
-CMD ["Set", "4", "1m", "10000"]
+# Create a wrapper script that handles both direct arguments and environment variables
+RUN echo '#!/bin/bash' > /benchmarks/run_bench.sh && \
+    echo 'set -e' >> /benchmarks/run_bench.sh && \
+    echo '# If arguments are provided, use them directly' >> /benchmarks/run_bench.sh && \
+    echo 'if [ $# -eq 4 ]; then' >> /benchmarks/run_bench.sh && \
+    echo '    exec /benchmarks/redis_bench.sh "$@"' >> /benchmarks/run_bench.sh && \
+    echo '# Otherwise, use environment variables' >> /benchmarks/run_bench.sh && \
+    echo 'else' >> /benchmarks/run_bench.sh && \
+    echo '    exec /benchmarks/redis_bench.sh "$TEST_CASE" "$NUM_CLIENTS" "$IO_SIZE" "$IO_COUNT"' >> /benchmarks/run_bench.sh && \
+    echo 'fi' >> /benchmarks/run_bench.sh && \
+    sudo chmod +x /benchmarks/run_bench.sh
+
+# Set the entrypoint to run the wrapper script
+# Arguments: test_case, num_clients, io_size, io_count
+# Or use environment variables: TEST_CASE, NUM_CLIENTS, IO_SIZE, IO_COUNT
+ENTRYPOINT ["/benchmarks/run_bench.sh"]
+
+# Default arguments
+CMD []
