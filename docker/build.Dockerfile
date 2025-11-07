@@ -1,7 +1,7 @@
 # Dockerfile for building the Content Transfer Engine (CTE)
-# Inherits from iowarp/iowarp-runtime-build:latest which contains all build dependencies
+# Inherits from iowarp/iowarp-cte-build:latest which contains all build dependencies
 
-FROM iowarp/iowarp-runtime-build:latest
+FROM iowarp/iowarp-cte-build:latest
 
 # Set working directory
 WORKDIR /workspace
@@ -9,22 +9,16 @@ WORKDIR /workspace
 # Copy the entire CTE source tree
 COPY . /workspace/
 
-# Configure and build CTE, installing to both /usr/local and /cte
+# Configure with release preset and build
+# Install to both /usr/local and /iowarp-cte for flexibility
 RUN sudo chown -R $(whoami):$(whoami) /workspace && \
     mkdir -p build && \
-    cd build && \
-    cmake .. \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DCTE_ENABLE_CUDA=OFF \
-        -DCTE_ENABLE_ROCM=OFF \
-        -DCTE_ENABLE_CMAKE_DOTENV=OFF \
-        -DWRP_CTE_ENABLE_PYTHON=OFF && \
-    make -j$(nproc) && \
-    sudo make install && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=/cte && \
-    sudo make install && \
+    cmake --preset release && \
+    cmake --build build -j$(nproc) && \
+    sudo cmake --install build --prefix /usr/local && \
+    sudo cmake --install build --prefix /iowarp-cte && \
     rm -rf /workspace
+
 
 # Add iowarp-cte to Spack configuration
 RUN echo "  iowarp-cte:" >> ~/.spack/packages.yaml && \
