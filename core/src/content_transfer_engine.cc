@@ -75,9 +75,6 @@ bool ContentTransferEngine::ClientInit(const std::string &config_path,
     params = CreateParams(main_allocator);
   }
 
-  HILOG(kInfo, "Creating CTE Core container from {}: {}",
-        effective_config_path, params.config_yaml_string_.str());
-
   // Create CTE Core container using constants from core_tasks.h and specified pool_query
   cte_client->Create(hipc::MemContext(), pool_query,
                      wrp_cte::core::kCtePoolName, wrp_cte::core::kCtePoolId, params);
