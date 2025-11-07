@@ -46,7 +46,7 @@ services:
         echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
         sleep 5 &&
         echo 'Node 1: Waiting for all nodes to be ready...' &&
-        sleep 10 &&
+        sleep 5 &&
         echo '========================================' &&
         echo 'Node 1: Launching CTE' &&
         echo '========================================' &&
@@ -98,7 +98,6 @@ services:
       - NODE_ID=2
       - NODE_IP=172.26.0.11
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
       - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
       - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'
@@ -142,7 +141,6 @@ services:
       - NODE_ID=3
       - NODE_IP=172.26.0.12
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
       - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
       - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'
@@ -185,7 +183,6 @@ services:
       - NODE_ID=4
       - NODE_IP=172.26.0.13
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
       - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
       - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'

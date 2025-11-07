@@ -99,15 +99,21 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   auto *config_manager = &ConfigManager::GetInstance();
   config_manager->Initialize(main_allocator);
 
-  // Load configuration from file if provided
+  // Load configuration from file or string if provided
   auto params = task->GetParams(main_allocator);
   std::string config_path = params.config_file_path_.str();
+  std::string config_yaml_string = params.config_yaml_string_.str();
 
   bool config_loaded = false;
-  if (!config_path.empty()) {
+  if (!config_yaml_string.empty()) {
+    // Prefer YAML string if provided (allows configuration without file I/O)
+    HILOG(kInfo, "Loading configuration from YAML string");
+    config_loaded = config_manager->LoadConfigFromString(config_yaml_string);
+  } else if (!config_path.empty()) {
+    // Fall back to file path if no YAML string provided
     config_loaded = config_manager->LoadConfig(config_path);
   } else {
-    // Try loading from environment variable
+    // Try loading from environment variable as last resort
     config_loaded = config_manager->LoadConfigFromEnvironment();
   }
 

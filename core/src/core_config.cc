@@ -52,6 +52,40 @@ bool Config::LoadFromFile(const std::string &config_file_path) {
   }
 }
 
+bool Config::LoadFromString(const std::string &yaml_string) {
+  try {
+    if (yaml_string.empty()) {
+      HELOG(kError, "Config error: Empty YAML string provided");
+      return false;
+    }
+
+    // Load and parse YAML from string
+    YAML::Node root = YAML::Load(yaml_string);
+
+    // Parse configuration using base class method
+    if (!ParseYamlNode(root)) {
+      HELOG(kError, "Config error: Failed to parse YAML configuration from string");
+      return false;
+    }
+
+    // Validate configuration
+    if (!Validate()) {
+      HELOG(kError, "Config error: Configuration validation failed");
+      return false;
+    }
+
+    HILOG(kInfo, "Configuration loaded successfully from YAML string");
+    return true;
+
+  } catch (const YAML::Exception &e) {
+    HELOG(kError, "YAML parsing error: {}", e.what());
+    return false;
+  } catch (const std::exception &e) {
+    HELOG(kError, "Config loading error: {}", e.what());
+    return false;
+  }
+}
+
 bool Config::LoadFromEnvironment() {
   std::string env_path = hshm::SystemInfo::Getenv(config_env_var_);
   if (env_path.empty()) {
@@ -649,8 +683,18 @@ bool ConfigManager::LoadConfig(const std::string &config_file_path) {
     HELOG(kError, "ConfigManager error: Not initialized");
     return false;
   }
-  
+
   config_loaded_ = config_->LoadFromFile(config_file_path);
+  return config_loaded_;
+}
+
+bool ConfigManager::LoadConfigFromString(const std::string &yaml_string) {
+  if (!initialized_) {
+    HELOG(kError, "ConfigManager error: Not initialized");
+    return false;
+  }
+
+  config_loaded_ = config_->LoadFromString(yaml_string);
   return config_loaded_;
 }
 
@@ -659,7 +703,7 @@ bool ConfigManager::LoadConfigFromEnvironment() {
     HELOG(kError, "ConfigManager error: Not initialized");
     return false;
   }
-  
+
   config_loaded_ = config_->LoadFromEnvironment();
   return config_loaded_;
 }

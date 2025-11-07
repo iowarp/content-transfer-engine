@@ -165,7 +165,14 @@ class Config {
    * @return true if successful, false otherwise
    */
   bool LoadFromFile(const std::string &config_file_path);
-  
+
+  /**
+   * Load configuration from YAML string
+   * @param yaml_string YAML configuration content as string
+   * @return true if successful, false otherwise
+   */
+  bool LoadFromString(const std::string &yaml_string);
+
   /**
    * Load configuration from environment variables
    * Falls back to config file specified in environment variable
@@ -326,7 +333,14 @@ class ConfigManager {
    * @return true if successful, false otherwise
    */
   bool LoadConfig(const std::string &config_file_path);
-  
+
+  /**
+   * Load configuration from YAML string
+   * @param yaml_string YAML configuration content as string
+   * @return true if successful, false otherwise
+   */
+  bool LoadConfigFromString(const std::string &yaml_string);
+
   /**
    * Load configuration from environment
    * @return true if successful, false otherwise

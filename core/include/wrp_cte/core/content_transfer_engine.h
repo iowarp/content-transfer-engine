@@ -14,6 +14,7 @@
 #define WRP_CTE_CORE_CONTENT_TRANSFER_ENGINE_H_
 
 #include "hermes_shm/util/singleton.h"
+#include <chimaera/chimaera.h>
 
 namespace wrp_cte::core {
 
@@ -38,9 +39,12 @@ public:
 
   /**
    * Initialize client components
+   * @param config_path Optional path to configuration file
+   * @param pool_query Pool query type for CTE container creation
    * @return true if initialization successful, false otherwise
    */
-  bool ClientInit();
+  bool ClientInit(const std::string &config_path = "",
+                  const chi::PoolQuery &pool_query = chi::PoolQuery::Dynamic());
 
   /**
    * Check if CTE is initialized

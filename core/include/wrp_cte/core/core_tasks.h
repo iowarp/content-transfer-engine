@@ -28,8 +28,9 @@ using Timestamp = std::chrono::time_point<std::chrono::steady_clock>;
  */
 struct CreateParams {
   // CTE-specific parameters
-  hipc::string config_file_path_; // YAML config file path
-  chi::u32 worker_count_;         // Number of worker threads
+  hipc::string config_file_path_;    // YAML config file path
+  hipc::string config_yaml_string_;  // YAML config content (if provided directly)
+  chi::u32 worker_count_;            // Number of worker threads
 
   // Required: chimod library name for module manager
   static constexpr const char *chimod_lib_name = "wrp_cte_core";
@@ -42,12 +43,14 @@ struct CreateParams {
                const std::string &config_file_path = "",
                chi::u32 worker_count = 4)
       : config_file_path_(alloc, config_file_path),
+        config_yaml_string_(alloc),
         worker_count_(worker_count) {}
 
   // Copy constructor with allocator (required for task creation)
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                const CreateParams &other)
       : config_file_path_(alloc, other.config_file_path_.str()),
+        config_yaml_string_(alloc, other.config_yaml_string_.str()),
         worker_count_(other.worker_count_) {}
 
   // Constructor with allocator, pool_id, and CreateParams (required for admin
@@ -55,6 +58,7 @@ struct CreateParams {
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                const chi::PoolId &pool_id, const CreateParams &other)
       : config_file_path_(alloc, other.config_file_path_.str()),
+        config_yaml_string_(alloc, other.config_yaml_string_.str()),
         worker_count_(other.worker_count_) {
     // pool_id is used by the admin task framework, but we don't need to store
     // it
@@ -63,7 +67,7 @@ struct CreateParams {
 
   // Serialization support for cereal
   template <class Archive> void serialize(Archive &ar) {
-    ar(config_file_path_, worker_count_);
+    ar(config_file_path_, config_yaml_string_, worker_count_);
   }
 };
 

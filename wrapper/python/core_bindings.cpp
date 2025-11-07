@@ -86,5 +86,6 @@ NB_MODULE(wrp_cte_core_ext, m) {
 
   // CTE-specific initialization
   m.def("initialize_cte", &wrp_cte::core::WRP_CTE_CLIENT_INIT,
-        "config_path"_a = "", "Initialize the CTE subsystem");
+        "config_path"_a = "", "pool_query"_a = chi::PoolQuery::Dynamic(),
+        "Initialize the CTE subsystem");
 }

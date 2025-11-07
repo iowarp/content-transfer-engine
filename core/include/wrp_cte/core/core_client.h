@@ -548,9 +548,11 @@ HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::Config, g_cte_config);
 /**
  * Initialize CTE client and configuration subsystem
  * @param config_path Optional path to configuration file
+ * @param pool_query Pool query type for CTE container creation (default: Dynamic)
  * @return true if initialization succeeded, false otherwise
  */
-bool WRP_CTE_CLIENT_INIT(const std::string &config_path = "");
+bool WRP_CTE_CLIENT_INIT(const std::string &config_path = "",
+                         const chi::PoolQuery &pool_query = chi::PoolQuery::Dynamic());
 
 /**
  * Tag wrapper class - provides convenient API for tag operations
