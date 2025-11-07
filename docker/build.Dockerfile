@@ -24,3 +24,10 @@ RUN mkdir -p build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=/cte && \
     sudo make install && \
     rm -rf /workspace
+
+# Add iowarp-cte to Spack configuration
+RUN echo "  iowarp-cte:" >> ~/.spack/packages.yaml && \
+    echo "    externals:" >> ~/.spack/packages.yaml && \
+    echo "    - spec: iowarp-cte@main" >> ~/.spack/packages.yaml && \
+    echo "      prefix: /usr/local" >> ~/.spack/packages.yaml && \
+    echo "    buildable: false" >> ~/.spack/packages.yaml

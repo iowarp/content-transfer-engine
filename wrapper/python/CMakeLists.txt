@@ -31,21 +31,27 @@ install(
 )
 
 # Generate stub file for type hints
-nanobind_add_stub(
-    wrp_cte_core_ext_stub
-    MODULE wrp_cte_core_ext
-    OUTPUT core_stub.pyi
-    PYTHON_PATH $<TARGET_FILE_DIR:wrp_cte_core_ext>
-    DEPENDS wrp_cte_core_ext
-)
+# Note: Stub generation is disabled because the module requires runtime initialization
+# (Chimaera runtime, singletons, etc.) before it can be imported. The nanobind stub
+# generator imports the module, which fails with std::bad_cast when singletons aren't
+# initialized. Users should rely on the inline documentation and Python type checkers
+# that can work without stubs.
+# nanobind_add_stub(
+#     wrp_cte_core_ext_stub
+#     MODULE wrp_cte_core_ext
+#     OUTPUT core_stub.pyi
+#     PYTHON_PATH $<TARGET_FILE_DIR:wrp_cte_core_ext>
+#     DEPENDS wrp_cte_core_ext
+# )
 
 # Install the stub file alongside the module (renamed to match module)
-install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/core_stub.pyi
-    DESTINATION lib
-    RENAME wrp_cte_core_ext.pyi
-    OPTIONAL
-)
+# Disabled along with stub generation above
+# install(
+#     FILES ${CMAKE_CURRENT_BINARY_DIR}/core_stub.pyi
+#     DESTINATION lib
+#     RENAME wrp_cte_core_ext.pyi
+#     OPTIONAL
+# )
 
 # Add Python bindings test
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)

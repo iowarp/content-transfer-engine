@@ -51,7 +51,6 @@
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_INSTALL_PREFIX": "/home/llogan/.ppi-jarvis-mods/packages/content-transfer-engine",
                 "CTE_ENABLE_CUDA": "OFF",
                 "CTE_ENABLE_ROCM": "OFF",
                 "CTE_ENABLE_CMAKE_DOTENV": "ON"

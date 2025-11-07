@@ -32,11 +32,6 @@ storage:
 dpe:
   dpe_type: "max_bw"  # Options: "random", "round_robin", "max_bw"
 
-# Optional: Logging configuration
-logging:
-  level: "info"
-  file_path: "/var/log/cte/cte.log"
-
 # Note: This configuration is suitable for Docker single-node deployment
 # For multi-node or production deployments, adjust:
 # - neighborhood: increase for distributed buffering
