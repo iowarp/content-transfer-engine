@@ -17,7 +17,7 @@ RUN sudo chown -R $(whoami):$(whoami) /workspace && \
     cmake --build build -j$(nproc) && \
     sudo cmake --install build --prefix /usr/local && \
     sudo cmake --install build --prefix /iowarp-cte && \
-    rm -rf /workspace
+    sudo rm -rf /workspace
 
 
 # Add iowarp-cte to Spack configuration
