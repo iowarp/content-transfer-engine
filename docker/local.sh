@@ -8,3 +8,5 @@ PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 
 # Build the Docker image
 docker build --no-cache -t iowarp/context-transfer-engine-build:latest -f "${SCRIPT_DIR}/local.Dockerfile" "${PROJECT_ROOT}"
+
+docker build --no-cache -t iowarp/context-transfer-engine:latest -f "${SCRIPT_DIR}/deploy.Dockerfile" "${PROJECT_ROOT}"

@@ -515,7 +515,9 @@ void Runtime::GetOrCreateTag(
 }
 
 void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
+  auto t_start = std::chrono::steady_clock::now();
   HILOG(kDebug, "PUTBLOB BEGINNING");
+
   // Dynamic scheduling phase - determine routing
   if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
     task->pool_query_ =
@@ -524,6 +526,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
   }
 
   try {
+    auto t_extract = std::chrono::steady_clock::now();
     // Extract input parameters
     TagId tag_id = task->tag_id_;
     std::string blob_name = task->blob_name_.str();
@@ -535,6 +538,10 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
     // Suppress unused variable warning for flags - may be used in future
     (void)flags;
+
+    auto t_validate_start = std::chrono::steady_clock::now();
+    double extract_ms = std::chrono::duration<double, std::milli>(t_validate_start - t_extract).count();
+    HILOG(kDebug, "PutBlob [{}]: Parameter extraction took {:.3f} ms", blob_name, extract_ms);
 
     // Validate input parameters
     if (size == 0) {
@@ -553,9 +560,18 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       return;
     }
 
+    auto t_check_exists = std::chrono::steady_clock::now();
+    double validate_ms = std::chrono::duration<double, std::milli>(t_check_exists - t_validate_start).count();
+    HILOG(kDebug, "PutBlob [{}]: Validation took {:.3f} ms", blob_name,
+          validate_ms); 
+
     // Step 1: Check if blob exists
     BlobInfo *blob_info_ptr = CheckBlobExists(blob_name, tag_id);
     bool blob_found = (blob_info_ptr != nullptr);
+
+    auto t_create_blob = std::chrono::steady_clock::now();
+    double check_exists_ms = std::chrono::duration<double, std::milli>(t_create_blob - t_check_exists).count();
+    HILOG(kDebug, "PutBlob [{}]: CheckBlobExists took {:.3f} ms (found={})", blob_name, check_exists_ms, blob_found);
 
     // Step 2: Create blob if it doesn't exist
     if (!blob_found) {
@@ -564,16 +580,31 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
         task->return_code_.store(5); // Error: Failed to create blob
         return;
       }
+      auto t_after_create = std::chrono::steady_clock::now();
+      double create_blob_ms = std::chrono::duration<double, std::milli>(t_after_create - t_create_blob).count();
+      HILOG(kDebug, "PutBlob [{}]: CreateNewBlob took {:.3f} ms", blob_name, create_blob_ms);
     }
 
+    auto t_get_old_size = std::chrono::steady_clock::now();
     // Step 2.5: Track blob size before modification for tag total_size_
     // accounting (no lock needed - blob_info_ptr is already obtained)
     chi::u64 old_blob_size = blob_info_ptr->GetTotalSize();
+
+    auto t_allocate = std::chrono::steady_clock::now();
+    double get_old_size_ms = std::chrono::duration<double, std::milli>(t_allocate - t_get_old_size).count();
+    HILOG(kDebug, "PutBlob [{}]: GetTotalSize took {:.3f} ms (old_size={})",
+          blob_name, get_old_size_ms, old_blob_size);
 
     // Step 3: Allocate additional space if needed for blob extension
     // (no lock held during expensive bdev allocation)
     chi::u32 allocation_result =
         AllocateNewData(*blob_info_ptr, offset, size, blob_score);
+
+    auto t_write = std::chrono::steady_clock::now();
+    double allocate_ms = std::chrono::duration<double, std::milli>(t_write - t_allocate).count();
+    HILOG(kDebug, "PutBlob [{}]: AllocateNewData took {:.3f} ms (result={})",
+          blob_name, allocate_ms, allocation_result);
+    
 
     if (allocation_result != 0) {
       HILOG(kError, "Allocation failure: {}", allocation_result);
@@ -588,6 +619,10 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     chi::u32 write_result =
         ModifyExistingData(blob_info_ptr->blocks_, blob_data, size, offset);
 
+    auto t_metadata = std::chrono::steady_clock::now();
+    double write_ms = std::chrono::duration<double, std::milli>(t_metadata - t_write).count();
+    HILOG(kDebug, "PutBlob [{}]: ModifyExistingData took {:.3f} ms (result={})", blob_name, write_ms, write_result);
+
     if (write_result != 0) {
       task->return_code_.store(
           20 + write_result); // Error: Write failure (20-29 range)
@@ -598,6 +633,10 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     chi::u64 new_blob_size = blob_info_ptr->GetTotalSize();
     chi::i64 size_change = static_cast<chi::i64>(new_blob_size) -
                            static_cast<chi::i64>(old_blob_size);
+
+    auto t_tag_update = std::chrono::steady_clock::now();
+    double size_calc_ms = std::chrono::duration<double, std::milli>(t_tag_update - t_metadata).count();
+    HILOG(kDebug, "PutBlob [{}]: Size calculation took {:.3f} ms (new_size={}, change={})", blob_name, size_calc_ms, new_blob_size, size_change);
 
     // Step 6: Update metadata (read lock only for map access - not modifying
     // map structure)
@@ -635,13 +674,26 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
       }
     } // Release read lock
 
+    auto t_telemetry = std::chrono::steady_clock::now();
+    double tag_update_ms = std::chrono::duration<double, std::milli>(t_telemetry - t_tag_update).count();
+    HILOG(kDebug, "PutBlob [{}]: Tag metadata update took {:.3f} ms", blob_name, tag_update_ms);
+
     // Log telemetry and success messages
     LogTelemetry(CteOp::kPutBlob, offset, size, tag_id, now,
                  blob_info_ptr->last_read_);
 
+    auto t_end = std::chrono::steady_clock::now();
+    double telemetry_ms = std::chrono::duration<double, std::milli>(t_end - t_telemetry).count();
+    double total_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    HILOG(kDebug, "PutBlob [{}]: Telemetry logging took {:.3f} ms", blob_name, telemetry_ms);
+    HILOG(kDebug, "PutBlob [{}]: TOTAL TIME: {:.3f} ms (size={} bytes)", blob_name, total_ms, size);
+
     task->return_code_.store(0);
 
   } catch (const std::exception &e) {
+    auto t_end = std::chrono::steady_clock::now();
+    double total_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    HILOG(kError, "PutBlob failed with exception after {:.3f} ms: {}", total_ms, e.what());
     task->return_code_.store(1); // Error: General exception
   }
 }
@@ -1417,17 +1469,6 @@ chi::u32 Runtime::ModifyExistingData(const std::vector<BlobBlock> &blocks,
       chimaera::bdev::Block bdev_block(
           block.target_offset_ + write_start_in_block, write_size, 0);
       hipc::Pointer data_ptr = data + data_buffer_offset;
-
-      // Log first few bytes of data being written for debugging
-      char* write_data = CHI_IPC->GetMainAllocator()->Convert<char>(data_ptr);
-      std::string data_preview = "data=[";
-      for (size_t i = 0; i < std::min(write_size, static_cast<size_t>(16)); ++i) {
-        if (i > 0) data_preview += ",";
-        data_preview += std::to_string(static_cast<unsigned char>(write_data[i]));
-      }
-      if (write_size > 16) data_preview += ",...";
-      data_preview += "]";
-      HILOG(kDebug, "ModifyExistingData: block[{}] - {}", block_idx, data_preview);
 
       chimaera::bdev::Client cte_clientcopy = block.bdev_client_;
       auto write_task = cte_clientcopy.AsyncWrite(
