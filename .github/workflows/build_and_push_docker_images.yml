@@ -89,7 +89,29 @@ jobs:
           file: ./docker/deploy.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: iowarp/context-transfer-engine-build:latest
+          tags: iowarp/context-transfer-engine:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Build and push redis_bench.Dockerfile
+        uses: docker/build-push-action@v4
+        with:
+          context: ./
+          file: ./docker/redis_bench.Dockerfile
+          builder: ${{ steps.buildx.outputs.name }}
+          push: true
+          tags: iowarp/cte-redis-bench:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Build and push wrp_cte_bench.Dockerfile
+        uses: docker/build-push-action@v4
+        with:
+          context: ./
+          file: ./docker/wrp_cte_bench.Dockerfile
+          builder: ${{ steps.buildx.outputs.name }}
+          push: true
+          tags: iowarp/cte-wrp-bench:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 

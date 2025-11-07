@@ -1,4 +1,17 @@
-Use dockerfile expert agent. 
+@CLAUDE.md Use dockerfile expert agent. 
 
-Under docker, let's build containers and example compose files for the wrp_cte_bench and redis benchmarks.
+Under docker, build two dockerfiles: redis_bench.Dockerfile and wrp_cte_bench.Dockerfile.
 
+Add both to the github actions for this container.
+
+## redis_bench.Dockerfile
+
+FROM iowarp/context-transfer-engine:latest
+
+Launches the benchmark similar to benchmark/redis_bench.sh
+
+## wrp_cte_bench.Dockerfile
+
+FROM iowarp/context-transfer-engine:latest
+
+Launches the benchmark similar to benchmark/wrp_cte_bench.sh. Should take as input environment variables for each of the script parameters.
