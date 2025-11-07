@@ -1,0 +1,126 @@
+# Docker Compose configuration for Content Transfer Engine (CTE)
+# Single-node deployment for development and testing
+
+version: '3.8'
+
+services:
+  cte:
+    image: iowarp/content-transfer-engine:latest
+    container_name: cte-node
+    hostname: cte-node
+
+    # Build configuration (uncomment to build locally)
+    # build:
+    #   context: .
+    #   dockerfile: deploy.Dockerfile
+
+    # Environment variables
+    environment:
+      # Configuration file path
+      - WRP_CTE_CONF=/etc/cte/cte_config.yaml
+
+      # Pool query type: "local" or "dynamic"
+      # local: single-node configuration
+      # dynamic: distributed multi-node configuration
+      - CTE_POOL_QUERY=local
+
+      # Optional: Set log level
+      # - CTE_LOG_LEVEL=INFO
+
+    # Mount configuration file
+    volumes:
+      # Configuration file (required)
+      - ./config/cte_config.yaml:/etc/cte/cte_config.yaml:ro
+
+      # Storage directory for CTE data
+      - cte_storage:/mnt/cte_storage
+
+      # Optional: Mount for logs
+      - cte_logs:/var/log/cte
+
+    # Network configuration
+    networks:
+      - cte_network
+
+    # Port mappings (adjust based on your configuration)
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+
+    # Resource limits (adjust based on your requirements)
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "test", "-f", "/usr/local/bin/launch_cte"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Capabilities (may need adjustment based on storage backend)
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+
+    # Allow access to devices (needed for certain storage backends)
+    # Uncomment if using direct device access
+    # devices:
+    #   - /dev/nvme0n1:/dev/nvme0n1
+
+    # Use host IPC for better performance (optional)
+    # ipc: host
+
+# Named volumes for persistent storage
+volumes:
+  cte_storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${CTE_STORAGE_PATH:-./storage}
+
+  cte_logs:
+    driver: local
+
+# Network configuration
+networks:
+  cte_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# Multi-node deployment example (uncomment to use)
+# Requires proper networking configuration and shared storage
+#
+# services:
+#   cte-node-1:
+#     extends:
+#       service: cte
+#     container_name: cte-node-1
+#     hostname: cte-node-1
+#     environment:
+#       - WRP_CTE_CONF=/etc/cte/cte_config.yaml
+#       - CTE_POOL_QUERY=dynamic
+#       - CTE_NODE_ID=1
+#
+#   cte-node-2:
+#     extends:
+#       service: cte
+#     container_name: cte-node-2
+#     hostname: cte-node-2
+#     environment:
+#       - WRP_CTE_CONF=/etc/cte/cte_config.yaml
+#       - CTE_POOL_QUERY=dynamic
+#       - CTE_NODE_ID=2

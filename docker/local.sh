@@ -7,4 +7,4 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "${SCRIPT_DIR}/.." && pwd )"
 
 # Build the Docker image
-docker build --no-cache -t iowarp/content-transfer-engine:latest -f "${SCRIPT_DIR}/Dockerfile.build" "${PROJECT_ROOT}"
+docker build --no-cache -t iowarp/content-transfer-engine-build:latest -f "${SCRIPT_DIR}/local.Dockerfile" "${PROJECT_ROOT}"

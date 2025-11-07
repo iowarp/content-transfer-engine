@@ -1,6 +1,6 @@
 {
     "name": "CTE",
-    "image": "iowarp/iowarp-runtime:latest",
+    "image": "iowarp/iowarp-runtime-build:latest",
     "workspaceFolder": "/workspace",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
     "mounts": [

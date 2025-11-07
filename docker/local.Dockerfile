@@ -1,4 +1,4 @@
-FROM iowarp/iowarp-runtime:latest
+FROM iowarp/iowarp-runtime-build:latest
 
 COPY . /workspace
 

@@ -1,0 +1,24 @@
+# Dockerfile for building the Content Transfer Engine (CTE)
+# Inherits from iowarp/iowarp-runtime-build:latest which contains all build dependencies
+
+FROM iowarp/iowarp-runtime-build:latest
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy the entire CTE source tree
+COPY . /workspace/
+
+# Configure and build CTE using the release preset
+RUN mkdir -p build && \
+    cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DCTE_ENABLE_CUDA=OFF \
+        -DCTE_ENABLE_ROCM=OFF \
+        -DCTE_ENABLE_CMAKE_DOTENV=OFF \
+        -DWRP_CTE_ENABLE_PYTHON=OFF && \
+    make -j$(nproc) && \
+    sudo make install && \
+    rm -rf /workspace
