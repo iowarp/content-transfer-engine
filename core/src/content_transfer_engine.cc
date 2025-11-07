@@ -50,8 +50,7 @@ bool ContentTransferEngine::ClientInit(const std::string &config_path,
   // If config_path is empty, check environment variables
   if (effective_config_path.empty()) {
     // Prioritize WRP_RUNTIME_CONF
-    const char *wrp_conf = std::getenv("WRP_CTE_CONF");
-    effective_config_path = wrp_conf;
+    effective_config_path = hshm::SystemInfo::Getenv("WRP_CTE_CONF");
   }
 
   // Create CreateParams with config file contents if path is available
