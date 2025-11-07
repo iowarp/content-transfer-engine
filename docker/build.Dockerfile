@@ -9,7 +9,7 @@ WORKDIR /workspace
 # Copy the entire CTE source tree
 COPY . /workspace/
 
-# Configure and build CTE using the release preset
+# Configure and build CTE, installing to both /usr/local and /cte
 RUN mkdir -p build && \
     cd build && \
     cmake .. \
@@ -20,5 +20,7 @@ RUN mkdir -p build && \
         -DCTE_ENABLE_CMAKE_DOTENV=OFF \
         -DWRP_CTE_ENABLE_PYTHON=OFF && \
     make -j$(nproc) && \
+    sudo make install && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=/cte && \
     sudo make install && \
     rm -rf /workspace
