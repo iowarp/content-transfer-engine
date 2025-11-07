@@ -1,7 +1,7 @@
 services:
   # Node 1 - Primary node that starts runtime, creates CTE, and runs benchmarks
   cte-bench-node1:
-    image: iowarp/content-transfer-engine:latest
+    image: iowarp/context-transfer-engine-build:latest
     container_name: cte-bench-node1
     hostname: cte-bench-node1
     extra_hosts:
@@ -60,7 +60,7 @@ services:
 
   # Node 2 - Secondary node
   cte-bench-node2:
-    image: iowarp/content-transfer-engine:latest
+    image: iowarp/context-transfer-engine-build:latest
     container_name: cte-bench-node2
     hostname: cte-bench-node2
     extra_hosts:
@@ -107,7 +107,7 @@ services:
 
   # Node 3 - Secondary node
   cte-bench-node3:
-    image: iowarp/content-transfer-engine:latest
+    image: iowarp/context-transfer-engine-build:latest
     container_name: cte-bench-node3
     hostname: cte-bench-node3
     extra_hosts:
@@ -154,7 +154,7 @@ services:
 
   # Node 4 - Secondary node
   cte-bench-node4:
-    image: iowarp/content-transfer-engine:latest
+    image: iowarp/context-transfer-engine-build:latest
     container_name: cte-bench-node4
     hostname: cte-bench-node4
     extra_hosts:

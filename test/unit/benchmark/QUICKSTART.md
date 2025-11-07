@@ -5,7 +5,7 @@
 ### 1. Prerequisites
 Ensure you have:
 - Docker and Docker Compose installed
-- CTE Docker image built as `iowarp/content-transfer-engine:latest`
+- CTE Docker image built as `iowarp/context-transfer-engine-build:latest`
 
 ### 2. Run Tests
 ```bash

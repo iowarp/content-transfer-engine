@@ -1,23 +1,8 @@
 name: Build and Push Docker Images
 on:
-  push:
-    branches:
-      - master
-      - main
-      - dev
   workflow_dispatch:
-    branches:
-        - master
-        - main
-        - dev
-    inputs:
-#      build_docker_images:
-#        description: 'If ''true'', force a build of the docker images and push them to dockerhub'
-#        required: false
-#        default: false
 jobs:
   build-docker-images:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-20.04
     steps:
       - name: Cache Hermes deps Docker
@@ -63,7 +48,6 @@ jobs:
 
   # Build and push Content Transfer Engine Docker images
   build-cte-images:
-    if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -94,7 +78,7 @@ jobs:
           file: ./docker/build.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: iowarp/content-transfer-engine-build:latest
+          tags: iowarp/context-transfer-engine-build:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
@@ -105,7 +89,7 @@ jobs:
           file: ./docker/deploy.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: iowarp/content-transfer-engine:latest
+          tags: iowarp/context-transfer-engine-build:latest
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 

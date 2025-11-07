@@ -23,7 +23,7 @@ test/unit/benchmark/
 ## Prerequisites
 
 1. **Docker and Docker Compose**: Ensure Docker is installed and running
-2. **CTE Docker Image**: Build the CTE Docker image named `iowarp/content-transfer-engine:latest`
+2. **CTE Docker Image**: Build the CTE Docker image named `iowarp/context-transfer-engine-build:latest`
 3. **Built CTE**: CTE should be built and installed in the Docker image with `wrp_cte_bench` executable
 
 ## Benchmark Test Cases

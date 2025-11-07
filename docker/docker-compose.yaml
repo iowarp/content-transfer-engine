@@ -5,7 +5,7 @@ version: '3.8'
 
 services:
   cte:
-    image: iowarp/content-transfer-engine:latest
+    image: iowarp/context-transfer-engine-build:latest
     container_name: cte-node
     hostname: cte-node
 

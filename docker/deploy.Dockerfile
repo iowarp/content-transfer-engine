@@ -4,7 +4,7 @@
 #==============================================================================
 # Use the runtime stage from build.Dockerfile
 #==============================================================================
-FROM iowarp/content-transfer-engine-build:latest AS deploy
+FROM iowarp/context-transfer-engine-build:latest AS deploy
 
 # Create necessary directories
 RUN mkdir -p /var/log/cte
