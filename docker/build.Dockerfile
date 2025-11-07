@@ -10,7 +10,8 @@ WORKDIR /workspace
 COPY . /workspace/
 
 # Configure and build CTE, installing to both /usr/local and /cte
-RUN mkdir -p build && \
+RUN sudo chown -R $(whoami):$(whoami) /workspace && \
+    mkdir -p build && \
     cd build && \
     cmake .. \
         -DCMAKE_BUILD_TYPE=Release \
