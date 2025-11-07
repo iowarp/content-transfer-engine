@@ -9,9 +9,10 @@ WORKDIR /workspace
 # Copy the entire CTE source tree
 COPY . /workspace/
 
-# Configure with release preset and build
+# Initialize git submodules and build
 # Install to both /usr/local and /iowarp-cte for flexibility
 RUN sudo chown -R $(whoami):$(whoami) /workspace && \
+    git submodule update --init --recursive && \
     mkdir -p build && \
     cmake --preset release && \
     cmake --build build -j$(nproc) && \
