@@ -30,7 +30,7 @@ jobs:
           context: ./
           file: ./docker/build.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: iowarp/context-transfer-engine-build:latest
 
@@ -40,7 +40,7 @@ jobs:
           context: ./
           file: ./docker/deploy.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: iowarp/context-transfer-engine:latest
 
@@ -50,7 +50,7 @@ jobs:
           context: ./
           file: ./docker/redis_bench.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: iowarp/iowarp-redis-bench:latest
 
@@ -60,6 +60,6 @@ jobs:
           context: ./
           file: ./docker/wrp_cte_bench.Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: iowarp/iowarp-cte-bench:latest
