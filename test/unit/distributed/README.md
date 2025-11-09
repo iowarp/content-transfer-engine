@@ -147,7 +147,6 @@ docker compose up -d
    - Installs CTE binaries to shared volume
    - Creates storage directory `/mnt/hdd1`
    - Waits for all nodes to be ready
-   - Launches CTE using `util/launch_cte.sh` with the distributed config
    - Runs unit tests (`test_core_functionality`)
 
 2. **Nodes 2-4 (Secondary)**:
@@ -293,6 +292,6 @@ Edit `cte_config.yaml` and change `media_type` (e.g., "SSD", "NVMe") and adjust 
 
 - The configuration uses the default IOWarp runtime configuration (no custom chimaera config needed)
 - All nodes share the same CTE configuration file mounted read-only
-- Node 1 is responsible for creating the CTE instance using `launch_cte.sh`
+- Node 1 is responsible for running the tests
 - The test execution is sequential - Node 1 runs tests after ensuring all nodes are ready
 - Containers remain running after tests complete to allow inspection (`tail -f /dev/null`)

@@ -21,7 +21,7 @@ struct PerformanceConfig {
 
   PerformanceConfig()
       : target_stat_interval_ms_(5000),
-        blob_cache_size_mb_(256),
+        blob_cache_size_mb_(16384),  // 16GB default cache
         max_concurrent_operations_(64),
         score_threshold_(0.7f),
         score_difference_threshold_(0.05f) {}
@@ -70,7 +70,7 @@ struct StorageConfig {
 struct DpeConfig {
   std::string dpe_type_;  // DPE algorithm type ("random", "round_robin", "max_bw")
   
-  DpeConfig() : dpe_type_("random") {}
+  DpeConfig() : dpe_type_("max_bw") {}
   explicit DpeConfig(const std::string& dpe_type) : dpe_type_(dpe_type) {}
 };
 

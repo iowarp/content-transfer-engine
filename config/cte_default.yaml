@@ -1,24 +1,50 @@
-# Content Transfer Engine (CTE) Configuration File
-# RAM-only storage configuration for benchmark testing
+# CTE Core Default Configuration
+#
+# This file contains the default configuration values for the Content Transfer Engine (CTE) Core ChiMod.
+# These defaults are used when no explicit configuration is provided.
+#
+# For complete documentation of all parameters, see: docs/cte/config.md
+
+# Performance tuning parameters
+performance:
+  # Interval in milliseconds for updating target performance statistics
+  target_stat_interval_ms: 5000
+
+  # Size of blob operation cache in megabytes (16GB default)
+  blob_cache_size_mb: 16384
+
+  # Maximum number of concurrent I/O operations
+  max_concurrent_operations: 64
+
+  # Threshold for triggering blob reorganization based on score (0.0-1.0)
+  score_threshold: 0.7
+
+  # Minimum score difference required to trigger reorganization (0.0-1.0)
+  score_difference_threshold: 0.05
 
 # Target management settings
 targets:
-  neighborhood: 1  # Single-node configuration
+  # Number of storage targets (nodes) CTE can buffer data to
+  neighborhood: 4
+
+  # Default timeout for target I/O operations in milliseconds
   default_target_timeout_ms: 30000
-  poll_period_ms: 5000  # Period to rescan targets for statistics (capacity, bandwidth, etc.)
 
-# Storage block device configuration
-# RAM-only configuration for benchmark testing
+  # Period for rescanning targets to update statistics in milliseconds
+  poll_period_ms: 5000
+
+# Storage device configuration
+# Note: At least one storage device must be configured for CTE to function
+# The example below shows a minimal configuration that must be customized
 storage:
-  # Primary RAM storage
-  - path: "ram::cte_ram_tier1"
-    bdev_type: "ram"
-    capacity_limit: "16GB"
-    score: 0.0           # Manual score override (0.0-1.0) - highest tier
+  devices:
+    - path: "/tmp/cte_storage"
+      bdev_type: "file"
+      capacity: "10GB"
+      score: -1.0  # -1.0 = automatic scoring based on performance
 
-# Data Placement Engine configuration
+# Data Placement Engine (DPE) configuration
 dpe:
-  dpe_type: "max_bw"  # Options: "random", "round_robin", "max_bw"
-
-# Note: This configuration uses only RAM-based storage for maximum performance
-# benchmarking. All data is stored in memory with no persistent storage.
+  # Algorithm used for data placement
+  # Options: "random", "round_robin", "max_bw", "score_based"
+  dpe_type: "max_bw"

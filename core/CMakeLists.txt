@@ -18,12 +18,3 @@ add_chimod_client(
     src/content_transfer_engine.cc
     src/tag.cc
 )
-
-# Add utility executable for launching CTE
-add_executable(launch_cte util/launch_cte.cc)
-target_link_libraries(launch_cte PRIVATE wrp_cte::core_client)
-
-# Install the utility
-install(TARGETS launch_cte
-  RUNTIME DESTINATION bin
-)

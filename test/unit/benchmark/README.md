@@ -119,10 +119,8 @@ Each node has:
 **Node 1:**
 1. Creates storage directories
 2. Starts Chimaera runtime in background
-3. Waits 5 seconds (runtime initialization)
-4. Waits additional 10 seconds (for other nodes)
-5. Launches CTE with `/usr/local/bin/launch_cte`
-6. Keeps running for benchmark execution
+3. Waits 15 seconds (runtime initialization and for other nodes)
+4. Keeps running for benchmark execution
 
 **Nodes 2-4:**
 1. Create storage directories
