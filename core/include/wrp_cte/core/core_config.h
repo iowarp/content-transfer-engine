@@ -14,14 +14,12 @@ namespace wrp_cte::core {
  */
 struct PerformanceConfig {
   chi::u32 target_stat_interval_ms_;    // Interval for updating target stats
-  chi::u32 blob_cache_size_mb_;         // Cache size for blob operations
   chi::u32 max_concurrent_operations_;  // Max concurrent I/O operations
   float score_threshold_;               // Threshold for blob reorganization
   float score_difference_threshold_;    // Minimum score difference for reorganization
 
   PerformanceConfig()
       : target_stat_interval_ms_(5000),
-        blob_cache_size_mb_(16384),  // 16GB default cache
         max_concurrent_operations_(64),
         score_threshold_(0.7f),
         score_difference_threshold_(0.05f) {}
@@ -101,20 +99,14 @@ class Config {
   DpeConfig dpe_;
 
   /**
-   * Environment variable configuration
-   */
-  std::string config_env_var_;
-
-  /**
    * Default constructor
    */
-  Config() : config_env_var_("WRP_CTE_CONF") {}
+  Config() = default;
 
   /**
    * Constructor with allocator (for compatibility)
    */
-  explicit Config(void *alloc)
-      : config_env_var_("WRP_CTE_CONF") {
+  explicit Config(void *alloc) {
     (void)alloc; // Suppress unused variable warning
   }
   
@@ -183,6 +175,11 @@ class Config {
   void EmitYaml(YAML::Emitter &emitter) const;
   
  private:
+  /**
+   * Environment variable name for configuration file path
+   */
+  std::string config_env_var_ = "WRP_RUNTIME_CONF";
+
   /**
    * Parse performance configuration from YAML
    * @param node YAML node containing performance config

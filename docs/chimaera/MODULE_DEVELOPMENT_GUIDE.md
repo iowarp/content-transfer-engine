@@ -4261,7 +4261,7 @@ compose:
 **1. Automatic During Runtime Init:**
 Pools are automatically created when runtime initializes if compose section is present in configuration:
 ```bash
-export CHI_SERVER_CONF=/path/to/config_with_compose.yaml
+export WRP_RUNTIME_CONF=/path/to/config_with_compose.yaml
 chimaera_start_runtime
 ```
 

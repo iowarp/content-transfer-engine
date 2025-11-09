@@ -19,7 +19,7 @@ export LD_LIBRARY_PATH="/path/to/your/project/build/bin:$LD_LIBRARY_PATH"
 export CHIMAERA_TEST_MODE=1
 
 # Optional: Specify custom configuration file
-export CHI_SERVER_CONF="/path/to/your/project/config/chimaera_default.yaml"
+export WRP_RUNTIME_CONF="/path/to/your/project/config/chimaera_default.yaml"
 ```
 
 **Module Discovery Process:**
@@ -325,7 +325,7 @@ install(TARGETS chimaera_your_module_tests
 # Set required environment variables
 export CHI_REPO_PATH="${PWD}/build/bin"
 export LD_LIBRARY_PATH="${PWD}/build/bin:${LD_LIBRARY_PATH}"
-export CHI_SERVER_CONF="${PWD}/config/chimaera_default.yaml"
+export WRP_RUNTIME_CONF="${PWD}/config/chimaera_default.yaml"
 export CHIMAERA_TEST_MODE=1
 
 # Build and run tests

@@ -3,6 +3,7 @@
 
 #include <chimaera/chimaera.h>
 #include <wrp_cte/core/autogen/core_methods.h>
+#include <wrp_cte/core/core_config.h>
 // Include admin tasks for GetOrCreatePoolTask
 #include <chimaera/admin/admin_tasks.h>
 // Include bdev tasks for BdevType enum
@@ -28,9 +29,8 @@ using Timestamp = std::chrono::time_point<std::chrono::steady_clock>;
  * Contains configuration parameters for CTE container creation
  */
 struct CreateParams {
-  // CTE-specific parameters
-  hipc::string config_file_path_;    // YAML config file path
-  hipc::string config_yaml_string_;  // YAML config content (if provided directly)
+  // CTE configuration object (not serialized, loaded from pool_config)
+  Config config_;
 
   // Required: chimod library name for module manager
   static constexpr const char *chimod_lib_name = "wrp_cte_core";
@@ -39,31 +39,32 @@ struct CreateParams {
   CreateParams() {}
 
   // Constructor with allocator and parameters
-  CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-               const std::string &config_file_path = "")
-      : config_file_path_(alloc, config_file_path),
-        config_yaml_string_(alloc) {}
+  CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
+      : config_() {
+    (void)alloc; // Suppress unused parameter warning
+  }
 
   // Copy constructor with allocator (required for task creation)
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                const CreateParams &other)
-      : config_file_path_(alloc, other.config_file_path_.str()),
-        config_yaml_string_(alloc, other.config_yaml_string_.str()) {}
+      : config_(other.config_) {
+    (void)alloc; // Suppress unused parameter warning
+  }
 
   // Constructor with allocator, pool_id, and CreateParams (required for admin
   // task creation)
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                const chi::PoolId &pool_id, const CreateParams &other)
-      : config_file_path_(alloc, other.config_file_path_.str()),
-        config_yaml_string_(alloc, other.config_yaml_string_.str()) {
-    // pool_id is used by the admin task framework, but we don't need to store
-    // it
+      : config_(other.config_) {
+    // pool_id is used by the admin task framework, but we don't need to store it
     (void)pool_id; // Suppress unused parameter warning
+    (void)alloc; // Suppress unused parameter warning
   }
 
   // Serialization support for cereal
   template <class Archive> void serialize(Archive &ar) {
-    ar(config_file_path_, config_yaml_string_);
+    // Config is not serialized - it's loaded from pool_config.config_ in LoadConfig
+    (void)ar;
   }
 
   /**
@@ -74,9 +75,9 @@ struct CreateParams {
   void LoadConfig(const chi::PoolConfig& pool_config) {
     // The pool_config.config_ contains the full CTE configuration YAML
     // in the format of config/cte_config.yaml (targets, storage, dpe sections).
-    // Store it directly - it will be parsed by Config::LoadFromString() in Runtime::Create()
+    // Parse it directly into the Config object
     if (!pool_config.config_.empty()) {
-      config_yaml_string_ = pool_config.config_;
+      config_.LoadFromString(pool_config.config_);
     }
   }
 };

@@ -76,11 +76,11 @@ check_prerequisites() {
     fi
     print_success "hostfile found"
 
-    if [ ! -f "cte_config.yaml" ]; then
-        print_error "cte_config.yaml not found"
+    if [ ! -f "wrp_config.yaml" ]; then
+        print_error "wrp_config.yaml not found"
         exit 1
     fi
-    print_success "cte_config.yaml found"
+    print_success "wrp_config.yaml found"
 }
 
 # Function to clean up previous runs

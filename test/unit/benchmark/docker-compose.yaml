@@ -39,7 +39,7 @@ services:
         mkdir -p /mnt/cte_storage &&
         echo 'Node 1: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
         export CHI_NODE_ID=0 &&
         echo 'Node 1: CHI_NODE_ID set to 0' &&
         chimaera_start_runtime &
@@ -96,7 +96,7 @@ services:
         mkdir -p /mnt/cte_storage &&
         echo 'Node 2: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
         export CHI_NODE_ID=1 &&
         echo 'Node 2: CHI_NODE_ID set to 1' &&
         echo '========================================' &&
@@ -143,7 +143,7 @@ services:
         mkdir -p /mnt/cte_storage &&
         echo 'Node 3: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
         export CHI_NODE_ID=2 &&
         echo 'Node 3: CHI_NODE_ID set to 2' &&
         echo '========================================' &&
@@ -190,7 +190,7 @@ services:
         mkdir -p /mnt/cte_storage &&
         echo 'Node 4: Starting IOWarp runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export CHI_SERVER_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
         export CHI_NODE_ID=3 &&
         echo 'Node 4: CHI_NODE_ID set to 3' &&
         echo '========================================' &&

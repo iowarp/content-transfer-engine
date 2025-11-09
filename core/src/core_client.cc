@@ -10,8 +10,10 @@ HSHM_DEFINE_GLOBAL_PTR_VAR_CC(wrp_cte::core::Client, g_cte_client);
 
 bool WRP_CTE_CLIENT_INIT(const std::string &config_path,
                          const chi::PoolQuery &pool_query) {
+  // config_path is no longer used - configuration now provided via chimaera_compose
+  (void)config_path; // Suppress unused parameter warning
   auto *cte_manager = CTE_MANAGER;
-  return cte_manager->ClientInit(config_path, pool_query);
+  return cte_manager->ClientInit(pool_query);
 }
 
 } // namespace wrp_cte::core

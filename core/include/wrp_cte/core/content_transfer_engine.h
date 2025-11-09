@@ -39,12 +39,11 @@ public:
 
   /**
    * Initialize client components
-   * @param config_path Optional path to configuration file
+   * Configuration is now provided via chimaera_compose using WRP_RUNTIME_CONF
    * @param pool_query Pool query type for CTE container creation
    * @return true if initialization successful, false otherwise
    */
-  bool ClientInit(const std::string &config_path = "",
-                  const chi::PoolQuery &pool_query = chi::PoolQuery::Dynamic());
+  bool ClientInit(const chi::PoolQuery &pool_query = chi::PoolQuery::Dynamic());
 
   /**
    * Check if CTE is initialized

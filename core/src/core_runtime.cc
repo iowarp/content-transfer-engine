@@ -95,27 +95,11 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   next_tag_id_minor_ = 1;
   telemetry_counter_ = 0;
 
-  // Initialize configuration with allocator
-  config_ = Config(main_allocator);
-
-  // Load configuration from file or string if provided
+  // Get configuration from params (loaded from pool_config.config_ via LoadConfig)
   auto params = task->GetParams(main_allocator);
-  std::string config_path = params.config_file_path_.str();
-  std::string config_yaml_string = params.config_yaml_string_.str();
+  config_ = params.config_;
 
-  bool config_loaded = false;
-  if (!config_yaml_string.empty()) {
-    // Prefer YAML string if provided (allows configuration without file I/O)
-    config_loaded = config_.LoadFromString(config_yaml_string);
-  } else if (!config_path.empty()) {
-    // Fall back to file path if no YAML string provided
-    config_loaded = config_.LoadFromFile(config_path);
-  } else {
-    // Try loading from environment variable as last resort
-    config_loaded = config_.LoadFromEnvironment();
-  }
-
-  // Configuration loaded (using defaults if loading failed)
+  // Configuration is now loaded from compose pool_config via CreateParams::LoadConfig()
 
   // Store storage configuration in runtime
   storage_devices_ = config_.storage_.devices_;

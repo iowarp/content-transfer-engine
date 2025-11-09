@@ -49,7 +49,7 @@ services:
         cmake --install . &&
         echo 'Node 1: Install complete. Starting runtime...' &&
         export PATH=/usr/local/bin:$PATH &&
-        CHI_SERVER_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
+        WRP_RUNTIME_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
         RUNTIME_PID=\$! &&
         echo \"Node 1: Runtime started (PID \$RUNTIME_PID). Ready for test execution.\" &&
         tail -f /dev/null
@@ -91,7 +91,7 @@ services:
         echo 'Node 2: Spack environment loaded' &&
         echo 'Node 2: Starting runtime...' &&
         export PATH=/usr/local/bin:$PATH &&
-        CHI_SERVER_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
+        WRP_RUNTIME_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
         RUNTIME_PID=\$! &&
         echo \"Node 2: Runtime started (PID \$RUNTIME_PID). Waiting for tests...\" &&
         tail -f /dev/null
@@ -133,7 +133,7 @@ services:
         echo 'Node 3: Spack environment loaded' &&
         echo 'Node 3: Starting runtime...' &&
         export PATH=/usr/local/bin:$PATH &&
-        CHI_SERVER_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
+        WRP_RUNTIME_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
         RUNTIME_PID=\$! &&
         echo \"Node 3: Runtime started (PID \$RUNTIME_PID). Waiting for tests...\" &&
         tail -f /dev/null
@@ -175,7 +175,7 @@ services:
         echo 'Node 4: Spack environment loaded' &&
         echo 'Node 4: Starting runtime...' &&
         export PATH=/usr/local/bin:$PATH &&
-        CHI_SERVER_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
+        WRP_RUNTIME_CONF=/etc/iowarp/chimaera_distributed.yaml chimaera_start_runtime &
         RUNTIME_PID=\$! &&
         echo \"Node 4: Runtime started (PID \$RUNTIME_PID). Waiting for tests...\" &&
         tail -f /dev/null

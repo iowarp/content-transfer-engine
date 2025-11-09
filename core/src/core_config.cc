@@ -125,11 +125,6 @@ bool Config::Validate() const {
     return false;
   }
   
-  if (performance_.blob_cache_size_mb_ == 0 || performance_.blob_cache_size_mb_ > 4096) {
-    HELOG(kError, "Config validation error: Invalid blob_cache_size_mb {} (must be 1-4096)", performance_.blob_cache_size_mb_);
-    return false;
-  }
-  
   if (performance_.max_concurrent_operations_ == 0 || performance_.max_concurrent_operations_ > 1024) {
     HELOG(kError, "Config validation error: Invalid max_concurrent_operations {} (must be 1-1024)", performance_.max_concurrent_operations_);
     return false;
@@ -163,9 +158,6 @@ std::string Config::GetParameterString(const std::string &param_name) const {
   if (param_name == "target_stat_interval_ms") {
     return std::to_string(performance_.target_stat_interval_ms_);
   }
-  if (param_name == "blob_cache_size_mb") {
-    return std::to_string(performance_.blob_cache_size_mb_);
-  }
   if (param_name == "max_concurrent_operations") {
     return std::to_string(performance_.max_concurrent_operations_);
   }
@@ -193,10 +185,6 @@ bool Config::SetParameterFromString(const std::string &param_name,
   try {
     if (param_name == "target_stat_interval_ms") {
       performance_.target_stat_interval_ms_ = static_cast<chi::u32>(std::stoul(value));
-      return true;
-    }
-    if (param_name == "blob_cache_size_mb") {
-      performance_.blob_cache_size_mb_ = static_cast<chi::u32>(std::stoul(value));
       return true;
     }
     if (param_name == "max_concurrent_operations") {
@@ -278,7 +266,6 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
   // Emit performance configuration
   emitter << YAML::Key << "performance" << YAML::Value << YAML::BeginMap;
   emitter << YAML::Key << "target_stat_interval_ms" << YAML::Value << performance_.target_stat_interval_ms_;
-  emitter << YAML::Key << "blob_cache_size_mb" << YAML::Value << performance_.blob_cache_size_mb_;
   emitter << YAML::Key << "max_concurrent_operations" << YAML::Value << performance_.max_concurrent_operations_;
   emitter << YAML::Key << "score_threshold" << YAML::Value << performance_.score_threshold_;
   emitter << YAML::Key << "score_difference_threshold" << YAML::Value << performance_.score_difference_threshold_;
@@ -321,10 +308,6 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
 bool Config::ParsePerformanceConfig(const YAML::Node &node) {
   if (node["target_stat_interval_ms"]) {
     performance_.target_stat_interval_ms_ = node["target_stat_interval_ms"].as<chi::u32>();
-  }
-
-  if (node["blob_cache_size_mb"]) {
-    performance_.blob_cache_size_mb_ = node["blob_cache_size_mb"].as<chi::u32>();
   }
 
   if (node["max_concurrent_operations"]) {
