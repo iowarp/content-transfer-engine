@@ -538,12 +538,8 @@ public:
   }
 };
 
-// Forward declaration for Config
-class Config;
-
-// Global pointer-based singletons with lazy initialization
+// Global pointer-based singleton for CTE client with lazy initialization
 HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::Client, g_cte_client);
-HSHM_DEFINE_GLOBAL_PTR_VAR_H(wrp_cte::core::Config, g_cte_config);
 
 /**
  * Initialize CTE client and configuration subsystem
@@ -670,12 +666,9 @@ public:
 
 } // namespace wrp_cte::core
 
-// Global singleton macros for easy access (return pointers, not references)
+// Global singleton macro for CTE client access (returns pointer, not reference)
 #define WRP_CTE_CLIENT                                                         \
   (&(*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Client,                           \
                               wrp_cte::core::g_cte_client)))
-#define WRP_CTE_CONFIG                                                         \
-  (&(*HSHM_GET_GLOBAL_PTR_VAR(wrp_cte::core::Config,                           \
-                              wrp_cte::core::g_cte_config)))
 
 #endif // WRPCTE_CORE_CLIENT_H_

@@ -95,9 +95,8 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   next_tag_id_minor_ = 1;
   telemetry_counter_ = 0;
 
-  // Initialize configuration manager with allocator
-  auto *config_manager = &ConfigManager::GetInstance();
-  config_manager->Initialize(main_allocator);
+  // Initialize configuration with allocator
+  config_ = Config(main_allocator);
 
   // Load configuration from file or string if provided
   auto params = task->GetParams(main_allocator);
@@ -107,20 +106,19 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   bool config_loaded = false;
   if (!config_yaml_string.empty()) {
     // Prefer YAML string if provided (allows configuration without file I/O)
-    config_loaded = config_manager->LoadConfigFromString(config_yaml_string);
+    config_loaded = config_.LoadFromString(config_yaml_string);
   } else if (!config_path.empty()) {
     // Fall back to file path if no YAML string provided
-    config_loaded = config_manager->LoadConfig(config_path);
+    config_loaded = config_.LoadFromFile(config_path);
   } else {
     // Try loading from environment variable as last resort
-    config_loaded = config_manager->LoadConfigFromEnvironment();
+    config_loaded = config_.LoadFromEnvironment();
   }
 
-  // Get configuration (will use defaults if loading failed)
-  const Config &config = config_manager->GetConfig();
+  // Configuration loaded (using defaults if loading failed)
 
   // Store storage configuration in runtime
-  storage_devices_ = config.storage_.devices_;
+  storage_devices_ = config_.storage_.devices_;
 
   // Initialize the client with the pool ID
   client_.Init(task->new_pool_id_);
@@ -128,7 +126,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
   // Register targets for each configured storage device and neighborhood node
   if (!storage_devices_.empty()) {
     // Get neighborhood size from configuration
-    chi::u32 neighborhood_size = config.targets_.neighborhood_;
+    chi::u32 neighborhood_size = config_.targets_.neighborhood_;
 
     // Get number of nodes from IPC manager
     chi::u32 num_nodes = ipc_manager->GetNumHosts();
@@ -192,7 +190,7 @@ void Runtime::Create(hipc::FullPtr<CreateTask> task, chi::RunContext &ctx) {
         pool_name_, task->new_pool_id_);
 
   HILOG(kInfo, "Configuration: neighborhood={}, poll_period_ms={}",
-        config.targets_.neighborhood_, config.targets_.poll_period_ms_); 
+        config_.targets_.neighborhood_, config_.targets_.poll_period_ms_); 
 }
 
 void Runtime::Destroy(hipc::FullPtr<DestroyTask> task, chi::RunContext &ctx) {
@@ -607,7 +605,7 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
     
 
     if (allocation_result != 0) {
-      HILOG(kError, "Allocation failure: {}", allocation_result);
+      HELOG(kError, "Allocation failure: {}", allocation_result);
       task->return_code_.store(
           10 + allocation_result); // Error: Allocation failure (10-19 range)
       return;
@@ -660,17 +658,12 @@ void Runtime::PutBlob(hipc::FullPtr<PutBlobTask> task, chi::RunContext &ctx) {
 
         // Use signed arithmetic to handle size decreases
         if (size_change >= 0) {
-          tag_info_ptr->total_size_ += static_cast<size_t>(size_change);
+          tag_info_ptr->total_size_.fetch_add(static_cast<size_t>(size_change));
         } else {
-          // Prevent underflow for size decreases
-          size_t decrease = static_cast<size_t>(-size_change);
-          if (decrease <= tag_info_ptr->total_size_) {
-            tag_info_ptr->total_size_ -= decrease;
-          } else {
-            tag_info_ptr->total_size_ = 0; // Clamp to 0 if we would underflow
-          }
+          HELOG(kError, "Size should not decrese");
+          task->return_code_.store(1);
+          return;
         }
-        tag_total_size = tag_info_ptr->total_size_;
       }
     } // Release read lock
 
@@ -1126,8 +1119,7 @@ void Runtime::GetTagSize(hipc::FullPtr<GetTagSizeTask> task,
 
 // Private helper methods
 const Config &Runtime::GetConfig() const {
-  auto *config_manager = &ConfigManager::GetInstance();
-  return config_manager->GetConfig();
+  return config_;
 }
 
 void Runtime::UpdateTargetStats(const chi::PoolId &target_id,
@@ -1360,7 +1352,7 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
       dpe->SelectTargets(available_targets, blob_score, additional_size);
 
   if (ordered_targets.empty()) {
-    return 1;
+    return 2;
   }
 
   // Use for loop to iterate over pre-selected targets in order
@@ -1382,6 +1374,9 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
     // Calculate how much we can allocate from this target
     chi::u64 allocate_size =
         std::min(remaining_to_allocate, target_info->remaining_space_);
+
+    HILOG(kInfo, "Target [{}]: remaining_space={} bytes, allocate_size={} bytes, remaining_to_allocate={} bytes",
+          selected_target_id.ToU64(), target_info->remaining_space_, allocate_size, remaining_to_allocate);
 
     if (allocate_size == 0) {
       // No space available, try next target
@@ -1407,7 +1402,7 @@ chi::u32 Runtime::AllocateNewData(BlobInfo &blob_info, chi::u64 offset,
   // Error condition: if we've exhausted all targets but still have remaining
   // space
   if (remaining_to_allocate > 0) {
-    return 1;
+    return 3;
   }
 
   return 0; // Success

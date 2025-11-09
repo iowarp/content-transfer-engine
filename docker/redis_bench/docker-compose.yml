@@ -34,7 +34,7 @@ services:
       - IO_SIZE=${IO_SIZE:-1m}
 
       # Number of operations to perform
-      - IO_COUNT=${IO_COUNT:-10000}
+      - IO_COUNT=${IO_COUNT:-10}
 
     # Resource limits
     mem_limit: 4g

@@ -5,9 +5,8 @@
 
 namespace wrp_cte::core {
 
-// Define global pointer variables in source file
+// Define global pointer variable for CTE client in source file
 HSHM_DEFINE_GLOBAL_PTR_VAR_CC(wrp_cte::core::Client, g_cte_client);
-HSHM_DEFINE_GLOBAL_PTR_VAR_CC(wrp_cte::core::Config, g_cte_config);
 
 bool WRP_CTE_CLIENT_INIT(const std::string &config_path,
                          const chi::PoolQuery &pool_query) {

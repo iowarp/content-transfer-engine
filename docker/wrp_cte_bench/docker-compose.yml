@@ -32,19 +32,11 @@ services:
 
     # Mount shared CTE configuration
     volumes:
-      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
+      - ./cte_config.yaml:/etc/iowarp/wrp_conf.yaml:ro
 
     # Expose ZeroMQ port for client connections
     ports:
       - "5555:5555"
-
-    # Environment variables for runtime configuration
-    environment:
-      # Path to CTE configuration file
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
-
-      # Enable CTE runtime initialization
-      - CTE_INIT_RUNTIME=1
 
     # Resource limits
     # Large shared memory for CTE operations
@@ -58,16 +50,8 @@ services:
     stdin_open: true
     tty: true
 
-    # Restart policy
-    restart: unless-stopped
-
-    # Health check to ensure runtime is ready
-    healthcheck:
-      test: ["CMD", "test", "-f", "/etc/iowarp/cte_config.yaml"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
+    # Restart policy - no restart for benchmark runs
+    restart: "no"
 
   # WRP CTE Benchmark Service
   # Runs benchmark tests against the iowarp runtime
@@ -80,18 +64,11 @@ services:
       iowarp-runtime:
         condition: service_healthy
 
-    # Mount shared CTE configuration
-    volumes:
-      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
-
     # Environment variables for benchmark configuration
     environment:
       # CTE Runtime Configuration
       # Do NOT initialize runtime in benchmark (runtime service handles this)
       - CTE_INIT_RUNTIME=${CTE_INIT_RUNTIME:-0}
-
-      # Path to CTE configuration file
-      - WRP_CTE_CONF=${WRP_CTE_CONF:-/etc/iowarp/cte_config.yaml}
 
       # Benchmark Test Parameters
       # Test case selection: Put (write), Get (read), PutGet (mixed)

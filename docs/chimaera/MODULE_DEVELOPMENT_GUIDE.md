@@ -113,6 +113,9 @@ class ExampleClass {
 Task definition patterns:
 
 1. **CreateParams Structure**: Define configuration parameters for container creation
+   - CreateParams use cereal serialization and do NOT require allocator-based constructors
+   - Only need default constructor and parameter-based constructors
+   - Allocator is NOT passed to CreateParams - it's handled internally by BaseCreateTask
 2. **CreateTask Template**: Use GetOrCreatePoolTask template for container creation (non-admin modules)
 3. **Custom Tasks**: Define custom tasks with SHM/Emplace constructors and HSHM data members
 
@@ -135,26 +138,40 @@ struct CreateParams {
   // MOD_NAME-specific parameters
   std::string config_data_;
   chi::u32 worker_count_;
-  
+
   // Required: chimod library name for module manager
   static constexpr const char* chimod_lib_name = "chimaera_MOD_NAME";
-  
+
   // Default constructor
   CreateParams() : worker_count_(1) {}
-  
-  // Constructor with allocator and parameters
-  CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc, 
-               const std::string& config_data = "", 
+
+  // Constructor with parameters
+  CreateParams(const std::string& config_data = "",
                chi::u32 worker_count = 1)
-      : config_data_(config_data), worker_count_(worker_count) {
-    // MOD_NAME parameters use standard types, so allocator isn't needed directly
-    // but it's available for future use with HSHM containers
-  }
-  
+      : config_data_(config_data), worker_count_(worker_count) {}
+
   // Serialization support for cereal
   template<class Archive>
   void serialize(Archive& ar) {
     ar(config_data_, worker_count_);
+  }
+
+  /**
+   * Load configuration from PoolConfig (for compose mode)
+   * Required for compose feature support
+   * @param pool_config Pool configuration from compose section
+   */
+  void LoadConfig(const chi::PoolConfig& pool_config) {
+    // Parse YAML config string
+    YAML::Node config = YAML::Load(pool_config.config_);
+
+    // Load module-specific parameters from YAML
+    if (config["config_data"]) {
+      config_data_ = config["config_data"].as<std::string>();
+    }
+    if (config["worker_count"]) {
+      worker_count_ = config["worker_count"].as<chi::u32>();
+    }
   }
 };
 
@@ -184,16 +201,16 @@ struct CustomTask : public chi::Task {
   // Emplace constructor
   explicit CustomTask(
       const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-      const chi::TaskNode &task_node,
+      const chi::TaskId &task_id,
       const chi::PoolId &pool_id,
       const chi::PoolQuery &pool_query,
       const std::string &data,
       chi::u32 operation_id)
-      : chi::Task(alloc, task_node, pool_id, pool_query, 10),
+      : chi::Task(alloc, task_id, pool_id, pool_query, 10),
         data_(alloc, data),
         operation_id_(operation_id),
         result_code_(0) {
-    task_node_ = task_node;
+    task_id_ = task_id;
     pool_id_ = pool_id;
     method_ = Method::kCustom;
     task_flags_.Clear();
@@ -250,7 +267,7 @@ class Client : public chi::ContainerClient {
     
     // CRITICAL: CreateTask MUST use admin pool for GetOrCreatePool processing
     auto task = ipc_manager->NewTask<CreateTask>(
-        chi::CreateTaskNode(),
+        chi::CreateTaskId(),
         chi::kAdminPoolId,  // Always use admin pool for CreateTask
         pool_query,
         CreateParams::chimod_lib_name,  // ChiMod name from CreateParams
@@ -280,7 +297,7 @@ CreateTask operations are actually GetOrCreatePoolTask operations that must be p
 ```cpp
 // CORRECT: Always use chi::kAdminPoolId for CreateTask
 auto task = ipc_manager->NewTask<CreateTask>(
-    chi::CreateTaskNode(),
+    chi::CreateTaskId(),
     chi::kAdminPoolId,          // REQUIRED: Use admin pool for CreateTask
     pool_query,
     CreateParams::chimod_lib_name,
@@ -293,7 +310,7 @@ auto task = ipc_manager->NewTask<CreateTask>(
 ```cpp
 // WRONG: Never use pool_id_ for CreateTask operations
 auto task = ipc_manager->NewTask<CreateTask>(
-    chi::CreateTaskNode(),
+    chi::CreateTaskId(),
     pool_id_,                   // WRONG: pool_id_ is not initialized yet
     pool_query,
     CreateParams::chimod_lib_name,
@@ -317,7 +334,7 @@ auto task = ipc_manager->NewTask<CreateTask>(
 ```cpp
 // CORRECT: Use CreateParams::chimod_lib_name
 auto task = ipc_manager->NewTask<CreateTask>(
-    chi::CreateTaskNode(),
+    chi::CreateTaskId(),
     chi::kAdminPoolId,
     pool_query,
     CreateParams::chimod_lib_name,  // Dynamic reference to CreateParams
@@ -330,7 +347,7 @@ auto task = ipc_manager->NewTask<CreateTask>(
 ```cpp
 // WRONG: Never hardcode module names
 auto task = ipc_manager->NewTask<CreateTask>(
-    chi::CreateTaskNode(),
+    chi::CreateTaskId(),
     chi::kAdminPoolId,
     pool_query,
     "chimaera_MOD_NAME",  // Hardcoded name breaks flexibility
@@ -353,7 +370,7 @@ All non-admin ChiMods using `GetOrCreatePoolTask` must follow this pattern:
 ```cpp
 // In AsyncCreate method
 auto task = ipc_manager->NewTask<CreateTask>(
-    chi::CreateTaskNode(),
+    chi::CreateTaskId(),
     chi::kAdminPoolId,                    // Always use admin pool
     pool_query,
     CreateParams::chimod_lib_name,        // REQUIRED: Use static member
@@ -1188,15 +1205,14 @@ struct CreateParams {
   
   // Required: chimod library name
   static constexpr const char* chimod_lib_name = "chimaera_MOD_NAME";
-  
+
   // Constructors
   CreateParams() : worker_count_(1) {}
-  
-  CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-               const std::string& config_data = "",
+
+  CreateParams(const std::string& config_data = "",
                chi::u32 worker_count = 1)
       : config_data_(config_data), worker_count_(worker_count) {}
-  
+
   // Cereal serialization
   template<class Archive>
   void serialize(Archive& ar) {
@@ -1322,10 +1338,10 @@ If you have existing custom CreateTask implementations, migrate to BaseCreateTas
 struct CreateTask : public chi::Task {
   // Custom constructor implementations
   explicit CreateTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-                      const chi::TaskNode &task_node,
+                      const chi::TaskId &task_id,
                       const chi::PoolId &pool_id,
                       const chi::PoolQuery &pool_query)
-      : chi::Task(alloc, task_node, pool_id, pool_query, 0) {
+      : chi::Task(alloc, task_id, pool_id, pool_query, 0) {
     method_ = Method::kCreate;  // Static casting required
     // ... initialization code ...
   }
@@ -1373,18 +1389,18 @@ The autogenerated Del dispatcher handles task cleanup:
 inline void Del(Runtime* runtime, chi::u32 method, hipc::FullPtr<chi::Task> task_ptr) {
   auto* ipc_manager = CHI_IPC;
   Method method_enum = static_cast<Method>(method);
-  
+
   switch (method_enum) {
     case Method::kCreate: {
-      ipc_manager->DelTask(task_ptr.Cast<CreateTask>(), chi::kMainSegment);
+      ipc_manager->DelTask(task_ptr.Cast<CreateTask>());
       break;
     }
     case Method::kCustom: {
-      ipc_manager->DelTask(task_ptr.Cast<CustomTask>(), chi::kMainSegment);
+      ipc_manager->DelTask(task_ptr.Cast<CustomTask>());
       break;
     }
     default:
-      ipc_manager->DelTask(task_ptr, chi::kMainSegment);
+      ipc_manager->DelTask(task_ptr);
       break;
   }
 }
@@ -1401,7 +1417,7 @@ Chimaera provides specialized cooperative synchronization primitives designed fo
 **Critical: Always use CoMutex and CoRwLock for module synchronization:**
 
 1. **Cooperative Design**: Compatible with Chimaera's fiber-based task execution
-2. **TaskNode Grouping**: Tasks sharing the same TaskNode can proceed together (bypassing locks)
+2. **TaskId Grouping**: Tasks sharing the same TaskId can proceed together (bypassing locks)
 3. **Deadlock Prevention**: Designed to prevent deadlocks in the runtime environment
 4. **Runtime Integration**: Automatically integrate with CHI_CUR_WORKER and task context
 5. **Performance**: Optimized for the runtime's execution model
@@ -1414,7 +1430,7 @@ Chimaera provides specialized cooperative synchronization primitives designed fo
 
 ### CoMutex: Cooperative Mutual Exclusion
 
-CoMutex provides mutual exclusion with TaskNode grouping support. Tasks sharing the same TaskNode can bypass the lock and execute concurrently.
+CoMutex provides mutual exclusion with TaskId grouping support. Tasks sharing the same TaskId can bypass the lock and execute concurrently.
 
 #### Basic Usage
 
@@ -1450,7 +1466,7 @@ chi::CoMutex Runtime::shared_mutex_;
 #### Key Features
 
 1. **Automatic Task Context**: Uses CHI_CUR_WORKER internally - no task parameters needed
-2. **TaskNode Grouping**: Tasks with the same TaskNode bypass the mutex
+2. **TaskId Grouping**: Tasks with the same TaskId bypass the mutex
 3. **RAII Support**: ScopedCoMutex for automatic lock management
 4. **Try-Lock Support**: Non-blocking lock attempts
 
@@ -1479,7 +1495,7 @@ namespace chi {
 
 ### CoRwLock: Cooperative Reader-Writer Lock
 
-CoRwLock provides reader-writer semantics with TaskNode grouping. Multiple readers can proceed concurrently, but writers have exclusive access.
+CoRwLock provides reader-writer semantics with TaskId grouping. Multiple readers can proceed concurrently, but writers have exclusive access.
 
 #### Basic Usage
 
@@ -1519,7 +1535,7 @@ chi::CoRwLock Runtime::data_lock_;
 
 1. **Multiple Readers**: Concurrent read access when no writers are active
 2. **Exclusive Writers**: Writers get exclusive access, blocking all other operations
-3. **TaskNode Grouping**: Tasks with same TaskNode can bypass reader locks
+3. **TaskId Grouping**: Tasks with same TaskId can bypass reader locks
 4. **Automatic Context**: Uses CHI_CUR_WORKER for task identification
 5. **RAII Support**: Scoped locks for both readers and writers
 
@@ -1555,26 +1571,26 @@ namespace chi {
 }
 ```
 
-### TaskNode Grouping Behavior
+### TaskId Grouping Behavior
 
-Both CoMutex and CoRwLock support TaskNode grouping, which allows related tasks to bypass synchronization:
+Both CoMutex and CoRwLock support TaskId grouping, which allows related tasks to bypass synchronization:
 
 ```cpp
-// Tasks created with the same TaskNode can proceed together
-auto task_node = chi::CreateTaskNode();
+// Tasks created with the same TaskId can proceed together
+auto task_id = chi::CreateTaskId();
 
-// These tasks share the same TaskNode - they can bypass CoMutex/CoRwLock
-auto task1 = ipc_manager->NewTask<Task1>(task_node, pool_id, pool_query, ...);
-auto task2 = ipc_manager->NewTask<Task2>(task_node, pool_id, pool_query, ...);
+// These tasks share the same TaskId - they can bypass CoMutex/CoRwLock
+auto task1 = ipc_manager->NewTask<Task1>(task_id, pool_id, pool_query, ...);
+auto task2 = ipc_manager->NewTask<Task2>(task_id, pool_id, pool_query, ...);
 
-// This task has a different TaskNode - must respect locks normally
-auto task3 = ipc_manager->NewTask<Task3>(chi::CreateTaskNode(), pool_id, pool_query, ...);
+// This task has a different TaskId - must respect locks normally
+auto task3 = ipc_manager->NewTask<Task3>(chi::CreateTaskId(), pool_id, pool_query, ...);
 ```
 
 **Key Points:**
-- Tasks with the same TaskNode are considered "grouped" and can bypass locks
-- Use TaskNode grouping for logically related operations that don't need mutual exclusion
-- Different TaskNodes must respect normal lock semantics
+- Tasks with the same TaskId are considered "grouped" and can bypass locks
+- Use TaskId grouping for logically related operations that don't need mutual exclusion
+- Different TaskIds must respect normal lock semantics
 
 ### Best Practices
 
@@ -1583,7 +1599,7 @@ auto task3 = ipc_manager->NewTask<Task3>(chi::CreateTaskNode(), pool_id, pool_qu
 3. **Member Definition**: Don't forget to define static members in your .cc file
 4. **Choose Appropriate Lock**: Use CoRwLock for read-heavy workloads, CoMutex for simple mutual exclusion
 5. **Minimal Critical Sections**: Keep locked sections as small as possible
-6. **TaskNode Design**: Group related tasks that can safely bypass locks
+6. **TaskId Design**: Group related tasks that can safely bypass locks
 
 ### Example: Module with Synchronized Data Structure
 
@@ -1832,11 +1848,11 @@ Tasks must include PoolQuery in their constructors:
 class CustomTask : public chi::Task {
  public:
   CustomTask(hipc::Allocator *alloc,
-             const chi::TaskNode &task_node,
+             const chi::TaskId &task_id,
              const chi::PoolId &pool_id,
              const chi::PoolQuery &pool_query,  // Required parameter
              /* custom parameters */)
-      : chi::Task(alloc, task_node, pool_id, pool_query, method_id) {
+      : chi::Task(alloc, task_id, pool_id, pool_query, method_id) {
     // Task initialization
   }
 };
@@ -1873,7 +1889,7 @@ switch (mode) {
 // High-priority broadcast
 auto query = chi::PoolQuery::Broadcast();
 auto task = ipc_manager->NewTask<UpdateTask>(
-    chi::CreateTaskNode(),
+    chi::CreateTaskId(),
     pool_id,
     query,
     update_data
@@ -2060,18 +2076,16 @@ my_vector.resize(100);
 
 ### Task Allocation and Deallocation Pattern
 ```cpp
-// Client side - allocation
+// Client side - allocation (NewTask uses main allocator automatically)
 auto task = ipc_manager->NewTask<CustomTask>(
-    chi::kMainSegment,
-    HSHM_MCTX,
-    chi::TaskNode(0),
+    chi::CreateTaskId(),
     pool_id_,
     pool_query,
     input_data,
     operation_id);
 
 // Client side - cleanup (after task completion)
-ipc_manager->DelTask(task, chi::kMainSegment);
+ipc_manager->DelTask(task);
 
 // Runtime side - automatic cleanup (no code needed)
 // Framework Del dispatcher calls ipc_manager->DelTask() automatically
@@ -2081,7 +2095,7 @@ ipc_manager->DelTask(task, chi::kMainSegment);
 
 The `CHI_IPC` singleton provides centralized buffer allocation for shared memory operations in client code. Use this for allocating temporary buffers that need to be shared between client and runtime processes.
 
-**Important**: `AllocateBuffer` is a template function that returns `hipc::FullPtr<T>`, not `hipc::Pointer`. You must specify the template type parameter when calling it.
+**Important**: `AllocateBuffer` returns `hipc::FullPtr<char>`, not `hipc::Pointer`. It is NOT a template function.
 
 #### Basic Usage
 ```cpp
@@ -2090,17 +2104,16 @@ The `CHI_IPC` singleton provides centralized buffer allocation for shared memory
 // Get the IPC manager singleton
 auto* ipc_manager = CHI_IPC;
 
-// Allocate a buffer in shared memory (returns FullPtr<T>, not hipc::Pointer)
+// Allocate a buffer in shared memory (returns FullPtr<char>)
 size_t buffer_size = 1024;
-hipc::FullPtr<void> buffer_ptr = ipc_manager->AllocateBuffer<void>(buffer_size);
+hipc::FullPtr<char> buffer_ptr = ipc_manager->AllocateBuffer(buffer_size);
 
 // Use the buffer (example: copy data into it)
-void* buffer_data = buffer_ptr.ptr_;
+char* buffer_data = buffer_ptr.ptr_;
 memcpy(buffer_data, source_data, data_size);
 
-// Alternative: Allocate typed buffer
-hipc::FullPtr<char> char_buffer = ipc_manager->AllocateBuffer<char>(buffer_size);
-strncpy(char_buffer.ptr_, "example data", buffer_size);
+// Alternative: Use directly
+strncpy(buffer_ptr.ptr_, "example data", buffer_size);
 
 // The buffer will be automatically freed when buffer_ptr goes out of scope
 // or when explicitly deallocated by the framework
@@ -2115,7 +2128,7 @@ strncpy(char_buffer.ptr_, "example data", buffer_size);
 ```cpp
 // ✅ Good: Use CHI_IPC for temporary shared buffers
 auto* ipc_manager = CHI_IPC;
-hipc::FullPtr<void> temp_buffer = ipc_manager->AllocateBuffer<void>(data_size);
+hipc::FullPtr<char> temp_buffer = ipc_manager->AllocateBuffer(data_size);
 
 // ✅ Good: Use chi::ipc types for persistent task data
 chi::ipc::string task_string(ctx_alloc, "persistent data");
@@ -3645,6 +3658,41 @@ int main() {
 }
 ```
 
+### CHIMAERA_RUNTIME_INIT for Testing and Benchmarks
+
+For simple unit tests and benchmarks, Chimaera provides `CHIMAERA_RUNTIME_INIT()` as a convenience function that initializes both the client and runtime in a single process. This is an alternative to using `CHIMAERA_CLIENT_INIT()` when you need both components initialized together.
+
+**Important Notes:**
+- **Primary Use Case**: Unit tests and benchmarks only
+- **Not for Production**: Should NOT be used in main production applications
+- **Single Process**: Initializes both client and runtime in the same process
+- **Simplified Testing**: Eliminates need for separate runtime and client processes during testing
+
+**Usage Example (Unit Tests/Benchmarks):**
+```cpp
+#include <chimaera/chimaera.h>
+#include <[namespace]/my_module/my_module_client.h>
+
+TEST(MyModuleTest, BasicOperation) {
+  // Initialize both client and runtime in single process
+  chi::CHIMAERA_RUNTIME_INIT();
+
+  // Create your ChiMod client
+  const chi::PoolId pool_id = chi::PoolId(7000, 0);
+  myproject::my_module::Client client(pool_id);
+
+  // Test your ChiMod functionality
+  auto pool_query = chi::PoolQuery::Local();
+  client.Create(HSHM_MCTX, pool_query, "test_pool");
+
+  // Assertions and test logic...
+}
+```
+
+**When to Use Each:**
+- **CHIMAERA_CLIENT_INIT()**: Production applications connecting to existing runtime
+- **CHIMAERA_RUNTIME_INIT()**: Unit tests, benchmarks, and simple testing scenarios
+
 ### Dependencies and Installation Paths
 
 External ChiMod development requires these components to be installed:
@@ -4031,7 +4079,6 @@ When creating a new Chimaera module, ensure you have:
 - [ ] **Init() method overridden** - calls base class Init() then initializes client for this ChiMod
 - [ ] Create() method does NOT call `chi::Container::Init()` (container is already initialized before Create is called)
 - [ ] All task methods use `hipc::FullPtr<TaskType>` parameters
-- [ ] **Monitor methods are optional** - only implement if you need custom load estimation or distributed coordination
 - [ ] **NO custom Del methods needed** - framework calls `ipc_manager->DelTask()` automatically
 - [ ] Uses `CHI_TASK_CC(ClassName)` macro for entry points
 - [ ] **Routing is automatic** - tasks are routed through external queue lanes mapped to workers (1:1 worker-to-lane mapping)
@@ -4054,8 +4101,6 @@ When creating a new Chimaera module, ensure you have:
 - [ ] Links against chimaera library
 
 ### Common Pitfalls to Avoid
-- [ ] ❌ Forgetting `kLocalSchedule` implementation (tasks won't execute)
-- [ ] ❌ **CRITICAL: Direct lane enqueuing** in Monitor methods (bypasses work orchestrator)
 - [ ] ❌ **CRITICAL: Not updating pool_id_ in Create methods** (leads to incorrect pool ID for subsequent operations)
 - [ ] ❌ Using raw pointers instead of FullPtr in runtime methods
 - [ ] ❌ **Calling `chi::Container::Init()` in Create method** (container is already initialized by framework before Create is called)
@@ -4069,8 +4114,6 @@ When creating a new Chimaera module, ensure you have:
 - [ ] ❌ **Using enum class for methods** (use namespace with GLOBAL_CONST instead)
 - [ ] ❌ **Using BaseCreateTask directly for non-admin modules** (use GetOrCreatePoolTask instead)
 - [ ] ❌ **Forgetting GetOrCreatePoolTask template** for container creation (reduces boilerplate)
-
-Remember: **kLocalSchedule is mandatory** - without it, your tasks will never be executed!
 
 ## Pool Name Requirements
 **CRITICAL**: All ChiMod Create functions MUST require a user-provided `pool_name` parameter. Never auto-generate pool names using `pool_id_` during Create operations.
@@ -4137,14 +4180,14 @@ class Client : public chi::ContainerClient {
     // ... cleanup
   }
   
-  // Asynchronous Create with required pool_name  
+  // Asynchronous Create with required pool_name
   hipc::FullPtr<CreateTask> AsyncCreate(
       const hipc::MemContext& mctx,
-      const chi::PoolQuery& pool_query, 
+      const chi::PoolQuery& pool_query,
       const std::string& pool_name /* user-provided name */) {
     // Use pool_name directly, never generate internally
     auto task = ipc_manager->NewTask<CreateTask>(
-        chi::CreateTaskNode(),
+        chi::CreateTaskId(),
         chi::kAdminPoolId,  // Always use admin pool
         pool_query,
         CreateParams::chimod_lib_name,  // Never hardcode
@@ -4161,3 +4204,122 @@ class Client : public chi::ContainerClient {
 - **File Devices**: `pool_name` parameter serves as the file path
 - **RAM Devices**: `pool_name` parameter serves as unique identifier
 - **Method Signature**: `Create(mctx, pool_query, pool_name, bdev_type, total_size=0, io_depth=32, alignment=4096)`
+
+## Compose Configuration Feature
+
+The compose feature allows automatic pool creation from YAML configuration files. This enables declarative infrastructure setup where all required pools can be defined in configuration and created during runtime initialization or via utility script.
+
+### CreateParams LoadConfig Requirement
+
+**CRITICAL**: All ChiMod CreateParams structures MUST implement a `LoadConfig()` method to support compose feature.
+
+```cpp
+/**
+ * Load configuration from PoolConfig (for compose mode)
+ * Required for compose feature support
+ * @param pool_config Pool configuration from compose section
+ */
+void LoadConfig(const chi::PoolConfig& pool_config) {
+  // Parse YAML config string
+  YAML::Node config = YAML::Load(pool_config.config_);
+
+  // Load module-specific parameters from YAML
+  if (config["parameter_name"]) {
+    parameter_name_ = config["parameter_name"].as<Type>();
+  }
+
+  // Parse size strings (e.g., "2GB", "512MB")
+  if (config["capacity"]) {
+    std::string capacity_str = config["capacity"].as<std::string>();
+    total_size_ = hshm::ConfigParse::ParseSize(capacity_str);
+  }
+}
+```
+
+### Compose Configuration Format
+
+```yaml
+compose:
+- mod_name: chimaera_bdev        # ChiMod library name
+  pool_name: ram://test          # Pool name (or file path for BDev)
+  pool_query: dynamic            # Either "dynamic" or "local"
+  pool_id: 200.0                 # Pool ID in "major.minor" format
+  capacity: 2GB                  # Module-specific parameters
+  bdev_type: ram                 # Additional parameters as needed
+  io_depth: 32
+  alignment: 4096
+
+- mod_name: chimaera_another_mod
+  pool_name: my_pool
+  pool_query: local
+  pool_id: 201.0
+  custom_param: value
+```
+
+### Usage Modes
+
+**1. Automatic During Runtime Init:**
+Pools are automatically created when runtime initializes if compose section is present in configuration:
+```bash
+export CHI_SERVER_CONF=/path/to/config_with_compose.yaml
+chimaera_start_runtime
+```
+
+**2. Manual via chimaera_compose Utility:**
+Create pools using compose configuration against running runtime:
+```bash
+chimaera_compose /path/to/compose_config.yaml
+```
+
+### Implementation Checklist
+
+When adding compose support to a ChiMod:
+
+- [ ] Add `LoadConfig(const chi::PoolConfig& pool_config)` method to CreateParams
+- [ ] Parse all module-specific parameters from YAML config
+- [ ] Handle optional parameters with defaults
+- [ ] Use `hshm::ConfigParse::ParseSize()` for size strings
+- [ ] Include `<yaml-cpp/yaml.h>` and `<chimaera/config_manager.h>` in tasks header
+- [ ] Test with compose configuration before release
+
+### Example Admin ChiMod LoadConfig
+
+```cpp
+void LoadConfig(const chi::PoolConfig& pool_config) {
+  // Admin doesn't have additional configuration fields
+  // YAML config parsing would go here for modules with config fields
+  (void)pool_config;  // Suppress unused parameter warning
+}
+```
+
+### Example BDev ChiMod LoadConfig
+
+```cpp
+void LoadConfig(const chi::PoolConfig& pool_config) {
+  YAML::Node config = YAML::Load(pool_config.config_);
+
+  // Load BDev type
+  if (config["bdev_type"]) {
+    std::string type_str = config["bdev_type"].as<std::string>();
+    if (type_str == "file") {
+      bdev_type_ = BdevType::kFile;
+    } else if (type_str == "ram") {
+      bdev_type_ = BdevType::kRam;
+    }
+  }
+
+  // Load capacity (parse size strings)
+  if (config["capacity"]) {
+    std::string capacity_str = config["capacity"].as<std::string>();
+    total_size_ = hshm::ConfigParse::ParseSize(capacity_str);
+  }
+
+  // Load optional parameters
+  if (config["io_depth"]) {
+    io_depth_ = config["io_depth"].as<chi::u32>();
+  }
+  if (config["alignment"]) {
+    alignment_ = config["alignment"].as<chi::u32>();
+  }
+}
+```

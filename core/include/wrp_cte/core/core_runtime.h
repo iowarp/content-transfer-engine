@@ -158,6 +158,9 @@ private:
   // Storage configuration (parsed from config file)
   std::vector<StorageDeviceConfig> storage_devices_;
 
+  // CTE configuration (replaces ConfigManager singleton)
+  Config config_;
+
   // Telemetry ring buffer for performance monitoring
   static const size_t kTelemetryRingSize = 1024; // Ring buffer size
   hipc::circular_mpsc_queue<CteTelemetry> telemetry_log_;

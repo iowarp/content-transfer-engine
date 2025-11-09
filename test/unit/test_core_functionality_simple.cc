@@ -225,23 +225,22 @@ TEST_CASE_METHOD(CTECoreTestFixture, "CTE Core Client Creation", "[cte][core][cl
 TEST_CASE("CTE CreateParams Configuration", "[cte][core][params]") {
   SECTION("Default CreateParams") {
     wrp_cte::core::CreateParams params;
-    
+
     // Check default values
-    REQUIRE(params.worker_count_ == 4);  // Default worker count
     REQUIRE(std::string(wrp_cte::core::CreateParams::chimod_lib_name) == "wrp_cte_core");
-    
+
     INFO("Default CreateParams validated successfully");
   }
-  
+
   SECTION("CreateParams constructor validation") {
     // NOTE: The allocator-based constructor test is commented out because it requires
     // proper HSHM memory manager initialization which is complex to set up in unit tests.
     // This test validates that the constructor signature is correct and compiles properly.
-    
-    // Test that we can construct parameters with different values
+
+    // Test that we can construct parameters with default values
     wrp_cte::core::CreateParams params_default;
-    REQUIRE(params_default.worker_count_ == 4);
-    
+    REQUIRE(std::string(wrp_cte::core::CreateParams::chimod_lib_name) == "wrp_cte_core");
+
     // The allocator-based constructor would be tested in integration tests
     // where the full Chimaera runtime is properly initialized
     INFO("CreateParams constructor signatures validated");

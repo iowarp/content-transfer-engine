@@ -6,26 +6,8 @@
 #include <hermes_shm/util/config_parse.h>
 #include <string>
 #include <vector>
-#include <unordered_map>
-#include <memory>
 
 namespace wrp_cte::core {
-
-// Named queue priorities for semantic clarity
-constexpr chi::QueueId kLowLatencyQueue = 0;
-constexpr chi::QueueId kHighLatencyQueue = 1;
-
-/**
- * Queue configuration structure for CTE Core
- */
-struct QueueConfig {
-  chi::u32 lane_count_;
-  chi::QueueId queue_id_;
-
-  QueueConfig() : lane_count_(1), queue_id_(kLowLatencyQueue) {}
-  QueueConfig(chi::u32 lane_count, chi::QueueId queue_id)
-      : lane_count_(lane_count), queue_id_(queue_id) {}
-};
 
 /**
  * Performance configuration for CTE Core operations
@@ -99,63 +81,40 @@ struct DpeConfig {
 class Config {
  public:
   /**
-   * Worker thread configuration
-   */
-  chi::u32 worker_count_;
-  
-  /**
-   * Queue configurations for different operation types
-   */
-  QueueConfig target_management_queue_;
-  QueueConfig tag_management_queue_;
-  QueueConfig blob_operations_queue_;
-  QueueConfig stats_queue_;
-  
-  /**
    * Performance settings
    */
   PerformanceConfig performance_;
-  
+
   /**
    * Target management settings
    */
   TargetConfig targets_;
-  
+
   /**
    * Storage configuration
    */
   StorageConfig storage_;
-  
+
   /**
    * Data Placement Engine configuration
    */
   DpeConfig dpe_;
-  
+
   /**
    * Environment variable configuration
    */
   std::string config_env_var_;
-  
+
   /**
    * Default constructor
    */
-  Config() : worker_count_(4),
-             target_management_queue_(2, kLowLatencyQueue),
-             tag_management_queue_(2, kLowLatencyQueue),
-             blob_operations_queue_(4, kHighLatencyQueue),
-             stats_queue_(1, kHighLatencyQueue),
-             config_env_var_("WRP_CTE_CONF") {}
+  Config() : config_env_var_("WRP_CTE_CONF") {}
 
   /**
    * Constructor with allocator (for compatibility)
    */
   explicit Config(void *alloc)
-      : worker_count_(4),
-        target_management_queue_(2, kLowLatencyQueue),
-        tag_management_queue_(2, kLowLatencyQueue),
-        blob_operations_queue_(4, kHighLatencyQueue),
-        stats_queue_(1, kHighLatencyQueue),
-        config_env_var_("WRP_CTE_CONF") {
+      : config_env_var_("WRP_CTE_CONF") {
     (void)alloc; // Suppress unused variable warning
   }
   
@@ -225,74 +184,33 @@ class Config {
   
  private:
   /**
-   * Parse queue configuration from YAML
-   * @param node YAML node containing queue config
-   * @param queue_config Output queue configuration
-   * @return true if successful, false otherwise
-   */
-  bool ParseQueueConfig(const YAML::Node &node, QueueConfig &queue_config);
-  
-  /**
    * Parse performance configuration from YAML
    * @param node YAML node containing performance config
    * @return true if successful, false otherwise
    */
   bool ParsePerformanceConfig(const YAML::Node &node);
-  
+
   /**
    * Parse target configuration from YAML
    * @param node YAML node containing target config
    * @return true if successful, false otherwise
    */
   bool ParseTargetConfig(const YAML::Node &node);
-  
+
   /**
    * Parse storage configuration from YAML
    * @param node YAML node containing storage config
    * @return true if successful, false otherwise
    */
   bool ParseStorageConfig(const YAML::Node &node);
-  
+
   /**
    * Parse DPE configuration from YAML
    * @param node YAML node containing DPE config
    * @return true if successful, false otherwise
    */
   bool ParseDpeConfig(const YAML::Node &node);
-  
-  /**
-   * Emit queue configuration to YAML
-   * @param emitter YAML emitter
-   * @param name Queue configuration name
-   * @param config Queue configuration
-   */
-  void EmitQueueConfig(YAML::Emitter &emitter, 
-                       const std::string &name,
-                       const QueueConfig &config) const;
-  
-  /**
-   * Convert queue ID to string
-   * @param queue_id Queue identifier
-   * @return Queue ID name as string
-   */
-  std::string QueueIdToString(chi::QueueId queue_id) const;
 
-  /**
-   * Convert string to queue ID
-   * @param queue_str Queue ID name as string
-   * @return Queue ID value, or kLowLatencyQueue if not found
-   */
-  chi::QueueId StringToQueueId(const std::string &queue_str) const;
-  
-  /**
-   * Validate queue configuration
-   * @param config Queue configuration to validate
-   * @param queue_name Queue name for error messages
-   * @return true if valid, false otherwise
-   */
-  bool ValidateQueueConfig(const QueueConfig &config, 
-                           const std::string &queue_name) const;
-  
   /**
    * Parse size string to bytes (e.g., "1GB", "512MB", "2TB")
    * @param size_str Size string to parse
@@ -307,74 +225,6 @@ class Config {
    * @return Formatted size string
    */
   std::string FormatSizeBytes(chi::u64 size_bytes) const;
-};
-
-/**
- * Configuration manager singleton
- * Provides global access to CTE Core configuration
- */
-class ConfigManager {
- public:
-  /**
-   * Get singleton instance
-   * @return Reference to configuration manager instance
-   */
-  static ConfigManager& GetInstance();
-  
-  /**
-   * Initialize configuration manager with allocator
-   * @param alloc Allocator for configuration data (unused in current implementation)
-   */
-  void Initialize(void *alloc);
-  
-  /**
-   * Load configuration from file
-   * @param config_file_path Path to YAML configuration file
-   * @return true if successful, false otherwise
-   */
-  bool LoadConfig(const std::string &config_file_path);
-
-  /**
-   * Load configuration from YAML string
-   * @param yaml_string YAML configuration content as string
-   * @return true if successful, false otherwise
-   */
-  bool LoadConfigFromString(const std::string &yaml_string);
-
-  /**
-   * Load configuration from environment
-   * @return true if successful, false otherwise
-   */
-  bool LoadConfigFromEnvironment();
-  
-  /**
-   * Get current configuration
-   * @return Reference to current configuration
-   */
-  const Config& GetConfig() const;
-  
-  /**
-   * Get mutable configuration (for runtime updates)
-   * @return Reference to mutable configuration
-   */
-  Config& GetMutableConfig();
-  
-  /**
-   * Check if configuration is loaded and valid
-   * @return true if configuration is ready, false otherwise
-   */
-  bool IsConfigurationReady() const;
-  
- private:
-  ConfigManager() = default;
-  ~ConfigManager() = default;
-  ConfigManager(const ConfigManager&) = delete;
-  ConfigManager& operator=(const ConfigManager&) = delete;
-  
-  void *allocator_;
-  std::unique_ptr<Config> config_;
-  bool initialized_;
-  bool config_loaded_;
 };
 
 }  // namespace wrp_cte::core

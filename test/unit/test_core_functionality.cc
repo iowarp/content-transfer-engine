@@ -99,7 +99,6 @@ public:
   // Test configuration constants
   static constexpr chi::u64 kTestTargetSize =
       1024 * 1024 * 100; // 10MB test target
-  static constexpr chi::u32 kTestWorkerCount = 2;
   static constexpr size_t kTestBlobSize = 4096; // 4KB test blobs
 
   // CTE Core pool configuration - use constants from core_tasks.h
@@ -383,10 +382,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     // Create parameters with test configuration
     wrp_cte::core::CreateParams params;
-    params.worker_count_ = kTestWorkerCount;
-
-    INFO("Calling core_client_->Create() with worker_count="
-         << params.worker_count_);
 
     // ACTUAL FUNCTIONAL TEST - call the real Create API
     REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
@@ -402,10 +397,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
 
     chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
     wrp_cte::core::CreateParams params;
-    params.worker_count_ = kTestWorkerCount;
-
-    INFO("Calling core_client_->AsyncCreate() with worker_count="
-         << params.worker_count_);
 
     // ACTUAL FUNCTIONAL TEST - call the real AsyncCreate API
     auto create_task = core_client_->AsyncCreate(mctx_, pool_query,
@@ -445,7 +436,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "FUNCTIONAL - Register Target",
   // First create the core pool using REAL API calls
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   INFO("Creating core pool before target registration...");
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
@@ -556,7 +546,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // Setup: Create core pool and register target
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
                                        kCTECorePoolId, params));
@@ -837,7 +826,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // Setup: Create core pool, register target, create tag
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
                                        kCTECorePoolId, params));
@@ -1228,7 +1216,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // Setup: Create core pool and register target
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
                                        kCTECorePoolId, params));
@@ -1740,7 +1727,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // Setup: Create core pool, register target, create tag
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   INFO("Step 1: Creating core pool...");
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
@@ -1901,7 +1887,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture,
   // Setup: Create core pool, register target, create tag
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   INFO("Step 1: Setting up CTE environment...");
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,
@@ -2159,7 +2144,6 @@ TEST_CASE_METHOD(CTECoreFunctionalTestFixture, "End-to-End CTE Core Workflow",
                  "[cte][core][integration]") {
   chi::PoolQuery pool_query = chi::PoolQuery::Dynamic();
   wrp_cte::core::CreateParams params;
-  params.worker_count_ = kTestWorkerCount;
 
   // Step 1: Initialize CTE core pool
   REQUIRE_NOTHROW(core_client_->Create(mctx_, pool_query, kCTECorePoolName,

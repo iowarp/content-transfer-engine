@@ -118,7 +118,15 @@ std::vector<TargetInfo> MaxBwDpe::SelectTargets(const std::vector<TargetInfo>& t
   std::vector<TargetInfo> available_targets;
   for (const auto& target : targets) {
     if (target.remaining_space_ >= data_size) {
+      HILOG(kInfo, "MaxBwDpe: Target [{}]: remaining_space={} bytes, data_size={} bytes",
+            target.bdev_client_.pool_id_.ToU64(), target.remaining_space_, data_size);
       available_targets.push_back(target);
+    } else {
+      HILOG(
+          kInfo,
+          "MaxBwDpe: Target [{}]: remaining_space={} bytes, data_size={} bytes",
+          target.bdev_client_.pool_id_.ToU64(), target.remaining_space_,
+          data_size);
     }
   }
 
@@ -146,7 +154,12 @@ std::vector<TargetInfo> MaxBwDpe::SelectTargets(const std::vector<TargetInfo>& t
   // Filter out targets that have too high of a score
   for (const auto& target : available_targets) {
     if (target.target_score_ <= blob_score) {
+      HILOG(kInfo, "MaxBwDpe: Target [{}]: target_score={}, blob_score={}",
+            target.bdev_client_.pool_id_.ToU64(), target.target_score_, blob_score);
       result.push_back(target);
+    } else {
+      HILOG(kInfo, "MaxBwDpe: Target [{}]: target_score={}, blob_score={}",
+            target.bdev_client_.pool_id_.ToU64(), target.target_score_, blob_score);
     }
   }
 

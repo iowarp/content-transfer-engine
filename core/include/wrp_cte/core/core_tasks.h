@@ -9,6 +9,7 @@
 #include <chimaera/bdev/bdev_tasks.h>
 // Include bdev client for TargetInfo
 #include <chimaera/bdev/bdev_client.h>
+#include <yaml-cpp/yaml.h>
 #include <chrono>
 
 namespace wrp_cte::core {
@@ -30,36 +31,31 @@ struct CreateParams {
   // CTE-specific parameters
   hipc::string config_file_path_;    // YAML config file path
   hipc::string config_yaml_string_;  // YAML config content (if provided directly)
-  chi::u32 worker_count_;            // Number of worker threads
 
   // Required: chimod library name for module manager
   static constexpr const char *chimod_lib_name = "wrp_cte_core";
 
   // Default constructor
-  CreateParams() : worker_count_(4) {}
+  CreateParams() {}
 
   // Constructor with allocator and parameters
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
-               const std::string &config_file_path = "",
-               chi::u32 worker_count = 4)
+               const std::string &config_file_path = "")
       : config_file_path_(alloc, config_file_path),
-        config_yaml_string_(alloc),
-        worker_count_(worker_count) {}
+        config_yaml_string_(alloc) {}
 
   // Copy constructor with allocator (required for task creation)
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                const CreateParams &other)
       : config_file_path_(alloc, other.config_file_path_.str()),
-        config_yaml_string_(alloc, other.config_yaml_string_.str()),
-        worker_count_(other.worker_count_) {}
+        config_yaml_string_(alloc, other.config_yaml_string_.str()) {}
 
   // Constructor with allocator, pool_id, and CreateParams (required for admin
   // task creation)
   CreateParams(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
                const chi::PoolId &pool_id, const CreateParams &other)
       : config_file_path_(alloc, other.config_file_path_.str()),
-        config_yaml_string_(alloc, other.config_yaml_string_.str()),
-        worker_count_(other.worker_count_) {
+        config_yaml_string_(alloc, other.config_yaml_string_.str()) {
     // pool_id is used by the admin task framework, but we don't need to store
     // it
     (void)pool_id; // Suppress unused parameter warning
@@ -67,7 +63,21 @@ struct CreateParams {
 
   // Serialization support for cereal
   template <class Archive> void serialize(Archive &ar) {
-    ar(config_file_path_, config_yaml_string_, worker_count_);
+    ar(config_file_path_, config_yaml_string_);
+  }
+
+  /**
+   * Load configuration from PoolConfig (for compose mode)
+   * Required for compose feature support
+   * @param pool_config Pool configuration from compose section
+   */
+  void LoadConfig(const chi::PoolConfig& pool_config) {
+    // The pool_config.config_ contains the full CTE configuration YAML
+    // in the format of config/cte_config.yaml (targets, storage, dpe sections).
+    // Store it directly - it will be parsed by Config::LoadFromString() in Runtime::Create()
+    if (!pool_config.config_.empty()) {
+      config_yaml_string_ = pool_config.config_;
+    }
   }
 };
 
@@ -350,7 +360,7 @@ namespace wrp_cte::core {
 struct TagInfo {
   std::string tag_name_;
   TagId tag_id_;
-  size_t total_size_;       // Total size of all blobs in this tag
+  std::atomic<size_t> total_size_;       // Total size of all blobs in this tag
   Timestamp last_modified_; // Last modification time
   Timestamp last_read_;     // Last read time
 
@@ -372,6 +382,25 @@ struct TagInfo {
         last_modified_(std::chrono::steady_clock::now()),
         last_read_(std::chrono::steady_clock::now()) {
     (void)alloc; // Suppress unused parameter warning
+  }
+
+  // Copy constructor
+  TagInfo(const TagInfo &other)
+      : tag_name_(other.tag_name_), tag_id_(other.tag_id_),
+        total_size_(other.total_size_.load()),
+        last_modified_(other.last_modified_),
+        last_read_(other.last_read_) {}
+
+  // Copy assignment operator
+  TagInfo& operator=(const TagInfo &other) {
+    if (this != &other) {
+      tag_name_ = other.tag_name_;
+      tag_id_ = other.tag_id_;
+      total_size_.store(other.total_size_.load());
+      last_modified_ = other.last_modified_;
+      last_read_ = other.last_read_;
+    }
+    return *this;
   }
 };
 

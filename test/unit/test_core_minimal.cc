@@ -46,7 +46,6 @@ public:
   // Semantic names for test constants (following CLAUDE.md requirements)
   static constexpr chi::QueueId kCTETestQueueId = chi::QueueId(1);
   static constexpr chi::u64 kTestTargetSize = 10 * 1024 * 1024;  // 10MB
-  static constexpr chi::u32 kDefaultWorkerCount = 4;
   
   std::unique_ptr<wrp_cte::core::Client> core_client_;
   std::string test_storage_path_;
@@ -124,10 +123,8 @@ TEST_CASE_METHOD(CTECoreTestFixture, "Create CTE Core Pool", "[cte][core][pool]"
   SECTION("CreateParams validation") {
     // Test default CreateParams structure
     wrp_cte::core::CreateParams default_params;
-    REQUIRE(default_params.worker_count_ == kDefaultWorkerCount);
     REQUIRE(std::string(wrp_cte::core::CreateParams::chimod_lib_name) == "wrp_cte_core");
-    
-    INFO("CreateParams validated - worker_count: " << default_params.worker_count_);
+
     INFO("ChiMod library name: " << wrp_cte::core::CreateParams::chimod_lib_name);
   }
   

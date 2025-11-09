@@ -86,9 +86,8 @@ public:
             // Step 5: Create CTE container
             std::cout << "5. Creating CTE container..." << std::endl;
             wrp_cte::core::CreateParams create_params;
-            create_params.worker_count_ = 2;  // Use 2 workers for testing
 
-            try {
+            try{
                 // Use CTE Core constants from core_tasks.h
                 cte_client_->Create(hipc::MemContext(), chi::PoolQuery::Dynamic(),
                                    wrp_cte::core::kCtePoolName,

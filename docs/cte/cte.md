@@ -145,75 +145,89 @@ public:
   // Constructors
   Client();
   explicit Client(const chi::PoolId &pool_id);
-  
+
   // Container lifecycle
-  void Create(const hipc::MemContext &mctx, 
+  void Create(const hipc::MemContext &mctx,
               const chi::PoolQuery &pool_query,
+              const std::string &pool_name,
+              const chi::PoolId &custom_pool_id,
               const CreateParams &params = CreateParams());
-  
+
   // Target management
   chi::u32 RegisterTarget(const hipc::MemContext &mctx,
                           const std::string &target_name,
                           chimaera::bdev::BdevType bdev_type,
-                          chi::u64 total_size);
-                          
+                          chi::u64 total_size,
+                          const chi::PoolQuery &target_query = chi::PoolQuery::Local(),
+                          const chi::PoolId &bdev_id = chi::PoolId::GetNull());
+
   chi::u32 UnregisterTarget(const hipc::MemContext &mctx,
                             const std::string &target_name);
-                            
-  std::vector<TargetInfo> ListTargets(const hipc::MemContext &mctx);
-  
+
+  std::vector<std::string> ListTargets(const hipc::MemContext &mctx);
+
   chi::u32 StatTargets(const hipc::MemContext &mctx);
-  
-  // Tag management  
-  TagInfo GetOrCreateTag(const hipc::MemContext &mctx,
-                        const std::string &tag_name,
-                        const TagId &tag_id = TagId::GetNull());
-                        
+
+  // Tag management
+  TagId GetOrCreateTag(const hipc::MemContext &mctx,
+                       const std::string &tag_name,
+                       const TagId &tag_id = TagId::GetNull());
+
   bool DelTag(const hipc::MemContext &mctx, const TagId &tag_id);
   bool DelTag(const hipc::MemContext &mctx, const std::string &tag_name);
-  
+
   size_t GetTagSize(const hipc::MemContext &mctx, const TagId &tag_id);
-  
+
   // Blob operations
   bool PutBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id,
+               const std::string &blob_name,
                chi::u64 offset, chi::u64 size, hipc::Pointer blob_data,
                float score, chi::u32 flags);
-               
+
   bool GetBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id,
+               const std::string &blob_name,
                chi::u64 offset, chi::u64 size, chi::u32 flags,
                hipc::Pointer blob_data);
-               
+
   bool DelBlob(const hipc::MemContext &mctx, const TagId &tag_id,
-               const std::string &blob_name, const BlobId &blob_id);
+               const std::string &blob_name);
 
   chi::u32 ReorganizeBlob(const hipc::MemContext &mctx,
                           const TagId &tag_id,
                           const std::string &blob_name,
                           float new_score);
 
-  // Blob score operations
+  // Blob metadata operations
   float GetBlobScore(const hipc::MemContext &mctx, const TagId &tag_id,
-                     const std::string &blob_name, 
-                     const BlobId &blob_id = BlobId::GetNull());
-  
-  // Blob size operations
+                     const std::string &blob_name);
+
   chi::u64 GetBlobSize(const hipc::MemContext &mctx, const TagId &tag_id,
-                       const std::string &blob_name, 
-                       const BlobId &blob_id = BlobId::GetNull());
-  
+                       const std::string &blob_name);
+
+  std::vector<std::string> GetContainedBlobs(const hipc::MemContext &mctx,
+                                             const TagId &tag_id);
+
   // Telemetry
   std::vector<CteTelemetry> PollTelemetryLog(const hipc::MemContext &mctx,
                                              std::uint64_t minimum_logical_time);
-  
+
   // Async variants (all methods have Async versions)
   hipc::FullPtr<CreateTask> AsyncCreate(...);
   hipc::FullPtr<RegisterTargetTask> AsyncRegisterTarget(...);
+  hipc::FullPtr<UnregisterTargetTask> AsyncUnregisterTarget(...);
+  hipc::FullPtr<ListTargetsTask> AsyncListTargets(...);
+  hipc::FullPtr<StatTargetsTask> AsyncStatTargets(...);
+  hipc::FullPtr<GetOrCreateTagTask<CreateParams>> AsyncGetOrCreateTag(...);
+  hipc::FullPtr<DelTagTask> AsyncDelTag(...);
+  hipc::FullPtr<GetTagSizeTask> AsyncGetTagSize(...);
+  hipc::FullPtr<PutBlobTask> AsyncPutBlob(...);
+  hipc::FullPtr<GetBlobTask> AsyncGetBlob(...);
+  hipc::FullPtr<DelBlobTask> AsyncDelBlob(...);
   hipc::FullPtr<ReorganizeBlobTask> AsyncReorganizeBlob(...);
   hipc::FullPtr<GetBlobScoreTask> AsyncGetBlobScore(...);
   hipc::FullPtr<GetBlobSizeTask> AsyncGetBlobSize(...);
-  // ... etc
+  hipc::FullPtr<GetContainedBlobsTask> AsyncGetContainedBlobs(...);
+  hipc::FullPtr<PollTelemetryLogTask> AsyncPollTelemetryLog(...);
 };
 
 }  // namespace wrp_cte::core
@@ -254,7 +268,8 @@ public:
   // Blob metadata operations
   float GetBlobScore(const std::string &blob_name);
   chi::u64 GetBlobSize(const std::string &blob_name);
-  
+  std::vector<std::string> GetContainedBlobs();
+
   // Tag accessor
   const TagId& GetTagId() const { return tag_id_; }
 };
@@ -269,6 +284,7 @@ public:
 - **Memory Management**: Raw data variant automatically handles shared memory allocation and cleanup
 - **Exception Safety**: Operations throw exceptions on failure for clear error handling
 - **Score Support**: Blob scoring for intelligent data placement across storage targets
+- **Blob Enumeration**: `GetContainedBlobs()` method returns all blob names in the tag
 
 #### Memory Management Guidelines
 
@@ -278,7 +294,7 @@ public:
 
 **For Asynchronous Operations:**
 - Only shared memory variant available to avoid memory lifecycle issues
-- Caller must keep `hipc::FullPtr<void>` alive until async task completes
+- Caller must keep `hipc::FullPtr<char>` alive until async task completes
 - See usage examples below for proper async memory management patterns
 
 ### Data Structures
@@ -299,38 +315,35 @@ struct CreateParams {
 };
 ```
 
-#### TargetInfo
+#### ListTargets Return Type
 
-Information about a registered storage target:
+The `ListTargets` method returns a vector of target names (strings):
 
 ```cpp
-struct TargetInfo {
-  std::string target_name_;
-  std::string bdev_pool_name_;
-  chimaera::bdev::Client bdev_client_;
-  chi::u64 bytes_read_;
-  chi::u64 bytes_written_;
-  chi::u64 ops_read_;
-  chi::u64 ops_written_;
-  float target_score_;              // 0-1, normalized log bandwidth
-  chi::u64 remaining_space_;        // Remaining allocatable space
-  chimaera::bdev::PerfMetrics perf_metrics_;
-};
+std::vector<std::string> ListTargets(const hipc::MemContext &mctx);
 ```
 
-#### TagInfo
+Example usage:
+```cpp
+auto target_names = cte_client->ListTargets(mctx);
+for (const auto& target_name : target_names) {
+    std::cout << "Target: " << target_name << "\n";
+}
+```
 
-Tag information for blob grouping:
+#### GetOrCreateTag Return Type
+
+The `GetOrCreateTag` method returns a `TagId` directly:
 
 ```cpp
-struct TagInfo {
-  std::string tag_name_;
-  TagId tag_id_;
-  std::unordered_map<BlobId, chi::u32> blob_ids_;
-  size_t total_size_;
-  Timestamp last_modified_;
-  Timestamp last_read_;
-};
+TagId GetOrCreateTag(const hipc::MemContext &mctx,
+                     const std::string &tag_name,
+                     const TagId &tag_id = TagId::GetNull());
+```
+
+Example usage:
+```cpp
+TagId tag_id = cte_client->GetOrCreateTag(mctx, "my_dataset");
 ```
 
 #### BlobInfo
@@ -398,14 +411,21 @@ CTE Core provides singleton access patterns:
 
 ```cpp
 // Initialize CTE client (must be called once)
-bool WRP_CTE_CLIENT_INIT(const std::string &config_path = "");
+// NOTE: This automatically calls CHIMAERA_CLIENT_INIT internally
+// config_path: Optional path to YAML configuration file
+// pool_query: Pool query type for CTE container creation (default: Dynamic)
+bool WRP_CTE_CLIENT_INIT(const std::string &config_path = "",
+                         const chi::PoolQuery &pool_query = chi::PoolQuery::Dynamic());
 
 // Access global CTE client instance
 auto *client = WRP_CTE_CLIENT;
-
-// Access global CTE configuration
-auto *config = WRP_CTE_CONFIG;
 ```
+
+**Important Notes:**
+- `WRP_CTE_CLIENT_INIT` automatically calls `CHIMAERA_CLIENT_INIT` internally
+- You do NOT need to call `CHIMAERA_CLIENT_INIT` separately when using CTE Core
+- Configuration is managed per-Runtime instance (no global ConfigManager singleton)
+- The config file path can also be specified via the `WRP_CTE_CONF` environment variable
 
 ## Usage Examples
 
@@ -419,24 +439,18 @@ auto *config = WRP_CTE_CONFIG;
 int main() {
   // Initialize Chimaera runtime
   chi::CHIMAERA_RUNTIME_INIT();
-  
-  // Initialize Chimaera client
-  chi::CHIMAERA_CLIENT_INIT();
-  
+
   // Initialize CTE subsystem
+  // NOTE: WRP_CTE_CLIENT_INIT automatically calls CHIMAERA_CLIENT_INIT internally
+  // You do NOT need to call CHIMAERA_CLIENT_INIT separately
   wrp_cte::core::WRP_CTE_CLIENT_INIT("/path/to/config.yaml");
-  
-  // Create CTE client
-  wrp_cte::core::Client cte_client;
-  
-  // Create CTE container with custom parameters
-  hipc::MemContext mctx;
-  wrp_cte::core::CreateParams params;
-  params.worker_count_ = 8;
-  params.config_file_path_ = "/path/to/cte_config.yaml";
-  
-  cte_client.Create(mctx, chi::PoolQuery::Local(), params);
-  
+
+  // Get global CTE client instance (created during initialization)
+  auto *cte_client = WRP_CTE_CLIENT;
+
+  // The CTE client is now ready to use - no need to call Create() again
+  // The client is automatically initialized with the pool specified during WRP_CTE_CLIENT_INIT
+
   return 0;
 }
 ```
@@ -444,11 +458,15 @@ int main() {
 ### Registering Storage Targets
 
 ```cpp
+// Get global CTE client
+auto *cte_client = WRP_CTE_CLIENT;
+hipc::MemContext mctx;
+
 // Register a file-based storage target
 std::string target_path = "/mnt/nvme/cte_storage.dat";
 chi::u64 target_size = 100ULL * 1024 * 1024 * 1024;  // 100GB
 
-chi::u32 result = cte_client.RegisterTarget(
+chi::u32 result = cte_client->RegisterTarget(
     mctx,
     target_path,
     chimaera::bdev::BdevType::kFile,
@@ -460,7 +478,7 @@ if (result == 0) {
 }
 
 // Register a RAM-based cache target
-result = cte_client.RegisterTarget(
+result = cte_client->RegisterTarget(
     mctx,
     "/tmp/cte_cache",
     chimaera::bdev::BdevType::kRam,
@@ -468,11 +486,9 @@ result = cte_client.RegisterTarget(
 );
 
 // List all registered targets
-auto targets = cte_client.ListTargets(mctx);
-for (const auto& target : targets) {
-    std::cout << "Target: " << target.target_name_ << "\n"
-              << "  Remaining space: " << target.remaining_space_ << " bytes\n"
-              << "  Score: " << target.target_score_ << "\n";
+auto targets = cte_client->ListTargets(mctx);
+for (const auto& target_name : targets) {
+    std::cout << "Target: " << target_name << "\n";
 }
 ```
 
@@ -481,23 +497,26 @@ for (const auto& target : targets) {
 #### Using the Core Client Directly
 
 ```cpp
+// Get global CTE client
+auto *cte_client = WRP_CTE_CLIENT;
+hipc::MemContext mctx;
+
 // Create or get a tag for grouping related blobs
-auto tag_info = cte_client.GetOrCreateTag(mctx, "dataset_v1");
-TagId tag_id = tag_info.tag_id_;
+TagId tag_id = cte_client->GetOrCreateTag(mctx, "dataset_v1");
 
 // Prepare data for storage
 std::vector<char> data(1024 * 1024);  // 1MB of data
 std::fill(data.begin(), data.end(), 'A');
 
 // Allocate shared memory for the data
-hipc::FullPtr<void> shm_buffer = CHI_IPC->AllocateBuffer<void>(data.size());
+// NOTE: AllocateBuffer is NOT templated - it returns hipc::FullPtr<char>
+hipc::FullPtr<char> shm_buffer = CHI_IPC->AllocateBuffer(data.size());
 memcpy(shm_buffer.ptr_, data.data(), data.size());
 
-bool success = cte_client.PutBlob(
+bool success = cte_client->PutBlob(
     mctx,
     tag_id,
     "blob_001",           // Blob name
-    BlobId::GetNull(),    // Auto-generate ID
     0,                    // Offset
     data.size(),          // Size
     shm_buffer.shm_,      // Shared memory pointer
@@ -507,38 +526,44 @@ bool success = cte_client.PutBlob(
 
 if (success) {
     std::cout << "Blob stored successfully\n";
-    
+
     // Get blob size
-    chi::u64 blob_size = cte_client.GetBlobSize(mctx, tag_id, "blob_001");
+    chi::u64 blob_size = cte_client->GetBlobSize(mctx, tag_id, "blob_001");
     std::cout << "Stored blob size: " << blob_size << " bytes\n";
-    
+
     // Get blob score
-    float blob_score = cte_client.GetBlobScore(mctx, tag_id, "blob_001");
+    float blob_score = cte_client->GetBlobScore(mctx, tag_id, "blob_001");
     std::cout << "Blob score: " << blob_score << "\n";
 }
 
 // Retrieve the blob
-auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(data.size());
-success = cte_client.GetBlob(
+auto retrieve_buffer = CHI_IPC->AllocateBuffer(data.size());
+success = cte_client->GetBlob(
     mctx,
     tag_id,
     "blob_001",           // Blob name for lookup
-    BlobId::GetNull(),    // Or use blob_id if known
     0,                    // Offset
     data.size(),          // Size to read
     0,                    // Flags
     retrieve_buffer.shm_  // Buffer for data
 );
 
+// Get all blob names in the tag
+std::vector<std::string> blob_names = cte_client->GetContainedBlobs(mctx, tag_id);
+std::cout << "Tag contains " << blob_names.size() << " blobs\n";
+for (const auto& name : blob_names) {
+    std::cout << "  - " << name << "\n";
+}
+
 // Get total size of all blobs in tag
-size_t tag_size = cte_client.GetTagSize(mctx, tag_id);
+size_t tag_size = cte_client->GetTagSize(mctx, tag_id);
 std::cout << "Tag total size: " << tag_size << " bytes\n";
 
 // Delete a specific blob
-success = cte_client.DelBlob(mctx, tag_id, "blob_001", BlobId::GetNull());
+success = cte_client->DelBlob(mctx, tag_id, "blob_001");
 
 // Delete entire tag (removes all blobs)
-success = cte_client.DelTag(mctx, tag_id);
+success = cte_client->DelTag(mctx, tag_id);
 ```
 
 #### Using the Tag Wrapper (Recommended for Convenience)
@@ -569,22 +594,29 @@ try {
     dataset_tag.GetBlob("blob_001", retrieve_data.data(), blob_size);
     
     // Alternative: Retrieve using manual shared memory management
-    // auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    // auto retrieve_buffer = CHI_IPC->AllocateBuffer(blob_size);
     // dataset_tag.GetBlob("blob_001", retrieve_buffer.shm_, blob_size);
-    
+
     std::cout << "Blob retrieved successfully\n";
-    
+
+    // Get all blobs in the tag
+    std::vector<std::string> blob_names = dataset_tag.GetContainedBlobs();
+    std::cout << "Tag contains " << blob_names.size() << " blobs\n";
+
 } catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << "\n";
 }
 
 // For tag-level operations, you still need the core client:
+auto *cte_client = WRP_CTE_CLIENT;
+hipc::MemContext mctx;
+
 // Get total size of all blobs in tag
-size_t tag_size = cte_client.GetTagSize(mctx, dataset_tag.GetTagId());
+size_t tag_size = cte_client->GetTagSize(mctx, dataset_tag.GetTagId());
 std::cout << "Tag total size: " << tag_size << " bytes\n";
 
 // Delete entire tag (removes all blobs)
-bool success = cte_client.DelTag(mctx, dataset_tag.GetTagId());
+bool success = cte_client->DelTag(mctx, dataset_tag.GetTagId());
 ```
 
 ### Tag Wrapper Usage Examples
@@ -647,7 +679,7 @@ try {
     std::cout << "Retrieved with automatic memory management\n";
     
     // Method 2: Manual shared memory management (for advanced use cases)
-    auto shm_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    auto shm_buffer = CHI_IPC->AllocateBuffer(blob_size);
     if (!shm_buffer.IsNull()) {
         data_tag.GetBlob("test_blob", shm_buffer.shm_, blob_size);
         std::cout << "Retrieved with manual shared memory management\n";
@@ -682,12 +714,12 @@ for (size_t i = 0; i < 4; ++i) {
     
     try {
         // For custom scoring, use shared memory version:
-        auto shm_ptr = CHI_IPC->AllocateBuffer<void>(chunks[i].size());
+        auto shm_ptr = CHI_IPC->AllocateBuffer(chunks[i].size());
         memcpy(shm_ptr.ptr_, chunks[i].data(), chunks[i].size());
         timeseries_tag.PutBlob(chunk_names[i], shm_ptr.shm_, chunks[i].size(), 0, scores[i]);
-        
+
         std::cout << "Stored chunk '" << chunk_names[i] << "' with score " << scores[i] << "\n";
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Failed to store chunk " << chunk_names[i] << ": " << e.what() << "\n";
     }
@@ -710,21 +742,21 @@ try {
     }
     
     std::cout << "Blob size: " << blob_size << " bytes\n";
-    
+
     // Allocate shared memory buffer for retrieval
-    auto retrieve_buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    auto retrieve_buffer = CHI_IPC->AllocateBuffer(blob_size);
     if (retrieve_buffer.IsNull()) {
         throw std::runtime_error("Failed to allocate retrieval buffer");
     }
-    
+
     // Retrieve the blob
     existing_tag.GetBlob("target_blob", retrieve_buffer.shm_, blob_size);
-    
+
     // Process the retrieved data
     ProcessBlobData(retrieve_buffer.ptr_, blob_size);
-    
+
     std::cout << "Successfully retrieved and processed blob\n";
-    
+
 } catch (const std::exception& e) {
     std::cerr << "Blob retrieval error: " << e.what() << "\n";
 }
@@ -746,15 +778,15 @@ for (int i = 0; i < 5; ++i) {
     std::fill(async_data[i].begin(), async_data[i].end(), 'Z' - i);
     
     // Allocate shared memory (must keep alive until async operation completes)
-    auto shm_buffer = CHI_IPC->AllocateBuffer<void>(async_data[i].size());
+    auto shm_buffer = CHI_IPC->AllocateBuffer(async_data[i].size());
     if (shm_buffer.IsNull()) {
         std::cerr << "Failed to allocate shared memory for async operation " << i << "\n";
         continue;
     }
-    
+
     // Copy data to shared memory
     memcpy(shm_buffer.ptr_, async_data[i].data(), async_data[i].size());
-    
+
     try {
         // Start async operation (returns immediately)
         auto task = async_tag.AsyncPutBlob(
@@ -764,13 +796,13 @@ for (int i = 0; i < 5; ++i) {
             0,    // offset
             0.6f  // score
         );
-        
+
         // Store references to keep alive
         shm_buffers.push_back(std::move(shm_buffer));
         async_tasks.push_back(task);
-        
+
         std::cout << "Started async put for blob " << i << "\n";
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Failed to start async put " << i << ": " << e.what() << "\n";
     }
@@ -976,31 +1008,28 @@ dpe:
 
 ### Programmatic Configuration
 
+Configuration in CTE Core is now managed per-Runtime instance, not through a global singleton. Configuration is loaded during initialization through the `WRP_CTE_CLIENT_INIT` function.
+
 ```cpp
-#include <wrp_cte/core/core_config.h>
+#include <wrp_cte/core/core_client.h>
 
-// Access configuration manager
-auto& config_mgr = wrp_cte::core::ConfigManager::GetInstance();
+// Initialize CTE with configuration file
+// Configuration is passed to the Runtime during creation
+bool success = wrp_cte::core::WRP_CTE_CLIENT_INIT("/path/to/config.yaml");
 
-// Load configuration from file
-bool success = config_mgr.LoadConfig("/path/to/config.yaml");
+// Or use environment variable WRP_CTE_CONF
+// export WRP_CTE_CONF=/path/to/config.yaml
+success = wrp_cte::core::WRP_CTE_CLIENT_INIT();
 
-// Or load from environment
-success = config_mgr.LoadConfigFromEnvironment();
-
-// Access configuration values
-const auto& config = config_mgr.GetConfig();
-std::cout << "Worker count: " << config.worker_count_ << "\n";
-std::cout << "Max targets: " << config.targets_.max_targets_ << "\n";
-
-// Modify configuration at runtime
-auto& mutable_config = config_mgr.GetMutableConfig();
-mutable_config.performance_.max_concurrent_operations_ = 128;
-mutable_config.performance_.score_threshold_ = 0.85f;
-
-// Save modified configuration
-config.SaveToFile("/path/to/new_config.yaml");
+// Configuration is now embedded in the Runtime instance
+// and cannot be modified after initialization
 ```
+
+**Note:** The ConfigManager singleton has been removed. Configuration is now:
+- Loaded once during `WRP_CTE_CLIENT_INIT`
+- Embedded in the CTE Runtime instance via `CreateParams`
+- Immutable after initialization
+- Can be specified via file path parameter or `WRP_CTE_CONF` environment variable
 
 ### Queue Priority Options
 
@@ -1086,9 +1115,10 @@ import wrp_cte_core_ext as cte
 
 # Initialize Chimaera runtime
 cte.chimaera_runtime_init()
-cte.chimaera_client_init()
 
 # Initialize CTE
+# NOTE: This automatically calls chimaera_client_init() internally
+# You do NOT need to call chimaera_client_init() separately
 cte.initialize_cte("/path/to/config.yaml")
 
 # Get global CTE client
@@ -1273,18 +1303,7 @@ result = client.ReorganizeBlob(
 
 #### Choosing Between Tag Wrapper and Direct Client API
 
-**Use the Tag Wrapper (`wrp_cte::core::Tag`) when:**
-- Working primarily with blobs within a single tag
-- You want simplified memory management for synchronous operations
-- Exception-based error handling fits your application design
-- Code readability and convenience are prioritized
-
-**Use the Direct Client API (`wrp_cte::core::Client`) when:**
-- Working with multiple tags simultaneously
-- You need precise control over memory allocation and lifecycle
-- Return code-based error handling is preferred
-- Maximum performance is critical (avoids wrapper overhead)
-- Using tag-level operations (GetTagSize, DelTag)
+Generally, the tag wrapper class is preferred over the direct API. 
 
 #### Memory Management Best Practices
 
@@ -1299,7 +1318,8 @@ tag.PutBlob("item", data.data(), data.size());  // Safe - automatic cleanup
 **For Shared Memory Operations:**
 ```cpp
 // Manual shared memory management - more control
-auto shm_buffer = CHI_IPC->AllocateBuffer<void>(data_size);
+// NOTE: AllocateBuffer is NOT templated - it returns hipc::FullPtr<char>
+auto shm_buffer = CHI_IPC->AllocateBuffer(data_size);
 memcpy(shm_buffer.ptr_, raw_data, data_size);
 tag.PutBlob("item", shm_buffer.shm_, data_size, 0, score);
 // shm_buffer automatically cleaned up when it goes out of scope
@@ -1308,15 +1328,15 @@ tag.PutBlob("item", shm_buffer.shm_, data_size, 0, score);
 **For Asynchronous Operations:**
 ```cpp
 // Always keep shared memory alive until async task completes
-std::vector<hipc::FullPtr<void>> buffers;  // Keep alive
+std::vector<hipc::FullPtr<char>> buffers;  // Keep alive
 std::vector<hipc::FullPtr<PutBlobTask>> tasks;
 
 for (auto& data_chunk : data_chunks) {
-    auto buffer = CHI_IPC->AllocateBuffer<void>(data_chunk.size());
+    auto buffer = CHI_IPC->AllocateBuffer(data_chunk.size());
     memcpy(buffer.ptr_, data_chunk.data(), data_chunk.size());
-    
+
     auto task = tag.AsyncPutBlob("chunk", buffer.shm_, data_chunk.size());
-    
+
     buffers.push_back(std::move(buffer));  // Keep alive!
     tasks.push_back(task);
 }
@@ -1354,12 +1374,12 @@ for (const auto& item : batch_items) {
 // Efficient: Check size before allocating retrieval buffer
 chi::u64 blob_size = tag.GetBlobSize("large_blob");
 if (blob_size > 0) {
-    auto buffer = CHI_IPC->AllocateBuffer<void>(blob_size);
+    auto buffer = CHI_IPC->AllocateBuffer(blob_size);
     tag.GetBlob("large_blob", buffer.shm_, blob_size);
 }
 
 // Less efficient: Allocate maximum possible size
-// auto buffer = CHI_IPC->AllocateBuffer<void>(MAX_SIZE);  // Wasteful
+// auto buffer = CHI_IPC->AllocateBuffer(MAX_SIZE);  // Wasteful
 ```
 
 #### Error Handling Patterns
@@ -1383,19 +1403,19 @@ try {
 
 **Direct Client (Return Code-based):**
 ```cpp
-wrp_cte::core::Client client;
+auto *client = WRP_CTE_CLIENT;
 hipc::MemContext mctx;
 
-auto tag_info = client.GetOrCreateTag(mctx, "dataset");
-bool success = client.PutBlob(mctx, tag_info.tag_id_, "data", 
-                              BlobId::GetNull(), 0, size, buffer, 0.5f, 0);
+TagId tag_id = client->GetOrCreateTag(mctx, "dataset");
+bool success = client->PutBlob(mctx, tag_id, "data",
+                               0, size, buffer, 0.5f, 0);
 
 if (!success) {
     std::cerr << "PutBlob failed\n";
     return false;
 }
 
-chi::u64 stored_size = client.GetBlobSize(mctx, tag_info.tag_id_, "data");
+chi::u64 stored_size = client->GetBlobSize(mctx, tag_id, "data");
 if (stored_size != size) {
     std::cerr << "Size mismatch: expected " << size << ", got " << stored_size << "\n";
     return false;

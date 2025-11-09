@@ -119,20 +119,6 @@ bool Config::SaveToFile(const std::string &config_file_path) const {
 }
 
 bool Config::Validate() const {
-  // Validate worker count
-  if (worker_count_ == 0 || worker_count_ > 1024) {
-    HELOG(kError, "Config validation error: Invalid worker_count {} (must be 1-1024)", worker_count_);
-    return false;
-  }
-  
-  // Validate queue configurations
-  if (!ValidateQueueConfig(target_management_queue_, "target_management_queue") ||
-      !ValidateQueueConfig(tag_management_queue_, "tag_management_queue") ||
-      !ValidateQueueConfig(blob_operations_queue_, "blob_operations_queue") ||
-      !ValidateQueueConfig(stats_queue_, "stats_queue")) {
-    return false;
-  }
-  
   // Validate performance configuration
   if (performance_.target_stat_interval_ms_ == 0 || performance_.target_stat_interval_ms_ > 60000) {
     HELOG(kError, "Config validation error: Invalid target_stat_interval_ms {} (must be 1-60000)", performance_.target_stat_interval_ms_);
@@ -174,9 +160,6 @@ bool Config::Validate() const {
 }
 
 std::string Config::GetParameterString(const std::string &param_name) const {
-  if (param_name == "worker_count") {
-    return std::to_string(worker_count_);
-  }
   if (param_name == "target_stat_interval_ms") {
     return std::to_string(performance_.target_stat_interval_ms_);
   }
@@ -205,13 +188,9 @@ std::string Config::GetParameterString(const std::string &param_name) const {
   return ""; // Parameter not found
 }
 
-bool Config::SetParameterFromString(const std::string &param_name, 
+bool Config::SetParameterFromString(const std::string &param_name,
                                     const std::string &value) {
   try {
-    if (param_name == "worker_count") {
-      worker_count_ = static_cast<chi::u32>(std::stoul(value));
-      return true;
-    }
     if (param_name == "target_stat_interval_ms") {
       performance_.target_stat_interval_ms_ = static_cast<chi::u32>(std::stoul(value));
       return true;
@@ -254,40 +233,6 @@ bool Config::SetParameterFromString(const std::string &param_name,
 }
 
 bool Config::ParseYamlNode(const YAML::Node &node) {
-  // Parse worker configuration
-  if (node["worker_count"]) {
-    worker_count_ = node["worker_count"].as<chi::u32>();
-  }
-  
-  // Parse queue configurations
-  if (node["queues"]) {
-    const YAML::Node &queues = node["queues"];
-    
-    if (queues["target_management"]) {
-      if (!ParseQueueConfig(queues["target_management"], target_management_queue_)) {
-        return false;
-      }
-    }
-    
-    if (queues["tag_management"]) {
-      if (!ParseQueueConfig(queues["tag_management"], tag_management_queue_)) {
-        return false;
-      }
-    }
-    
-    if (queues["blob_operations"]) {
-      if (!ParseQueueConfig(queues["blob_operations"], blob_operations_queue_)) {
-        return false;
-      }
-    }
-    
-    if (queues["stats"]) {
-      if (!ParseQueueConfig(queues["stats"], stats_queue_)) {
-        return false;
-      }
-    }
-  }
-  
   // Parse performance configuration
   if (node["performance"]) {
     if (!ParsePerformanceConfig(node["performance"])) {
@@ -326,19 +271,10 @@ bool Config::ParseYamlNode(const YAML::Node &node) {
 
 void Config::EmitYaml(YAML::Emitter &emitter) const {
   emitter << YAML::BeginMap;
-  
+
   // Emit general configuration
-  emitter << YAML::Key << "worker_count" << YAML::Value << worker_count_;
   emitter << YAML::Key << "config_env_var" << YAML::Value << config_env_var_.c_str();
-  
-  // Emit queue configurations
-  emitter << YAML::Key << "queues" << YAML::Value << YAML::BeginMap;
-  EmitQueueConfig(emitter, "target_management", target_management_queue_);
-  EmitQueueConfig(emitter, "tag_management", tag_management_queue_);
-  EmitQueueConfig(emitter, "blob_operations", blob_operations_queue_);
-  EmitQueueConfig(emitter, "stats", stats_queue_);
-  emitter << YAML::EndMap;
-  
+
   // Emit performance configuration
   emitter << YAML::Key << "performance" << YAML::Value << YAML::BeginMap;
   emitter << YAML::Key << "target_stat_interval_ms" << YAML::Value << performance_.target_stat_interval_ms_;
@@ -380,19 +316,6 @@ void Config::EmitYaml(YAML::Emitter &emitter) const {
   emitter << YAML::EndMap;
   
   emitter << YAML::EndMap;
-}
-
-bool Config::ParseQueueConfig(const YAML::Node &node, QueueConfig &queue_config) {
-  if (node["lane_count"]) {
-    queue_config.lane_count_ = node["lane_count"].as<chi::u32>();
-  }
-
-  if (node["priority"]) {
-    std::string priority_str = node["priority"].as<std::string>();
-    queue_config.queue_id_ = StringToQueueId(priority_str);
-  }
-
-  return true;
 }
 
 bool Config::ParsePerformanceConfig(const YAML::Node &node) {
@@ -623,113 +546,6 @@ std::string Config::FormatSizeBytes(chi::u64 size_bytes) const {
     std::snprintf(buffer, sizeof(buffer), "%.1f%s", size, units[unit_index]);
     return std::string(buffer);
   }
-}
-
-void Config::EmitQueueConfig(YAML::Emitter &emitter,
-                             const std::string &name,
-                             const QueueConfig &config) const {
-  emitter << YAML::Key << name << YAML::Value << YAML::BeginMap;
-  emitter << YAML::Key << "lane_count" << YAML::Value << config.lane_count_;
-  emitter << YAML::Key << "priority" << YAML::Value << QueueIdToString(config.queue_id_);
-  emitter << YAML::EndMap;
-}
-
-std::string Config::QueueIdToString(chi::QueueId queue_id) const {
-  if (queue_id == kLowLatencyQueue) {
-    return "low_latency";
-  } else if (queue_id == kHighLatencyQueue) {
-    return "high_latency";
-  } else {
-    return "low_latency";
-  }
-}
-
-chi::QueueId Config::StringToQueueId(const std::string &queue_str) const {
-  if (queue_str == "low_latency") {
-    return kLowLatencyQueue;
-  } else if (queue_str == "high_latency") {
-    return kHighLatencyQueue;
-  }
-
-  HELOG(kError, "Config warning: Unknown priority '{}', using default (low_latency)", queue_str);
-  return kLowLatencyQueue;
-}
-
-bool Config::ValidateQueueConfig(const QueueConfig &config, 
-                                 const std::string &queue_name) const {
-  if (config.lane_count_ == 0 || config.lane_count_ > 64) {
-    HELOG(kError, "Config validation error: Invalid lane_count {} for {} (must be 1-64)", config.lane_count_, queue_name);
-    return false;
-  }
-  
-  return true;
-}
-
-// ConfigManager implementation
-ConfigManager& ConfigManager::GetInstance() {
-  static ConfigManager instance;
-  return instance;
-}
-
-void ConfigManager::Initialize(void *alloc) {
-  allocator_ = alloc;
-  config_ = std::make_unique<Config>(alloc);
-  initialized_ = true;
-  config_loaded_ = false;
-}
-
-bool ConfigManager::LoadConfig(const std::string &config_file_path) {
-  if (!initialized_) {
-    HELOG(kError, "ConfigManager error: Not initialized");
-    return false;
-  }
-
-  config_loaded_ = config_->LoadFromFile(config_file_path);
-  return config_loaded_;
-}
-
-bool ConfigManager::LoadConfigFromString(const std::string &yaml_string) {
-  if (!initialized_) {
-    HELOG(kError, "ConfigManager error: Not initialized");
-    return false;
-  }
-
-  config_loaded_ = config_->LoadFromString(yaml_string);
-  return config_loaded_;
-}
-
-bool ConfigManager::LoadConfigFromEnvironment() {
-  if (!initialized_) {
-    HELOG(kError, "ConfigManager error: Not initialized");
-    return false;
-  }
-
-  config_loaded_ = config_->LoadFromEnvironment();
-  return config_loaded_;
-}
-
-const Config& ConfigManager::GetConfig() const {
-  if (!initialized_ || !config_) {
-    static Config default_config;
-    HELOG(kError, "ConfigManager warning: Using default configuration");
-    return default_config;
-  }
-  
-  return *config_;
-}
-
-Config& ConfigManager::GetMutableConfig() {
-  if (!initialized_ || !config_) {
-    static Config default_config;
-    HELOG(kError, "ConfigManager warning: Using default configuration");
-    return default_config;
-  }
-  
-  return *config_;
-}
-
-bool ConfigManager::IsConfigurationReady() const {
-  return initialized_ && config_loaded_ && config_ != nullptr;
 }
 
 }  // namespace wrp_cte::core

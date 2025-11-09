@@ -36,9 +36,8 @@ bool ContentTransferEngine::ClientInit(const std::string &config_path,
     return false;
   }
 
-  // Initialize CTE core client and config
+  // Initialize CTE core client
   auto *cte_client = WRP_CTE_CLIENT;
-  auto *cte_config = WRP_CTE_CONFIG;
 
   // Determine config file path - prioritize parameter, then environment variables
   CreateParams params;
@@ -80,7 +79,6 @@ bool ContentTransferEngine::ClientInit(const std::string &config_path,
 
   // Suppress unused variable warnings
   (void)cte_client;
-  (void)cte_config;
 
   // Mark as successfully initialized
   is_initialized_ = true;
