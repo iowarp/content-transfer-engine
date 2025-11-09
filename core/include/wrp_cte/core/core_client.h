@@ -536,6 +536,98 @@ public:
     ipc_manager->Enqueue(task);
     return task;
   }
+
+  /**
+   * Synchronous tag query - waits for completion
+   * Queries tags by regex pattern
+   * @param mctx Memory context
+   * @param tag_regex Tag regex pattern to match
+   * @param pool_query Pool query for routing (default: Broadcast)
+   * @return Vector of matching tag names
+   */
+  std::vector<std::string> TagQuery(const hipc::MemContext &mctx,
+                                     const std::string &tag_regex,
+                                     const chi::PoolQuery &pool_query = chi::PoolQuery::Broadcast()) {
+    auto task = AsyncTagQuery(mctx, tag_regex, pool_query);
+    task->Wait();
+    std::vector<std::string> result;
+    if (task->return_code_.load() == 0) {
+      for (const auto &tag_name : task->tag_names_) {
+        result.emplace_back(tag_name.str());
+      }
+    }
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous tag query - returns immediately
+   * @param mctx Memory context
+   * @param tag_regex Tag regex pattern to match
+   * @param pool_query Pool query for routing (default: Broadcast)
+   * @return Task pointer for async operation
+   */
+  hipc::FullPtr<TagQueryTask>
+  AsyncTagQuery(const hipc::MemContext &mctx,
+                const std::string &tag_regex,
+                const chi::PoolQuery &pool_query = chi::PoolQuery::Broadcast()) {
+    (void)mctx; // Suppress unused parameter warning
+    auto *ipc_manager = CHI_IPC;
+
+    auto task = ipc_manager->NewTask<TagQueryTask>(
+        chi::CreateTaskId(), pool_id_, pool_query, tag_regex);
+
+    ipc_manager->Enqueue(task);
+    return task;
+  }
+
+  /**
+   * Synchronous blob query - waits for completion
+   * Queries blobs by tag and blob regex patterns
+   * @param mctx Memory context
+   * @param tag_regex Tag regex pattern to match
+   * @param blob_regex Blob regex pattern to match
+   * @param pool_query Pool query for routing (default: Broadcast)
+   * @return Vector of matching blob names
+   */
+  std::vector<std::string> BlobQuery(const hipc::MemContext &mctx,
+                                      const std::string &tag_regex,
+                                      const std::string &blob_regex,
+                                      const chi::PoolQuery &pool_query = chi::PoolQuery::Broadcast()) {
+    auto task = AsyncBlobQuery(mctx, tag_regex, blob_regex, pool_query);
+    task->Wait();
+    std::vector<std::string> result;
+    if (task->return_code_.load() == 0) {
+      for (const auto &blob_name : task->blob_names_) {
+        result.emplace_back(blob_name.str());
+      }
+    }
+    CHI_IPC->DelTask(task);
+    return result;
+  }
+
+  /**
+   * Asynchronous blob query - returns immediately
+   * @param mctx Memory context
+   * @param tag_regex Tag regex pattern to match
+   * @param blob_regex Blob regex pattern to match
+   * @param pool_query Pool query for routing (default: Broadcast)
+   * @return Task pointer for async operation
+   */
+  hipc::FullPtr<BlobQueryTask>
+  AsyncBlobQuery(const hipc::MemContext &mctx,
+                 const std::string &tag_regex,
+                 const std::string &blob_regex,
+                 const chi::PoolQuery &pool_query = chi::PoolQuery::Broadcast()) {
+    (void)mctx; // Suppress unused parameter warning
+    auto *ipc_manager = CHI_IPC;
+
+    auto task = ipc_manager->NewTask<BlobQueryTask>(
+        chi::CreateTaskId(), pool_id_, pool_query, tag_regex, blob_regex);
+
+    ipc_manager->Enqueue(task);
+    return task;
+  }
 };
 
 // Global pointer-based singleton for CTE client with lazy initialization

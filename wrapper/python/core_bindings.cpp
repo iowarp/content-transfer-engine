@@ -69,7 +69,13 @@ NB_MODULE(wrp_cte_core_ext, m) {
            "Poll telemetry log with minimum logical time filter")
       .def("ReorganizeBlob", &wrp_cte::core::Client::ReorganizeBlob,
            "mctx"_a, "tag_id"_a, "blob_name"_a, "new_score"_a,
-           "Reorganize single blob with new score for data placement optimization");
+           "Reorganize single blob with new score for data placement optimization")
+      .def("TagQuery", &wrp_cte::core::Client::TagQuery,
+           "mctx"_a, "tag_regex"_a, "pool_query"_a = chi::PoolQuery::Broadcast(),
+           "Query tags by regex pattern")
+      .def("BlobQuery", &wrp_cte::core::Client::BlobQuery,
+           "mctx"_a, "tag_regex"_a, "blob_regex"_a, "pool_query"_a = chi::PoolQuery::Broadcast(),
+           "Query blobs by tag and blob regex patterns");
 
   // Module-level convenience functions
   m.def(

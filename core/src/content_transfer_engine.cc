@@ -52,4 +52,19 @@ bool ContentTransferEngine::ClientInit(const chi::PoolQuery &pool_query) {
   return true;
 }
 
+std::vector<std::string> ContentTransferEngine::TagQuery(
+    const std::string &tag_re,
+    const chi::PoolQuery &pool_query) {
+  auto *cte_client = WRP_CTE_CLIENT;
+  return cte_client->TagQuery(hipc::MemContext(), tag_re, pool_query);
+}
+
+std::vector<std::string> ContentTransferEngine::BlobQuery(
+    const std::string &tag_re,
+    const std::string &blob_re,
+    const chi::PoolQuery &pool_query) {
+  auto *cte_client = WRP_CTE_CLIENT;
+  return cte_client->BlobQuery(hipc::MemContext(), tag_re, blob_re, pool_query);
+}
+
 } // namespace wrp_cte::core

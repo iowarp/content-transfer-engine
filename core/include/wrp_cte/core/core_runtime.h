@@ -345,6 +345,20 @@ private:
   void GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
                          chi::RunContext &ctx);
 
+  /**
+   * Query tags by regex pattern (Method::kTagQuery)
+   * @param task TagQuery task containing regex pattern and results
+   * @param ctx Runtime context for task execution
+   */
+  void TagQuery(hipc::FullPtr<TagQueryTask> task, chi::RunContext &ctx);
+
+  /**
+   * Query blobs by tag and blob regex patterns (Method::kBlobQuery)
+   * @param task BlobQuery task containing regex patterns and results
+   * @param ctx Runtime context for task execution
+   */
+  void BlobQuery(hipc::FullPtr<BlobQueryTask> task, chi::RunContext &ctx);
+
 private:
   /**
    * Helper function to compute hash-based pool query for blob operations

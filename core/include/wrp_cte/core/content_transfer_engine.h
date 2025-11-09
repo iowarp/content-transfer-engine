@@ -61,6 +61,26 @@ public:
     return is_initializing_;
   }
 
+  /**
+   * Query tags by regex pattern
+   * @param tag_re Tag regex pattern
+   * @param pool_query Pool query for routing (default: Broadcast)
+   * @return Vector of matching tag names
+   */
+  std::vector<std::string> TagQuery(const std::string &tag_re,
+                                     const chi::PoolQuery &pool_query = chi::PoolQuery::Broadcast());
+
+  /**
+   * Query blobs by tag and blob regex patterns
+   * @param tag_re Tag regex pattern
+   * @param blob_re Blob regex pattern
+   * @param pool_query Pool query for routing (default: Broadcast)
+   * @return Vector of matching blob names
+   */
+  std::vector<std::string> BlobQuery(const std::string &tag_re,
+                                      const std::string &blob_re,
+                                      const chi::PoolQuery &pool_query = chi::PoolQuery::Broadcast());
+
 private:
   bool is_initializing_;  /**< True during initialization process */
   bool is_initialized_;   /**< True when fully initialized */

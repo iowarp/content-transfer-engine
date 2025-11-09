@@ -23,6 +23,11 @@ add_executable(test_core_functionality
     test_core_functionality.cc
 )
 
+# Create test_query executable for query API tests
+add_executable(test_query
+    test_query.cc
+)
+
 # Link against required libraries using modern target names
 target_link_libraries(cte_core_unit_tests
     wrp_cte_core_client          # CTE core client library
@@ -35,6 +40,16 @@ target_link_libraries(cte_core_unit_tests
 
 # Link test_core_functionality
 target_link_libraries(test_core_functionality
+    wrp_cte_core_client          # CTE core client library
+    wrp_cte_core_runtime         # CTE core runtime library
+    chimaera::cxx                # Modern Chimaera core framework target
+    chimaera::admin_client       # Modern Chimaera admin target (if needed)
+    Catch2::Catch2WithMain       # Catch2 testing framework with main
+    MPI::MPI_CXX                 # MPI support if needed
+)
+
+# Link test_query
+target_link_libraries(test_query
     wrp_cte_core_client          # CTE core client library
     wrp_cte_core_runtime         # CTE core runtime library
     chimaera::cxx                # Modern Chimaera core framework target
@@ -63,6 +78,13 @@ target_compile_options(test_core_functionality PRIVATE
     $<$<CONFIG:Release>:-O3>     # Optimization for release
 )
 
+target_compile_features(test_query PRIVATE cxx_std_17)
+target_compile_options(test_query PRIVATE
+    -Wall -Wextra -Werror        # Strict warnings as per CLAUDE.md
+    $<$<CONFIG:Debug>:-g -O0>    # Debug symbols and no optimization for debug
+    $<$<CONFIG:Release>:-O3>     # Optimization for release
+)
+
 # Include directories
 target_include_directories(cte_core_unit_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/core/include
@@ -70,6 +92,11 @@ target_include_directories(cte_core_unit_tests PRIVATE
 )
 
 target_include_directories(test_core_functionality PRIVATE
+    ${CMAKE_SOURCE_DIR}/core/include
+    ${CMAKE_SOURCE_DIR}/core/src
+)
+
+target_include_directories(test_query PRIVATE
     ${CMAKE_SOURCE_DIR}/core/include
     ${CMAKE_SOURCE_DIR}/core/src
 )
@@ -119,7 +146,7 @@ endif()
 # ------------------------------------------------------------------------------
 # Install Targets
 # ------------------------------------------------------------------------------
-install(TARGETS cte_core_unit_tests test_core_functionality
+install(TARGETS cte_core_unit_tests test_core_functionality test_query
     LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
     ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
     RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}

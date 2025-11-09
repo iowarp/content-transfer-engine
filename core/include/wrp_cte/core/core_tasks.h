@@ -1140,6 +1140,127 @@ struct GetContainedBlobsTask : public chi::Task {
   }
 };
 
+/**
+ * TagQuery task - Query tags by regex pattern
+ */
+struct TagQueryTask : public chi::Task {
+  IN hipc::string tag_regex_;              // Tag regex pattern
+  OUT hipc::vector<hipc::string> tag_names_; // Matching tag names
+
+  // SHM constructor
+  explicit TagQueryTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
+      : chi::Task(alloc), tag_regex_(alloc), tag_names_(alloc) {}
+
+  // Emplace constructor
+  explicit TagQueryTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+                        const chi::TaskId &task_id,
+                        const chi::PoolId &pool_id,
+                        const chi::PoolQuery &pool_query,
+                        const std::string &tag_regex)
+      : chi::Task(alloc, task_id, pool_id, pool_query, Method::kTagQuery),
+        tag_regex_(alloc, tag_regex), tag_names_(alloc) {
+    task_id_ = task_id;
+    pool_id_ = pool_id;
+    method_ = Method::kTagQuery;
+    task_flags_.Clear();
+    pool_query_ = pool_query;
+  }
+
+  /**
+   * Serialize IN and INOUT parameters
+   */
+  template <typename Archive> void SerializeIn(Archive &ar) {
+    ar(tag_regex_);
+  }
+
+  /**
+   * Serialize OUT and INOUT parameters
+   */
+  template <typename Archive> void SerializeOut(Archive &ar) {
+    ar(tag_names_);
+  }
+
+  /**
+   * Copy from another TagQueryTask
+   */
+  void Copy(const hipc::FullPtr<TagQueryTask> &other) {
+    tag_regex_ = other->tag_regex_;
+    tag_names_ = other->tag_names_;
+  }
+
+  /**
+   * Aggregate results from multiple nodes
+   */
+  void Aggregate(const hipc::FullPtr<TagQueryTask> &other) {
+    // Append tag names from other task
+    for (const auto &tag_name : other->tag_names_) {
+      tag_names_.emplace_back(tag_name);
+    }
+  }
+};
+
+/**
+ * BlobQuery task - Query blobs by tag and blob regex patterns
+ */
+struct BlobQueryTask : public chi::Task {
+  IN hipc::string tag_regex_;               // Tag regex pattern
+  IN hipc::string blob_regex_;              // Blob regex pattern
+  OUT hipc::vector<hipc::string> blob_names_; // Matching blob names
+
+  // SHM constructor
+  explicit BlobQueryTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc)
+      : chi::Task(alloc), tag_regex_(alloc), blob_regex_(alloc), blob_names_(alloc) {}
+
+  // Emplace constructor
+  explicit BlobQueryTask(const hipc::CtxAllocator<CHI_MAIN_ALLOC_T> &alloc,
+                         const chi::TaskId &task_id,
+                         const chi::PoolId &pool_id,
+                         const chi::PoolQuery &pool_query,
+                         const std::string &tag_regex,
+                         const std::string &blob_regex)
+      : chi::Task(alloc, task_id, pool_id, pool_query, Method::kBlobQuery),
+        tag_regex_(alloc, tag_regex), blob_regex_(alloc, blob_regex), blob_names_(alloc) {
+    task_id_ = task_id;
+    pool_id_ = pool_id;
+    method_ = Method::kBlobQuery;
+    task_flags_.Clear();
+    pool_query_ = pool_query;
+  }
+
+  /**
+   * Serialize IN and INOUT parameters
+   */
+  template <typename Archive> void SerializeIn(Archive &ar) {
+    ar(tag_regex_, blob_regex_);
+  }
+
+  /**
+   * Serialize OUT and INOUT parameters
+   */
+  template <typename Archive> void SerializeOut(Archive &ar) {
+    ar(blob_names_);
+  }
+
+  /**
+   * Copy from another BlobQueryTask
+   */
+  void Copy(const hipc::FullPtr<BlobQueryTask> &other) {
+    tag_regex_ = other->tag_regex_;
+    blob_regex_ = other->blob_regex_;
+    blob_names_ = other->blob_names_;
+  }
+
+  /**
+   * Aggregate results from multiple nodes
+   */
+  void Aggregate(const hipc::FullPtr<BlobQueryTask> &other) {
+    // Append blob names from other task
+    for (const auto &blob_name : other->blob_names_) {
+      blob_names_.emplace_back(blob_name);
+    }
+  }
+};
+
 } // namespace wrp_cte::core
 
 #endif // WRPCTE_CORE_TASKS_H_

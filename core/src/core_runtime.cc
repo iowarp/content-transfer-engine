@@ -6,6 +6,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <regex>
 #include <string>
 #include <unordered_map>
 #include <wrp_cte/core/core_config.h>
@@ -1906,6 +1907,114 @@ void Runtime::GetContainedBlobs(hipc::FullPtr<GetContainedBlobsTask> task,
   } catch (const std::exception &e) {
     task->return_code_.store(1); // Error during operation
     HILOG(kError, "GetContainedBlobs failed: {}", e.what());
+  }
+}
+
+void Runtime::TagQuery(hipc::FullPtr<TagQueryTask> task, chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Broadcast();
+    return;
+  }
+
+  try {
+    std::string tag_regex = task->tag_regex_.str();
+    std::vector<std::string> matching_tags;
+
+    // Create regex pattern
+    std::regex pattern(tag_regex);
+
+    // Iterate over tag table and find matching tags
+    tag_name_to_id_.for_each(
+        [&pattern, &matching_tags](const std::string &tag_name,
+                                   const TagId &tag_id) {
+          (void)tag_id; // Suppress unused parameter warning
+          if (std::regex_match(tag_name, pattern)) {
+            matching_tags.push_back(tag_name);
+          }
+        });
+
+    // Copy results to task output
+    task->tag_names_.clear();
+    for (const auto &tag_name : matching_tags) {
+      task->tag_names_.emplace_back(tag_name.c_str());
+    }
+
+    // Success
+    task->return_code_.store(0);
+    HILOG(kDebug, "TagQuery successful: pattern={}, found {} tags",
+          tag_regex, matching_tags.size());
+
+  } catch (const std::exception &e) {
+    task->return_code_.store(1);
+    HILOG(kError, "TagQuery failed: {}", e.what());
+  }
+}
+
+void Runtime::BlobQuery(hipc::FullPtr<BlobQueryTask> task, chi::RunContext &ctx) {
+  // Dynamic scheduling phase - determine routing
+  if (ctx.exec_mode == chi::ExecMode::kDynamicSchedule) {
+    task->pool_query_ = chi::PoolQuery::Broadcast();
+    return;
+  }
+
+  try {
+    std::string tag_regex = task->tag_regex_.str();
+    std::string blob_regex = task->blob_regex_.str();
+
+    // Create regex patterns
+    std::regex tag_pattern(tag_regex);
+    std::regex blob_pattern(blob_regex);
+
+    // Find matching tag IDs
+    std::vector<TagId> matching_tag_ids;
+    tag_name_to_id_.for_each(
+        [&tag_pattern, &matching_tag_ids](const std::string &tag_name,
+                                          const TagId &tag_id) {
+          if (std::regex_match(tag_name, tag_pattern)) {
+            matching_tag_ids.push_back(tag_id);
+          }
+        });
+
+    // Find blobs in matching tags
+    std::vector<std::string> matching_blobs;
+    for (const auto &tag_id : matching_tag_ids) {
+      // Construct prefix for this tag's blobs
+      std::string prefix = std::to_string(tag_id.major_) + "." +
+                           std::to_string(tag_id.minor_) + ".";
+
+      // Iterate through tag_blob_name_to_info_ and filter by prefix
+      tag_blob_name_to_info_.for_each(
+          [&prefix, &blob_pattern, &matching_blobs](
+              const std::string &composite_key, const BlobInfo &blob_info) {
+            (void)blob_info; // Suppress unused parameter warning
+            // Check if composite key starts with the tag prefix
+            if (composite_key.rfind(prefix, 0) == 0) {
+              // Extract blob name (everything after the prefix)
+              std::string blob_name = composite_key.substr(prefix.length());
+
+              // Check if blob name matches regex
+              if (std::regex_match(blob_name, blob_pattern)) {
+                matching_blobs.push_back(blob_name);
+              }
+            }
+          });
+    }
+
+    // Copy results to task output
+    task->blob_names_.clear();
+    for (const auto &blob_name : matching_blobs) {
+      task->blob_names_.emplace_back(blob_name.c_str());
+    }
+
+    // Success
+    task->return_code_.store(0);
+    HILOG(kDebug, "BlobQuery successful: tag_pattern={}, blob_pattern={}, found {} blobs",
+          tag_regex, blob_regex, matching_blobs.size());
+
+  } catch (const std::exception &e) {
+    task->return_code_.store(1);
+    HILOG(kError, "BlobQuery failed: {}", e.what());
   }
 }
 
