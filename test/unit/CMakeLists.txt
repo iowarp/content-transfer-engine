@@ -109,20 +109,112 @@ if(BUILD_TESTING)
 endif()
 
 # Manual test registration for specific test cases
-add_test(NAME cte_core_pool_creation 
-    COMMAND cte_core_unit_tests "[cte][core][pool][creation]")
-    
-add_test(NAME cte_core_target_registration 
-    COMMAND cte_core_unit_tests "[cte][core][target][registration]")
-    
-add_test(NAME cte_core_blob_put 
-    COMMAND cte_core_unit_tests "[cte][core][blob][put]")
-    
-add_test(NAME cte_core_blob_get 
-    COMMAND cte_core_unit_tests "[cte][core][blob][get]")
-    
-add_test(NAME cte_core_integration 
-    COMMAND cte_core_unit_tests "[cte][core][integration]")
+add_test(NAME cte_core_pool_creation
+    COMMAND cte_core_unit_tests "[core][cte][pool]")
+
+add_test(NAME cte_core_target_registration
+    COMMAND cte_core_unit_tests "[core][cte][target]")
+
+add_test(NAME cte_core_blob_put
+    COMMAND cte_core_unit_tests "[core][cte][putblob]")
+
+add_test(NAME cte_core_blob_get
+    COMMAND cte_core_unit_tests "[core][cte][getblob]")
+
+add_test(NAME cte_core_integration
+    COMMAND cte_core_unit_tests "[core][cte][integration]")
+
+add_test(NAME cte_core_client_creation
+    COMMAND cte_core_unit_tests "[client][core][creation][cte]")
+
+add_test(NAME cte_core_params
+    COMMAND cte_core_unit_tests "[core][cte][params]")
+
+add_test(NAME cte_core_target_config
+    COMMAND cte_core_unit_tests "[config][core][cte][target]")
+
+add_test(NAME cte_core_tag_info
+    COMMAND cte_core_unit_tests "[core][cte][info][tag]")
+
+add_test(NAME cte_core_blob_info
+    COMMAND cte_core_unit_tests "[blob][core][cte][info]")
+
+add_test(NAME cte_core_tasks
+    COMMAND cte_core_unit_tests "[core][cte][tasks]")
+
+add_test(NAME cte_core_helpers
+    COMMAND cte_core_unit_tests "[core][cte][helpers]")
+
+add_test(NAME cte_core_workflow
+    COMMAND cte_core_unit_tests "[core][cte][workflow]")
+
+add_test(NAME cte_core_performance
+    COMMAND cte_core_unit_tests "[core][cte][performance]")
+
+# Add test_core_functionality tests
+add_test(NAME cte_functional_pool_creation
+    COMMAND test_core_functionality "[core][creation][cte][pool]")
+
+add_test(NAME cte_functional_target_registration
+    COMMAND test_core_functionality "[core][cte][registration][target]")
+
+add_test(NAME cte_functional_putblob
+    COMMAND test_core_functionality "[blob][core][cte][functional][put]")
+
+add_test(NAME cte_functional_getblob
+    COMMAND test_core_functionality "[blob][core][cte][functional][get]")
+
+add_test(NAME cte_functional_putget_integration
+    COMMAND test_core_functionality "[blob][core][cte][integration][put-get]")
+
+add_test(NAME cte_functional_putget_comprehensive
+    COMMAND test_core_functionality "[blob][comprehensive][core][cte][integration][put-get]")
+
+add_test(NAME cte_functional_reorganize
+    COMMAND test_core_functionality "[blob][core][cte][functional][reorganize]")
+
+add_test(NAME cte_functional_e2e_workflow
+    COMMAND test_core_functionality "[core][cte][integration]")
+
+# Add test_query tests
+add_test(NAME cte_query_tag_exact
+    COMMAND test_query "[query][tagquery][exact]")
+
+add_test(NAME cte_query_tag_wildcard
+    COMMAND test_query "[query][tagquery][wildcard]")
+
+add_test(NAME cte_query_tag_alternation
+    COMMAND test_query "[query][tagquery][alternation]")
+
+add_test(NAME cte_query_tag_matchall
+    COMMAND test_query "[query][tagquery][matchall]")
+
+add_test(NAME cte_query_tag_nomatch
+    COMMAND test_query "[query][tagquery][nomatch]")
+
+add_test(NAME cte_query_blob_exact
+    COMMAND test_query "[query][blobquery][exact]")
+
+add_test(NAME cte_query_blob_wildcard
+    COMMAND test_query "[query][blobquery][wildcard]")
+
+add_test(NAME cte_query_blob_multitag
+    COMMAND test_query "[query][blobquery][multitag]")
+
+add_test(NAME cte_query_blob_matchall
+    COMMAND test_query "[query][blobquery][matchall]")
+
+add_test(NAME cte_query_blob_no_blob
+    COMMAND test_query "[query][blobquery][noblob]")
+
+add_test(NAME cte_query_blob_no_tag
+    COMMAND test_query "[query][blobquery][notag]")
+
+add_test(NAME cte_query_blob_extension
+    COMMAND test_query "[query][blobquery][extension]")
+
+add_test(NAME cte_query_local_poolquery
+    COMMAND test_query "[query][poolquery][local]")
 
 # Set test properties for proper execution environment
 set_tests_properties(
@@ -131,9 +223,51 @@ set_tests_properties(
     cte_core_blob_put
     cte_core_blob_get
     cte_core_integration
+    cte_core_client_creation
+    cte_core_params
+    cte_core_target_config
+    cte_core_tag_info
+    cte_core_blob_info
+    cte_core_tasks
+    cte_core_helpers
+    cte_core_workflow
+    cte_core_performance
     PROPERTIES
         TIMEOUT 300  # 5 minute timeout for each test
         LABELS "unit;core;cte"
+)
+
+set_tests_properties(
+    cte_functional_pool_creation
+    cte_functional_target_registration
+    cte_functional_putblob
+    cte_functional_getblob
+    cte_functional_putget_integration
+    cte_functional_putget_comprehensive
+    cte_functional_reorganize
+    cte_functional_e2e_workflow
+    PROPERTIES
+        TIMEOUT 300  # 5 minute timeout for each test
+        LABELS "functional;core;cte"
+)
+
+set_tests_properties(
+    cte_query_tag_exact
+    cte_query_tag_wildcard
+    cte_query_tag_alternation
+    cte_query_tag_matchall
+    cte_query_tag_nomatch
+    cte_query_blob_exact
+    cte_query_blob_wildcard
+    cte_query_blob_multitag
+    cte_query_blob_matchall
+    cte_query_blob_no_blob
+    cte_query_blob_no_tag
+    cte_query_blob_extension
+    cte_query_local_poolquery
+    PROPERTIES
+        TIMEOUT 300  # 5 minute timeout for each test
+        LABELS "query;core;cte"
 )
 
 # ------------------------------------------------------------------------------

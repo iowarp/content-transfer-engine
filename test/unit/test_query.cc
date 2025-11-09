@@ -33,13 +33,9 @@
  */
 
 #include <catch2/catch_all.hpp>
-#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
-#include <thread>
-
-using namespace std::chrono_literals;
 
 // Chimaera core includes
 #include <chimaera/admin/admin_tasks.h>
