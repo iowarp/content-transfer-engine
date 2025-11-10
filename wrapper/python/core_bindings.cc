@@ -60,7 +60,10 @@ NB_MODULE(wrp_cte_core_ext, m) {
       .def_rw("read_time_", &wrp_cte::core::CteTelemetry::read_time_)
       .def_rw("logical_time_", &wrp_cte::core::CteTelemetry::logical_time_);
 
-  // Bind Client class with PollTelemetryLog and ReorganizeBlob methods
+  // Bind Client class with PollTelemetryLog, ReorganizeBlob, and Query methods
+  // Note: Query methods use lambda wrappers to avoid evaluating chi::PoolQuery
+  // static methods (Broadcast/Dynamic) at module import time, which would
+  // cause std::bad_cast errors before runtime initialization
   nb::class_<wrp_cte::core::Client>(m, "Client")
       .def(nb::init<>())
       .def(nb::init<const chi::PoolId &>())
@@ -70,18 +73,27 @@ NB_MODULE(wrp_cte_core_ext, m) {
       .def("ReorganizeBlob", &wrp_cte::core::Client::ReorganizeBlob,
            "mctx"_a, "tag_id"_a, "blob_name"_a, "new_score"_a,
            "Reorganize single blob with new score for data placement optimization")
-      .def("TagQuery", &wrp_cte::core::Client::TagQuery,
-           "mctx"_a, "tag_regex"_a, "pool_query"_a = chi::PoolQuery::Broadcast(),
+      .def("TagQuery",
+           [](wrp_cte::core::Client &self, const hipc::MemContext &mctx,
+              const std::string &tag_regex, const chi::PoolQuery &pool_query) {
+             return self.TagQuery(mctx, tag_regex, pool_query);
+           },
+           "mctx"_a, "tag_regex"_a, "pool_query"_a,
            "Query tags by regex pattern")
-      .def("BlobQuery", &wrp_cte::core::Client::BlobQuery,
-           "mctx"_a, "tag_regex"_a, "blob_regex"_a, "pool_query"_a = chi::PoolQuery::Broadcast(),
+      .def("BlobQuery",
+           [](wrp_cte::core::Client &self, const hipc::MemContext &mctx,
+              const std::string &tag_regex, const std::string &blob_regex,
+              const chi::PoolQuery &pool_query) {
+             return self.BlobQuery(mctx, tag_regex, blob_regex, pool_query);
+           },
+           "mctx"_a, "tag_regex"_a, "blob_regex"_a, "pool_query"_a,
            "Query blobs by tag and blob regex patterns");
 
   // Module-level convenience functions
   m.def(
       "get_cte_client",
-      []() -> wrp_cte::core::Client * { return WRP_CTE_CLIENT; },
-      nb::rv_policy::reference, "Get the global CTE client instance");
+      []() -> wrp_cte::core::Client { return *WRP_CTE_CLIENT; },
+      "Get a copy of the global CTE client instance");
 
   // Chimaera runtime initialization functions
   m.def("chimaera_runtime_init", &chi::CHIMAERA_RUNTIME_INIT,
@@ -91,7 +103,11 @@ NB_MODULE(wrp_cte_core_ext, m) {
         "Initialize the Chimaera client");
 
   // CTE-specific initialization
-  m.def("initialize_cte", &wrp_cte::core::WRP_CTE_CLIENT_INIT,
-        "config_path"_a = "", "pool_query"_a = chi::PoolQuery::Dynamic(),
+  // Note: Lambda wrapper used to avoid chi::PoolQuery::Dynamic() evaluation at import
+  m.def("initialize_cte",
+        [](const std::string &config_path, const chi::PoolQuery &pool_query) {
+          return wrp_cte::core::WRP_CTE_CLIENT_INIT(config_path, pool_query);
+        },
+        "config_path"_a, "pool_query"_a,
         "Initialize the CTE subsystem");
 }

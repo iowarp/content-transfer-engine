@@ -5,6 +5,11 @@ Tests that all bindings compile and are accessible without full runtime initiali
 """
 
 import sys
+import os
+
+# When running with python -I (isolated mode), we need to manually add the current directory
+# The test is run with WORKING_DIRECTORY set to the module directory
+sys.path.insert(0, os.getcwd())
 
 def test_import():
     """Test that the module can be imported successfully"""
@@ -56,7 +61,7 @@ def test_functions_accessibility():
     """Test that module functions are accessible without calling them"""
     try:
         import wrp_cte_core_ext as cte
-        
+
         # Test initialization functions exist
         runtime_init = cte.chimaera_runtime_init
         client_init = cte.chimaera_client_init
@@ -64,11 +69,11 @@ def test_functions_accessibility():
         print(f"✅ chimaera_runtime_init function accessible: {runtime_init}")
         print(f"✅ chimaera_client_init function accessible: {client_init}")
         print(f"✅ initialize_cte function accessible: {cte_init}")
-        
+
         # Test client getter function exists
         client_getter = cte.get_cte_client
         print(f"✅ get_cte_client function accessible: {client_getter}")
-        
+
         return True
     except Exception as e:
         print(f"❌ Functions accessibility test failed: {e}")
@@ -104,23 +109,23 @@ def test_runtime_functions_signature():
     try:
         import wrp_cte_core_ext as cte
         import inspect
-        
+
         # Check chimaera_runtime_init signature
         runtime_init_sig = inspect.signature(cte.chimaera_runtime_init)
         print(f"✅ chimaera_runtime_init signature: {runtime_init_sig}")
-        
+
         # Check chimaera_client_init signature
         client_init_sig = inspect.signature(cte.chimaera_client_init)
         print(f"✅ chimaera_client_init signature: {client_init_sig}")
-        
+
         # Check initialize_cte signature
         cte_init_sig = inspect.signature(cte.initialize_cte)
         print(f"✅ initialize_cte signature: {cte_init_sig}")
-        
+
         # Check get_cte_client signature
         client_getter_sig = inspect.signature(cte.get_cte_client)
         print(f"✅ get_cte_client signature: {client_getter_sig}")
-        
+
         return True
     except Exception as e:
         print(f"❌ Function signature test failed: {e}")

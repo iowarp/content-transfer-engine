@@ -5,8 +5,13 @@ Tests runtime initialization, basic types, and PollTelemetryLog functionality
 """
 
 import sys
+import os
 import unittest
 import time
+
+# When running with python -I (isolated mode), we need to manually add the current directory
+# The test is run with WORKING_DIRECTORY set to the module directory
+sys.path.insert(0, os.getcwd())
 
 def test_import():
     """Test that the module can be imported successfully"""
@@ -114,7 +119,7 @@ def test_poll_telemetry_log():
     """Test PollTelemetryLog functionality"""
     try:
         import wrp_cte_core_ext as cte
-        
+
         # Test that we can access the client (even if not fully initialized)
         try:
             client = cte.get_cte_client()

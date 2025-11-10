@@ -6,7 +6,7 @@ find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 # Create the Python module
 nanobind_add_module(
     wrp_cte_core_ext
-    core_bindings.cpp
+    core_bindings.cc
 )
 
 # Link against the core client library
@@ -53,23 +53,54 @@ install(
 #     OPTIONAL
 # )
 
-# Add Python bindings test
+# Add Python bindings tests
+# NOTE: These tests may conflict with system-installed versions of the module.
+# If you see "refusing to add duplicate key" errors, uninstall the system version:
+#   sudo rm /usr/local/lib/wrp_cte_core_ext*.so
+# Or run tests after: make uninstall
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
     if(BUILD_TESTING)
+        # Full Python bindings test (includes runtime initialization)
+        # Use -I flag to run in isolated mode (ignore user site-packages)
         add_test(
             NAME python_bindings_test
-            COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
+            COMMAND ${Python_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
             WORKING_DIRECTORY $<TARGET_FILE_DIR:wrp_cte_core_ext>
         )
 
-        # Set environment for the test to find the module
-        set_tests_properties(python_bindings_test PROPERTIES
-            ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:wrp_cte_core_ext>"
+        # Compilation-focused test (no runtime initialization required)
+        add_test(
+            NAME python_bindings_compilation_test
+            COMMAND ${Python_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_compilation_bindings.py
+            WORKING_DIRECTORY $<TARGET_FILE_DIR:wrp_cte_core_ext>
         )
 
-        # Ensure the test depends on the built module
-        set_tests_properties(python_bindings_test PROPERTIES
+        # Query API bindings test
+        add_test(
+            NAME python_query_bindings_test
+            COMMAND ${Python_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_query_bindings.py
+            WORKING_DIRECTORY $<TARGET_FILE_DIR:wrp_cte_core_ext>
+        )
+
+        # Set properties for tests
+        # Tests use -I (isolated mode) and manually add current directory to sys.path
+        # No PYTHONPATH needed since tests run in module directory and add it explicitly
+        set_tests_properties(
+            python_bindings_test
+            python_bindings_compilation_test
+            python_query_bindings_test
+            PROPERTIES
+            LABELS "python;bindings"
+            TIMEOUT 60
+        )
+
+        # Ensure tests depend on the built module
+        set_tests_properties(
+            python_bindings_test
+            python_bindings_compilation_test
+            python_query_bindings_test
+            PROPERTIES
             DEPENDS wrp_cte_core_ext
         )
     endif()
