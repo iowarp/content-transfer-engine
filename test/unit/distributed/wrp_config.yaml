@@ -1,0 +1,76 @@
+---
+# WRP Configuration for Distributed CTE Testing
+# Combines Chimaera runtime configuration with CTE compose deployment
+# 4-node cluster configuration
+
+# Worker thread configuration
+workers:
+  sched_threads: 8
+  slow_threads: 8
+
+# Memory segment configuration
+memory:
+  main_segment_size: 4GB
+  client_data_segment_size: 2GB
+  runtime_data_segment_size: 2GB
+
+# Network configuration
+networking:
+  port: 8080
+  neighborhood_size: 32
+  hostfile: /etc/iowarp/hostfile
+
+# Logging configuration
+logging:
+  level: info
+  file: /tmp/chimaera.log
+
+# Runtime configuration
+runtime:
+  stack_size: 65536
+  queue_depth: 10000
+  lane_map_policy: round_robin
+  heartbeat_interval: 1000
+
+# Compose section - declarative pool creation
+# Creates CTE Core ChiMod with storage devices and DPE configuration
+compose:
+  # CTE Core ChiMod with storage configuration
+  - mod_name: wrp_cte_core
+    pool_name: cte_main
+    pool_query: local
+    pool_id: "512.0"
+    # Storage block device configuration
+    # This configuration defines 4 storage targets across 4 nodes
+    storage:
+      - path: /mnt/hdd1
+        bdev_type: file
+        capacity_limit: 10GB
+        score: 0.25
+      - path: /mnt/hdd2
+        bdev_type: file
+        capacity_limit: 10GB
+        score: 0.25
+      - path: /mnt/hdd3
+        bdev_type: file
+        capacity_limit: 10GB
+        score: 0.25
+      - path: /mnt/hdd4
+        bdev_type: file
+        capacity_limit: 10GB
+        score: 0.25
+    # Data Placement Engine configuration
+    dpe:
+      dpe_type: max_bw  # Options: random, round_robin, max_bw
+    # Target management configuration
+    targets:
+      neighborhood: 4
+      default_target_timeout_ms: 30000
+      poll_period_ms: 5000
+    # Performance configuration
+    performance:
+      target_stat_interval_ms: 5000
+      blob_cache_size_mb: 16384
+      max_concurrent_operations: 64
+      score_threshold: 0.7
+      score_difference_threshold: 0.05

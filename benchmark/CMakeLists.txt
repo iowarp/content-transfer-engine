@@ -1,56 +1,25 @@
-# ------------------------------------------------------------------------------
-# Build Tests
-# ------------------------------------------------------------------------------
+# Benchmark directory CMakeLists.txt
+cmake_minimum_required(VERSION 3.20)
 
-add_executable(test_performance_exec
-        ${TEST_MAIN}/main.cc
-        test_init.cc
-        test_latency.cc)
-add_dependencies(test_performance_exec hermes)
-target_link_libraries(test_performance_exec
-        hermes Catch2::Catch2 MPI::MPI_CXX)
+# Find required packages
+find_package(MPI REQUIRED)
 
-# add_executable(test_performance_exec
-# ${TEST_MAIN}/main.cc
-# test_init.cc
-# test_latency.cc
-# test_zmq.cc
-# )
-# add_dependencies(test_performance_exec
-# ${Hermes_CLIENT_DEPS} hermes)
-# target_link_libraries(test_performance_exec
-# ${Hermes_CLIENT_DEPS} Catch2::Catch2
-# MPI::MPI_CXX ${ZMQ_LIBRARIES})
-add_executable(hermes_api_bench
-        hermes_api_bench.cc)
-add_dependencies(hermes_api_bench
-        ${Hermes_CLIENT_DEPS})
-target_link_libraries(hermes_api_bench
-        ${Hermes_CLIENT_DEPS}
-        Catch2::Catch2 MPI::MPI_CXX)
+# Create wrp_cte_bench executable
+add_executable(wrp_cte_bench
+  wrp_cte_bench.cc
+)
 
-# ------------------------------------------------------------------------------
-# Test Cases
-# ------------------------------------------------------------------------------
+# Link required libraries
+target_link_libraries(wrp_cte_bench
+  wrp_cte::core_client
+  chimaera::cxx
+  MPI::MPI_CXX
+)
 
-# STRING TESTS
-# add_test(NAME test_performance COMMAND
-# ${CMAKE_BINARY_DIR}/bin/test_performance_exec "TestIpc")
+# Set C++ standard
+target_compile_features(wrp_cte_bench PRIVATE cxx_std_17)
 
-# ------------------------------------------------------------------------------
-# Install Targets
-# ------------------------------------------------------------------------------
-install(TARGETS
-        test_performance_exec
-        hermes_api_bench
-        LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR})
-
-# -----------------------------------------------------------------------------
-# Coverage
-# -----------------------------------------------------------------------------
-if(HERMES_ENABLE_COVERAGE)
-        set_coverage_flags(test_performance_exec)
-        set_coverage_flags(hermes_api_bench)
-endif()
+# Install the benchmark executable
+install(TARGETS wrp_cte_bench
+  RUNTIME DESTINATION bin
+)

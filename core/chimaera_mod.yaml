@@ -1,0 +1,33 @@
+# CTE Core ChiMod Configuration
+module_name: core
+namespace: wrp_cte
+version: 1.0.0
+
+# Inherited Methods (fixed IDs)
+kCreate: 0        # Container creation (required)
+kDestroy: 1       # Container destruction (required)
+kNodeFailure: -1  # Not implemented (-1 means disabled)
+kRecover: -1      # Not implemented 
+kMigrate: -1      # Not implemented
+kUpgrade: -1      # Not implemented
+
+# Custom Methods (start from 10, use sequential IDs)
+kRegisterTarget: 10     # Register a target on this node
+kUnregisterTarget: 11   # Unregister a target from this node
+kListTargets: 12        # List registered targets on this node
+kStatTargets: 13        # Update performance stats for all targets
+kGetOrCreateTag: 14     # Get or create a tag for blob grouping
+kGetTagSize: 20        # Get the size of a tag
+kDelTag: 19            # Delete a tag
+
+kGetContainedBlobs: 24  # Get all blob names contained in a tag
+kPutBlob: 15            # Store a blob
+kGetBlob: 16            # Retrieve a blob
+kReorganizeBlob: 17     # Change score for a single blob
+kDelBlob: 18            # Delete a blob
+kGetBlobScore: 22       # Get the score of a blob
+kGetBlobSize: 23        # Get the size of a blob
+
+kPollTelemetryLog: 21  # Poll telemetry log with minimum logical time filter
+kTagQuery: 30          # Query tags by regex pattern
+kBlobQuery: 31         # Query blobs by tag and blob regex patterns

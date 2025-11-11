@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --build:*)",
+      "Bash(find:*)",
+      "Bash(./build/bin/test_core_functionality:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

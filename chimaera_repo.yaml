@@ -1,0 +1,8 @@
+# Content Transfer Engine ChiMod Repository Configuration
+namespace: wrp_cte
+version: 1.0.0
+description: "Content Transfer Engine - A system for placing data in tiered storage"
+
+# Module discovery - directories to scan for ChiMods
+modules:
+  - core

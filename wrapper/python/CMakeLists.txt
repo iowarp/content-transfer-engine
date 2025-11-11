@@ -1,23 +1,107 @@
-# ------------------------------------------------------------------------------
-# Find Packages
-# ------------------------------------------------------------------------------
-# find_package(pybind11 CONFIG REQUIRED)
-# message(STATUS "Found pybind11 v${pybind11_VERSION}: ${pybind11_INCLUDE_DIRS}")
+cmake_minimum_required(VERSION 3.20)
 
-# ------------------------------------------------------------------------------
-# Compile Python Hermes
-# ------------------------------------------------------------------------------
-pybind11_add_module(py_hermes MODULE py_hermes.cpp)
-add_dependencies(py_hermes ${Hermes_CLIENT_DEPS})
-target_link_libraries(py_hermes PUBLIC
-        ${Hermes_CLIENT_DEPS} pybind11::module)
+# Find Python for nanobind
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 
-# ------------------------------------------------------------------------------
-# Install Targets
-# ------------------------------------------------------------------------------
-install(TARGETS
-        py_hermes
-        LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
-        ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR})
+# Create the Python module
+nanobind_add_module(
+    wrp_cte_core_ext
+    core_bindings.cc
+)
 
-message(STATUS "Python executable: ${PYTHON_EXECUTABLE}")
+# Link against the core client library
+target_link_libraries(wrp_cte_core_ext PRIVATE wrp_cte_core_client)
+
+# Include directories for headers
+target_include_directories(wrp_cte_core_ext PRIVATE
+    ${CMAKE_SOURCE_DIR}/core/include
+    ${CMAKE_SOURCE_DIR}/external/nanobind/include
+)
+
+# Ensure C++17 standard
+target_compile_features(wrp_cte_core_ext PRIVATE cxx_std_17)
+
+# Install the Python module to lib directory
+# Following the project pattern of installing shared libraries to lib
+install(
+    TARGETS wrp_cte_core_ext
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+# Generate stub file for type hints
+# Note: Stub generation is disabled because the module requires runtime initialization
+# (Chimaera runtime, singletons, etc.) before it can be imported. The nanobind stub
+# generator imports the module, which fails with std::bad_cast when singletons aren't
+# initialized. Users should rely on the inline documentation and Python type checkers
+# that can work without stubs.
+# nanobind_add_stub(
+#     wrp_cte_core_ext_stub
+#     MODULE wrp_cte_core_ext
+#     OUTPUT core_stub.pyi
+#     PYTHON_PATH $<TARGET_FILE_DIR:wrp_cte_core_ext>
+#     DEPENDS wrp_cte_core_ext
+# )
+
+# Install the stub file alongside the module (renamed to match module)
+# Disabled along with stub generation above
+# install(
+#     FILES ${CMAKE_CURRENT_BINARY_DIR}/core_stub.pyi
+#     DESTINATION lib
+#     RENAME wrp_cte_core_ext.pyi
+#     OPTIONAL
+# )
+
+# Add Python bindings tests
+# NOTE: These tests may conflict with system-installed versions of the module.
+# If you see "refusing to add duplicate key" errors, uninstall the system version:
+#   sudo rm /usr/local/lib/wrp_cte_core_ext*.so
+# Or run tests after: make uninstall
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    include(CTest)
+    if(BUILD_TESTING)
+        # Full Python bindings test (includes runtime initialization)
+        # Use -I flag to run in isolated mode (ignore user site-packages)
+        add_test(
+            NAME python_bindings_test
+            COMMAND ${Python_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_python_bindings.py
+            WORKING_DIRECTORY $<TARGET_FILE_DIR:wrp_cte_core_ext>
+        )
+
+        # Compilation-focused test (no runtime initialization required)
+        add_test(
+            NAME python_bindings_compilation_test
+            COMMAND ${Python_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_compilation_bindings.py
+            WORKING_DIRECTORY $<TARGET_FILE_DIR:wrp_cte_core_ext>
+        )
+
+        # Query API bindings test
+        add_test(
+            NAME python_query_bindings_test
+            COMMAND ${Python_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_query_bindings.py
+            WORKING_DIRECTORY $<TARGET_FILE_DIR:wrp_cte_core_ext>
+        )
+
+        # Set properties for tests
+        # Tests use -I (isolated mode) and manually add current directory to sys.path
+        # No PYTHONPATH needed since tests run in module directory and add it explicitly
+        set_tests_properties(
+            python_bindings_test
+            python_bindings_compilation_test
+            python_query_bindings_test
+            PROPERTIES
+            LABELS "python;bindings"
+            TIMEOUT 60
+        )
+
+        # Ensure tests depend on the built module
+        set_tests_properties(
+            python_bindings_test
+            python_bindings_compilation_test
+            python_query_bindings_test
+            PROPERTIES
+            DEPENDS wrp_cte_core_ext
+        )
+    endif()
+endif()

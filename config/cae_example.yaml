@@ -1,0 +1,38 @@
+# WRP Content Adapter Engine (CAE) Configuration
+#
+# This configuration file defines which paths should be tracked by the
+# CTE adapters using include/exclude regex patterns.
+
+# Include patterns - regex patterns for paths to intercept
+# Patterns are checked in order of specificity (longest first)
+# If a path matches an include pattern, it will be intercepted
+# Environment variables are expanded using hshm::ConfigParse::ExpandPath
+include:
+  - ".*test_hermes.*"     # Default: test directories
+  - "$HOME/data.*"        # Home directory data (env var expanded)
+  - "/scratch.*"          # Scratch space and subdirectories
+  - "/mnt/shared.*"       # Shared mount points
+
+# Exclude patterns - regex patterns for paths to NOT intercept
+# These take precedence based on specificity (path length)
+# If a path matches an exclude pattern, it will NOT be intercepted
+# Environment variables are also expanded in exclude patterns
+exclude:
+  - "/tmp.*"              # Exclude temporary files
+  - "$HOME/data/exclude.*"  # Exclude specific subdirectories (env var expanded)
+  - "/scratch/private.*"  # Exclude private scratch areas
+
+# Path matching behavior:
+# 1. Patterns are sorted by length (descending) for specificity
+# 2. Most specific pattern is checked first
+# 3. First matching pattern determines result (include or exclude)
+# 4. If no patterns match, path is excluded by default
+
+# Adapter page size in bytes
+# This controls the granularity of I/O operations in the adapters
+# Common values: 4096, 8192, 16384, 65536, 1048576
+adapter_page_size: 1048576  # 1MB
+
+# Global interception enable/disable (optional, defaults to true)
+# When false, all interception is disabled regardless of path patterns
+interception_enabled: true
