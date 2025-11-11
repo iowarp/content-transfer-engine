@@ -1,5 +1,5 @@
 services:
-  # Node 1 - Primary node that starts runtime, creates CTE, and runs benchmarks
+  # Node 1 - Primary node that starts runtime and keeps running for benchmarks
   cte-bench-node1:
     image: iowarp/context-transfer-engine-build:latest
     container_name: cte-bench-node1
@@ -14,15 +14,16 @@ services:
         ipv4_address: 172.27.0.10
     volumes:
       - ./hostfile:/etc/iowarp/hostfile:ro
-      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
-      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
+      - ./wrp_config.yaml:/etc/iowarp/wrp_config.yaml:ro
       - storage1:/mnt/cte_storage
     environment:
       - NODE_ID=1
       - NODE_IP=172.27.0.10
       - CHI_NODE_ID=0
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+      - WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml
+      - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
+      - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: ["/bin/bash", "-c"]
@@ -37,25 +38,15 @@ services:
         sudo chown -R iowarp:iowarp /mnt &&
         echo 'Node 1: Creating storage directories...' &&
         mkdir -p /mnt/cte_storage &&
-        echo 'Node 1: Starting IOWarp runtime...' &&
+        echo 'Node 1: Starting Chimaera runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml &&
         export CHI_NODE_ID=0 &&
         echo 'Node 1: CHI_NODE_ID set to 0' &&
-        chimaera_start_runtime &
-        RUNTIME_PID=$$! &&
-        echo \"Node 1: Runtime started (PID $$RUNTIME_PID)\" &&
-        sleep 5 &&
-        echo 'Node 1: Waiting for all nodes to be ready...' &&
-        sleep 10 &&
         echo '========================================' &&
-        echo 'Node 1: Launching CTE' &&
+        echo 'Node 1: Runtime starting in foreground' &&
         echo '========================================' &&
-        export WRP_CTE_CONF=/etc/iowarp/cte_config.yaml &&
-        /usr/local/bin/launch_cte &&
-        echo 'Node 1: CTE launched successfully' &&
-        echo 'Node 1: Keeping container running. Use docker exec to run benchmarks.' &&
-        tail -f /dev/null
+        chimaera_start_runtime
       "
 
   # Node 2 - Secondary node
@@ -73,15 +64,16 @@ services:
         ipv4_address: 172.27.0.11
     volumes:
       - ./hostfile:/etc/iowarp/hostfile:ro
-      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
-      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
+      - ./wrp_config.yaml:/etc/iowarp/wrp_config.yaml:ro
       - storage2:/mnt/cte_storage
     environment:
       - NODE_ID=2
       - NODE_IP=172.27.0.11
       - CHI_NODE_ID=1
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+      - WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml
+      - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
+      - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: ["/bin/bash", "-c"]
@@ -94,9 +86,9 @@ services:
         sudo service ssh start &&
         sudo chown -R iowarp:iowarp /mnt &&
         mkdir -p /mnt/cte_storage &&
-        echo 'Node 2: Starting IOWarp runtime...' &&
+        echo 'Node 2: Starting Chimaera runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml &&
         export CHI_NODE_ID=1 &&
         echo 'Node 2: CHI_NODE_ID set to 1' &&
         echo '========================================' &&
@@ -120,15 +112,16 @@ services:
         ipv4_address: 172.27.0.12
     volumes:
       - ./hostfile:/etc/iowarp/hostfile:ro
-      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
-      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
+      - ./wrp_config.yaml:/etc/iowarp/wrp_config.yaml:ro
       - storage3:/mnt/cte_storage
     environment:
       - NODE_ID=3
       - NODE_IP=172.27.0.12
       - CHI_NODE_ID=2
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+      - WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml
+      - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
+      - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: ["/bin/bash", "-c"]
@@ -141,9 +134,9 @@ services:
         sudo service ssh start &&
         sudo chown -R iowarp:iowarp /mnt &&
         mkdir -p /mnt/cte_storage &&
-        echo 'Node 3: Starting IOWarp runtime...' &&
+        echo 'Node 3: Starting Chimaera runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml &&
         export CHI_NODE_ID=2 &&
         echo 'Node 3: CHI_NODE_ID set to 2' &&
         echo '========================================' &&
@@ -167,15 +160,16 @@ services:
         ipv4_address: 172.27.0.13
     volumes:
       - ./hostfile:/etc/iowarp/hostfile:ro
-      - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
-      - ./chimaera_config.yaml:/etc/iowarp/chimaera_config.yaml:ro
+      - ./wrp_config.yaml:/etc/iowarp/wrp_config.yaml:ro
       - storage4:/mnt/cte_storage
     environment:
       - NODE_ID=4
       - NODE_IP=172.27.0.13
       - CHI_NODE_ID=3
       - CONTAINER_HOSTFILE=/etc/iowarp/hostfile
-      - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+      - WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml
+      - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8
+      - ASAN_OPTIONS=detect_leaks=0:detect_odr_violation=0:halt_on_error=1:abort_on_error=1:print_stacktrace=1:symbolize=1
     shm_size: '16gb'
     mem_limit: 16g
     entrypoint: ["/bin/bash", "-c"]
@@ -188,9 +182,9 @@ services:
         sudo service ssh start &&
         sudo chown -R iowarp:iowarp /mnt &&
         mkdir -p /mnt/cte_storage &&
-        echo 'Node 4: Starting IOWarp runtime...' &&
+        echo 'Node 4: Starting Chimaera runtime...' &&
         export PATH=/usr/local/bin:$$PATH &&
-        export WRP_RUNTIME_CONF=/etc/iowarp/chimaera_config.yaml &&
+        export WRP_RUNTIME_CONF=/etc/iowarp/wrp_config.yaml &&
         export CHI_NODE_ID=3 &&
         echo 'Node 4: CHI_NODE_ID set to 3' &&
         echo '========================================' &&

@@ -34,14 +34,13 @@ services:
       - IO_SIZE=${IO_SIZE:-1m}
 
       # Number of operations to perform
-      - IO_COUNT=${IO_COUNT:-10}
+      - IO_COUNT=${IO_COUNT:-1000}
 
     # Resource limits
     mem_limit: 4g
 
     # Clean up container after run
     restart: "no"
-
   # Alternative service configurations for different test scenarios
   # Uncomment to use specific test cases
 
@@ -85,23 +84,23 @@ services:
   #   mem_limit: 4g
   #   restart: "no"
 
-# Example usage commands:
-#
-# Run default benchmark (All tests, 4 clients, 1MB I/O, 10000 ops):
-#   docker-compose up redis-bench
-#
-# Run Set benchmark with custom parameters:
-#   TEST_CASE=Set NUM_CLIENTS=8 IO_SIZE=4k IO_COUNT=100000 docker-compose up redis-bench
-#
-# Run Get benchmark with 16 clients:
-#   TEST_CASE=Get NUM_CLIENTS=16 docker-compose up redis-bench
-#
-# Run specific service variants:
-#   docker-compose up redis-bench-set
-#   docker-compose up redis-bench-large
-#
-# View logs:
-#   docker-compose logs -f redis-bench
-#
-# Clean up:
-#   docker-compose down
+  # Example usage commands:
+  #
+  # Run default benchmark (All tests, 4 clients, 1MB I/O, 10000 ops):
+  #   docker-compose up redis-bench
+  #
+  # Run Set benchmark with custom parameters:
+  #   TEST_CASE=Set NUM_CLIENTS=8 IO_SIZE=4k IO_COUNT=100000 docker-compose up redis-bench
+  #
+  # Run Get benchmark with 16 clients:
+  #   TEST_CASE=Get NUM_CLIENTS=16 docker-compose up redis-bench
+  #
+  # Run specific service variants:
+  #   docker-compose up redis-bench-set
+  #   docker-compose up redis-bench-large
+  #
+  # View logs:
+  #   docker-compose logs -f redis-bench
+  #
+  # Clean up:
+  #   docker-compose down
