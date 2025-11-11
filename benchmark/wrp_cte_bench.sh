@@ -26,7 +26,7 @@ NC='\033[0m' # No Color
 
 # Script directory and paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="${WRP_CTE_CONF:-$SCRIPT_DIR/cte_config_ram.yaml}"
+CONFIG_FILE="${WRP_RUNTIME_CONF:-$SCRIPT_DIR/cte_config_ram.yaml}"
 BENCHMARK_EXE="wrp_cte_bench"
 
 # Parse size string with k/K, m/M, g/G suffixes
@@ -155,13 +155,13 @@ main() {
 
     # Set environment variables
     export CTE_INIT_RUNTIME=1
-    export WRP_CTE_CONF="$CONFIG_FILE"
+    export WRP_RUNTIME_CONF="$CONFIG_FILE"
 
     # Run benchmark with mpirun
     echo -e "${GREEN}Starting benchmark...${NC}"
     echo ""
 
-    mpirun -x WRP_CTE_CONF -x CTE_INIT_RUNTIME -n $num_procs "$BENCHMARK_EXE" "$test_case" "$depth" "$io_size_str" "$io_count"
+    mpirun -x WRP_RUNTIME_CONF -x CTE_INIT_RUNTIME -n $num_procs "$BENCHMARK_EXE" "$test_case" "$depth" "$io_size_str" "$io_count"
 
     local exit_code=$?
 

@@ -108,7 +108,7 @@ The package generates a complete CTE YAML configuration file with:
 
 The package sets the following environment variable:
 
-- **`WRP_CTE_CONF`**: Path to the generated CTE configuration file
+- **`WRP_RUNTIME_CONF`**: Path to the generated CTE configuration file
 
 ## Usage Example
 
@@ -137,7 +137,7 @@ wrp_cte:
 1. Validates device specifications using SizeType
 2. Auto-detects storage via resource graph if no devices specified
 3. Generates CTE YAML configuration file
-4. Sets `WRP_CTE_CONF` environment variable
+4. Sets `WRP_RUNTIME_CONF` environment variable
 
 ### Start
 No persistent process - returns success status and reports configuration location
@@ -155,7 +155,7 @@ Uses `Rm` with `PsshExecInfo` to remove storage device files across all cluster 
 
 This package is designed to work with:
 
-- **CTE Core Module**: Uses generated configuration via `WRP_CTE_CONF`
+- **CTE Core Module**: Uses generated configuration via `WRP_RUNTIME_CONF`
 - **Jarvis Resource Graph**: For automatic storage discovery
 - **IoWarp Framework**: As part of the content transfer pipeline
 - **Cluster Environments**: Supports distributed storage cleanup

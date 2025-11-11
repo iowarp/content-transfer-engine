@@ -8,7 +8,7 @@ The cte is a system for placing data in tiered storage. This is implemented as a
 
 ## Create
 
-There is a YAML configuration file whose path can be passed to the CreateTask. This is the only parameter to the CreateTask. By default, if the path is null, the path will be set to the path pointed to by the environment variable WRP_CTE_CONF.
+There is a YAML configuration file whose path can be passed to the CreateTask. This is the only parameter to the CreateTask. By default, if the path is null, the path will be set to the path pointed to by the environment variable WRP_RUNTIME_CONF.
 
 In the runtime, we need to do the following:
 1. Create targets on this node. 
