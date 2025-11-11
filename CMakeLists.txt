@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(content_transfer_engine)
 
 option(WRP_CTE_ENABLE_PYTHON "Enable Python bindings" ON)
-
+option(CTE_ENABLE_ASAN "Enable AddressSanitizer for debugging" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,13 @@ if(APPLE)
     set(CMAKE_INSTALL_RPATH "@loader_path/../lib:@loader_path:${CMAKE_INSTALL_PREFIX}/lib")
 elseif(UNIX)
     set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN:${CMAKE_INSTALL_PREFIX}/lib")
+endif()
+
+# AddressSanitizer (ASAN) configuration
+if(CTE_ENABLE_ASAN)
+    message(STATUS "AddressSanitizer (ASAN) enabled")
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address)
 endif()
 
 # Set all binary output directories to build/bin
