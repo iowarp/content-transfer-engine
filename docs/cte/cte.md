@@ -425,7 +425,7 @@ auto *client = WRP_CTE_CLIENT;
 - `WRP_CTE_CLIENT_INIT` automatically calls `CHIMAERA_CLIENT_INIT` internally
 - You do NOT need to call `CHIMAERA_CLIENT_INIT` separately when using CTE Core
 - Configuration is managed per-Runtime instance (no global ConfigManager singleton)
-- The config file path can also be specified via the `WRP_CTE_CONF` environment variable
+- The config file path can also be specified via the `WRP_RUNTIME_CONF` environment variable
 
 ## Usage Examples
 
@@ -941,7 +941,7 @@ if (result == 0) {
 
 CTE Core uses YAML configuration files for runtime parameters. Configuration can be loaded from:
 1. A file path specified during initialization
-2. Environment variable `WRP_CTE_CONF`
+2. Environment variable `WRP_RUNTIME_CONF`
 3. Programmatically via the Config API
 
 ### Configuration File Format
@@ -1017,8 +1017,8 @@ Configuration in CTE Core is now managed per-Runtime instance, not through a glo
 // Configuration is passed to the Runtime during creation
 bool success = wrp_cte::core::WRP_CTE_CLIENT_INIT("/path/to/config.yaml");
 
-// Or use environment variable WRP_CTE_CONF
-// export WRP_CTE_CONF=/path/to/config.yaml
+// Or use environment variable WRP_RUNTIME_CONF
+// export WRP_RUNTIME_CONF=/path/to/config.yaml
 success = wrp_cte::core::WRP_CTE_CLIENT_INIT();
 
 // Configuration is now embedded in the Runtime instance
@@ -1029,7 +1029,7 @@ success = wrp_cte::core::WRP_CTE_CLIENT_INIT();
 - Loaded once during `WRP_CTE_CLIENT_INIT`
 - Embedded in the CTE Runtime instance via `CreateParams`
 - Immutable after initialization
-- Can be specified via file path parameter or `WRP_CTE_CONF` environment variable
+- Can be specified via file path parameter or `WRP_RUNTIME_CONF` environment variable
 
 ### Queue Priority Options
 

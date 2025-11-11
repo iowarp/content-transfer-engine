@@ -79,7 +79,7 @@ All benchmark parameters can be configured via environment variables:
 | `IO_SIZE` | Size of each I/O operation | `1m` | 4k, 1m, 16m |
 | `IO_COUNT` | Number of operations to perform | `100` | 100, 1000, 100000 |
 | `CTE_INIT_RUNTIME` | Initialize CTE runtime in benchmark | `0` | 0 (runtime service), 1 (self-init) |
-| `WRP_CTE_CONF` | Path to CTE configuration file | `/etc/iowarp/cte_config.yaml` | Custom path |
+| `WRP_RUNTIME_CONF` | Path to CTE configuration file | `/etc/iowarp/cte_config.yaml` | Custom path |
 
 ### I/O Size Format
 

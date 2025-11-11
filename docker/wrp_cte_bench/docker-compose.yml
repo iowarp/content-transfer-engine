@@ -21,7 +21,7 @@
 #                       Supports: b (bytes), k (KB), m (MB), g (GB)
 #   IO_COUNT          - Number of operations to perform (default: 100)
 #   CTE_INIT_RUNTIME  - Initialize CTE runtime in benchmark (default: 0, runtime handled by iowarp service)
-#   WRP_CTE_CONF      - Path to CTE configuration file (default: /etc/iowarp/cte_config.yaml)
+#   WRP_RUNTIME_CONF  - Path to CTE configuration file (default: /etc/iowarp/cte_config.yaml)
 
 services:
   # IOWarp Runtime Service
@@ -115,7 +115,7 @@ services:
   #     - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
   #   environment:
   #     - CTE_INIT_RUNTIME=0
-  #     - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+  #     - WRP_RUNTIME_CONF=/etc/iowarp/cte_config.yaml
   #     - TEST_CASE=Put
   #     - NUM_PROCS=4
   #     - DEPTH=8
@@ -138,7 +138,7 @@ services:
   #     - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
   #   environment:
   #     - CTE_INIT_RUNTIME=0
-  #     - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+  #     - WRP_RUNTIME_CONF=/etc/iowarp/cte_config.yaml
   #     - TEST_CASE=Get
   #     - NUM_PROCS=4
   #     - DEPTH=8
@@ -161,7 +161,7 @@ services:
   #     - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
   #   environment:
   #     - CTE_INIT_RUNTIME=0
-  #     - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+  #     - WRP_RUNTIME_CONF=/etc/iowarp/cte_config.yaml
   #     - TEST_CASE=PutGet
   #     - NUM_PROCS=4
   #     - DEPTH=4
@@ -184,7 +184,7 @@ services:
   #     - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
   #   environment:
   #     - CTE_INIT_RUNTIME=0
-  #     - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+  #     - WRP_RUNTIME_CONF=/etc/iowarp/cte_config.yaml
   #     - TEST_CASE=Put
   #     - NUM_PROCS=1
   #     - DEPTH=2
@@ -207,7 +207,7 @@ services:
   #     - ./cte_config.yaml:/etc/iowarp/cte_config.yaml:ro
   #   environment:
   #     - CTE_INIT_RUNTIME=0
-  #     - WRP_CTE_CONF=/etc/iowarp/cte_config.yaml
+  #     - WRP_RUNTIME_CONF=/etc/iowarp/cte_config.yaml
   #     - TEST_CASE=Put
   #     - NUM_PROCS=16
   #     - DEPTH=16

@@ -23,12 +23,10 @@ add_executable(test_core_functionality
     test_core_functionality.cc
 )
 
-# TODO: Create test_query executable for query API tests (TagQuery, BlobQuery)
-# Currently commented out because test_query.cc does not exist yet
-# Uncomment when test_query.cc is created to test the query APIs
-# add_executable(test_query
-#     test_query.cc
-# )
+# Create test_query executable for query API tests (TagQuery, BlobQuery)
+add_executable(test_query
+    test_query.cc
+)
 
 # Link against required libraries using modern target names
 target_link_libraries(cte_core_unit_tests
@@ -50,16 +48,15 @@ target_link_libraries(test_core_functionality
     MPI::MPI_CXX                 # MPI support if needed
 )
 
-# TODO: Link test_query - uncomment when test_query.cc is created
 # Link test_query
-# target_link_libraries(test_query
-#     wrp_cte_core_client          # CTE core client library
-#     wrp_cte_core_runtime         # CTE core runtime library
-#     chimaera::cxx                # Modern Chimaera core framework target
-#     chimaera::admin_client       # Modern Chimaera admin target (if needed)
-#     Catch2::Catch2WithMain       # Catch2 testing framework with main
-#     MPI::MPI_CXX                 # MPI support if needed
-# )
+target_link_libraries(test_query
+    wrp_cte_core_client          # CTE core client library
+    wrp_cte_core_runtime         # CTE core runtime library
+    chimaera::cxx                # Modern Chimaera core framework target
+    chimaera::admin_client       # Modern Chimaera admin target (if needed)
+    Catch2::Catch2WithMain       # Catch2 testing framework with main
+    MPI::MPI_CXX                 # MPI support if needed
+)
 
 # Set compile definitions for runtime initialization control
 # Note: Runtime initialization is now controlled by CTE_INIT_RUNTIME environment variable
@@ -81,13 +78,13 @@ target_compile_options(test_core_functionality PRIVATE
     $<$<CONFIG:Release>:-O3>     # Optimization for release
 )
 
-# TODO: Compile options for test_query - uncomment when test_query.cc is created
-# target_compile_features(test_query PRIVATE cxx_std_17)
-# target_compile_options(test_query PRIVATE
-#     -Wall -Wextra -Werror        # Strict warnings as per CLAUDE.md
-#     $<$<CONFIG:Debug>:-g -O0>    # Debug symbols and no optimization for debug
-#     $<$<CONFIG:Release>:-O3>     # Optimization for release
-# )
+# Compile options for test_query
+target_compile_features(test_query PRIVATE cxx_std_17)
+target_compile_options(test_query PRIVATE
+    -Wall -Wextra -Werror        # Strict warnings as per CLAUDE.md
+    $<$<CONFIG:Debug>:-g -O0>    # Debug symbols and no optimization for debug
+    $<$<CONFIG:Release>:-O3>     # Optimization for release
+)
 
 # Include directories
 target_include_directories(cte_core_unit_tests PRIVATE
@@ -100,11 +97,11 @@ target_include_directories(test_core_functionality PRIVATE
     ${CMAKE_SOURCE_DIR}/core/src
 )
 
-# TODO: Include directories for test_query - uncomment when test_query.cc is created
-# target_include_directories(test_query PRIVATE
-#     ${CMAKE_SOURCE_DIR}/core/include
-#     ${CMAKE_SOURCE_DIR}/core/src
-# )
+# Include directories for test_query
+target_include_directories(test_query PRIVATE
+    ${CMAKE_SOURCE_DIR}/core/include
+    ${CMAKE_SOURCE_DIR}/core/src
+)
 
 # Add test discovery for CTest integration
 include(CTest)
@@ -285,17 +282,11 @@ endif()
 # ------------------------------------------------------------------------------
 # Install Targets
 # ------------------------------------------------------------------------------
-install(TARGETS cte_core_unit_tests test_core_functionality
+install(TARGETS cte_core_unit_tests test_core_functionality test_query
     LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
     ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
     RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}
 )
-# TODO: Add test_query to install targets when test_query.cc is created
-# install(TARGETS cte_core_unit_tests test_core_functionality test_query
-#     LIBRARY DESTINATION ${HERMES_INSTALL_LIB_DIR}
-#     ARCHIVE DESTINATION ${HERMES_INSTALL_LIB_DIR}
-#     RUNTIME DESTINATION ${HERMES_INSTALL_BIN_DIR}
-# )
 
 # ------------------------------------------------------------------------------
 # Add External Integration Tests

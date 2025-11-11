@@ -13,11 +13,13 @@
 /**
  * CTE Core Benchmark Application
  *
- * This benchmark measures the performance of Put, Get, and GetTagSize operations
- * in the Content Transfer Engine (CTE) with MPI support for parallel I/O.
+ * This benchmark measures the performance of Put, Get, and GetTagSize
+ * operations in the Content Transfer Engine (CTE) with MPI support for parallel
+ * I/O.
  *
  * Usage:
- *   mpirun -n <num_procs> wrp_cte_bench <test_case> <depth> <io_size> <io_count>
+ *   mpirun -n <num_procs> wrp_cte_bench <test_case> <depth> <io_size>
+ * <io_count>
  *
  * Parameters:
  *   test_case: Benchmark to conduct (Put, Get, PutGet)
@@ -26,12 +28,12 @@
  *   io_count: Number of I/O operations to generate per node
  */
 
-#include <mpi.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <mpi.h>
 #include <string>
 #include <thread>
 #include <vector>
@@ -56,8 +58,8 @@ chi::u64 ParseSize(const std::string &size_str) {
   for (char c : size_str) {
     if (std::isdigit(c)) {
       num_str += c;
-    } else if (c == 'k' || c == 'K' || c == 'm' || c == 'M' ||
-               c == 'g' || c == 'G') {
+    } else if (c == 'k' || c == 'K' || c == 'm' || c == 'M' || c == 'g' ||
+               c == 'G') {
       suffix = std::tolower(c);
       break;
     }
@@ -71,10 +73,18 @@ chi::u64 ParseSize(const std::string &size_str) {
   size = std::stoull(num_str);
 
   switch (suffix) {
-    case 'k': multiplier = 1024; break;
-    case 'm': multiplier = 1024 * 1024; break;
-    case 'g': multiplier = 1024 * 1024 * 1024; break;
-    default: multiplier = 1; break;
+  case 'k':
+    multiplier = 1024;
+    break;
+  case 'm':
+    multiplier = 1024 * 1024;
+    break;
+  case 'g':
+    multiplier = 1024 * 1024 * 1024;
+    break;
+  default:
+    multiplier = 1;
+    break;
   }
 
   return size * multiplier;
@@ -110,7 +120,8 @@ std::string FormatTime(double milliseconds) {
  * Calculate bandwidth in MB/s
  */
 double CalcBandwidth(chi::u64 total_bytes, double milliseconds) {
-  if (milliseconds <= 0.0) return 0.0;
+  if (milliseconds <= 0.0)
+    return 0.0;
   double seconds = milliseconds / 1000.0;
   double megabytes = static_cast<double>(total_bytes) / (1024.0 * 1024.0);
   return megabytes / seconds;
@@ -122,7 +133,7 @@ double CalcBandwidth(chi::u64 total_bytes, double milliseconds) {
  * Returns true if unset or set to any value except "0", "false", "no", "off"
  */
 bool ShouldInitializeRuntime() {
-  const char* env_val = std::getenv("CTE_INIT_RUNTIME");
+  const char *env_val = std::getenv("CTE_INIT_RUNTIME");
   if (env_val == nullptr) {
     return false; // Default for benchmark: assume runtime already initialized
   }
@@ -132,17 +143,17 @@ bool ShouldInitializeRuntime() {
   return !(val == "0" || val == "false" || val == "no" || val == "off");
 }
 
-}  // namespace
+} // namespace
 
 /**
  * Main benchmark class
  */
 class CTEBenchmark {
- public:
-  CTEBenchmark(int rank, int size, const std::string &test_case,
-               int depth, chi::u64 io_size, int io_count)
-      : rank_(rank), size_(size), test_case_(test_case),
-        depth_(depth), io_size_(io_size), io_count_(io_count) {}
+public:
+  CTEBenchmark(int rank, int size, const std::string &test_case, int depth,
+               chi::u64 io_size, int io_count)
+      : rank_(rank), size_(size), test_case_(test_case), depth_(depth),
+        io_size_(io_size), io_count_(io_count) {}
 
   ~CTEBenchmark() = default;
 
@@ -172,7 +183,7 @@ class CTEBenchmark {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
- private:
+private:
   void PrintBenchmarkInfo() {
     std::cout << "=== CTE Core Benchmark ===" << std::endl;
     std::cout << "Test case: " << test_case_ << std::endl;
@@ -180,8 +191,10 @@ class CTEBenchmark {
     std::cout << "Async depth: " << depth_ << std::endl;
     std::cout << "I/O size: " << FormatSize(io_size_) << std::endl;
     std::cout << "I/O count per rank: " << io_count_ << std::endl;
-    std::cout << "Total I/O per rank: " << FormatSize(io_size_ * io_count_) << std::endl;
-    std::cout << "Total I/O (all ranks): " << FormatSize(io_size_ * io_count_ * size_) << std::endl;
+    std::cout << "Total I/O per rank: " << FormatSize(io_size_ * io_count_)
+              << std::endl;
+    std::cout << "Total I/O (all ranks): "
+              << FormatSize(io_size_ * io_count_ * size_) << std::endl;
     std::cout << "===========================" << std::endl << std::endl;
   }
 
@@ -204,7 +217,8 @@ class CTEBenchmark {
 
       // Generate async Put operations
       for (int j = 0; j < batch_size; ++j) {
-        std::string tag_name = "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
+        std::string tag_name =
+            "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
         wrp_cte::core::Tag tag(tag_name);
         std::string blob_name = "blob_0";
 
@@ -220,7 +234,8 @@ class CTEBenchmark {
     }
 
     auto end_time = high_resolution_clock::now();
-    auto duration_ms = duration_cast<milliseconds>(end_time - start_time).count();
+    auto duration_ms =
+        duration_cast<milliseconds>(end_time - start_time).count();
 
     PrintResults("Put", duration_ms);
   }
@@ -240,7 +255,8 @@ class CTEBenchmark {
     }
 
     for (int i = 0; i < io_count_; ++i) {
-      std::string tag_name = "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i);
+      std::string tag_name =
+          "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i);
       wrp_cte::core::Tag tag(tag_name);
       std::string blob_name = "blob_0";
 
@@ -261,7 +277,8 @@ class CTEBenchmark {
 
       // For Get operations, use synchronous API in batches
       for (int j = 0; j < batch_size; ++j) {
-        std::string tag_name = "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
+        std::string tag_name =
+            "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
         wrp_cte::core::Tag tag(tag_name);
         std::string blob_name = "blob_0";
 
@@ -270,7 +287,8 @@ class CTEBenchmark {
     }
 
     auto end_time = high_resolution_clock::now();
-    auto duration_ms = duration_cast<milliseconds>(end_time - start_time).count();
+    auto duration_ms =
+        duration_cast<milliseconds>(end_time - start_time).count();
 
     PrintResults("Get", duration_ms);
   }
@@ -297,7 +315,8 @@ class CTEBenchmark {
 
       // Generate async Put operations
       for (int j = 0; j < batch_size; ++j) {
-        std::string tag_name = "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
+        std::string tag_name =
+            "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
         wrp_cte::core::Tag tag(tag_name);
         std::string blob_name = "blob_0";
 
@@ -313,7 +332,8 @@ class CTEBenchmark {
 
       // Perform Get operations synchronously
       for (int j = 0; j < batch_size; ++j) {
-        std::string tag_name = "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
+        std::string tag_name =
+            "tag_r" + std::to_string(rank_) + "_i" + std::to_string(i + j);
         wrp_cte::core::Tag tag(tag_name);
         std::string blob_name = "blob_0";
 
@@ -322,7 +342,8 @@ class CTEBenchmark {
     }
 
     auto end_time = high_resolution_clock::now();
-    auto duration_ms = duration_cast<milliseconds>(end_time - start_time).count();
+    auto duration_ms =
+        duration_cast<milliseconds>(end_time - start_time).count();
 
     PrintResults("PutGet", duration_ms);
   }
@@ -334,14 +355,15 @@ class CTEBenchmark {
       all_times.resize(size_);
     }
 
-    MPI_Gather(&duration_ms, 1, MPI_LONG_LONG,
-               all_times.data(), 1, MPI_LONG_LONG,
-               0, MPI_COMM_WORLD);
+    MPI_Gather(&duration_ms, 1, MPI_LONG_LONG, all_times.data(), 1,
+               MPI_LONG_LONG, 0, MPI_COMM_WORLD);
 
     if (rank_ == 0) {
       // Calculate statistics
-      long long min_time = *std::min_element(all_times.begin(), all_times.end());
-      long long max_time = *std::max_element(all_times.begin(), all_times.end());
+      long long min_time =
+          *std::min_element(all_times.begin(), all_times.end());
+      long long max_time =
+          *std::max_element(all_times.begin(), all_times.end());
       long long sum_time = 0;
       for (auto t : all_times) {
         sum_time += t;
@@ -362,9 +384,12 @@ class CTEBenchmark {
       std::cout << "Time (max): " << FormatTime(max_time) << std::endl;
       std::cout << "Time (avg): " << FormatTime(avg_time) << std::endl;
       std::cout << std::endl;
-      std::cout << "Bandwidth per rank (min): " << min_bw << " MB/s" << std::endl;
-      std::cout << "Bandwidth per rank (max): " << max_bw << " MB/s" << std::endl;
-      std::cout << "Bandwidth per rank (avg): " << avg_bw << " MB/s" << std::endl;
+      std::cout << "Bandwidth per rank (min): " << min_bw << " MB/s"
+                << std::endl;
+      std::cout << "Bandwidth per rank (max): " << max_bw << " MB/s"
+                << std::endl;
+      std::cout << "Bandwidth per rank (avg): " << avg_bw << " MB/s"
+                << std::endl;
       std::cout << "Aggregate bandwidth: " << agg_bw << " MB/s" << std::endl;
       std::cout << "===========================" << std::endl;
     }
@@ -389,15 +414,22 @@ int main(int argc, char **argv) {
   // Check arguments
   if (argc != 5) {
     if (rank == 0) {
-      std::cerr << "Usage: " << argv[0] << " <test_case> <depth> <io_size> <io_count>" << std::endl;
+      std::cerr << "Usage: " << argv[0]
+                << " <test_case> <depth> <io_size> <io_count>" << std::endl;
       std::cerr << "  test_case: Put, Get, or PutGet" << std::endl;
       std::cerr << "  depth: Number of async requests (e.g., 4)" << std::endl;
-      std::cerr << "  io_size: Size of I/O operations (e.g., 1m, 4k, 1g)" << std::endl;
-      std::cerr << "  io_count: Number of I/O operations per rank (e.g., 100)" << std::endl;
+      std::cerr << "  io_size: Size of I/O operations (e.g., 1m, 4k, 1g)"
+                << std::endl;
+      std::cerr << "  io_count: Number of I/O operations per rank (e.g., 100)"
+                << std::endl;
       std::cerr << std::endl;
       std::cerr << "Environment variables:" << std::endl;
-      std::cerr << "  CTE_INIT_RUNTIME: Set to '1', 'true', 'yes', or 'on' to initialize runtime" << std::endl;
-      std::cerr << "                    Default: assumes runtime already initialized" << std::endl;
+      std::cerr << "  CTE_INIT_RUNTIME: Set to '1', 'true', 'yes', or 'on' to "
+                   "initialize runtime"
+                << std::endl;
+      std::cerr
+          << "                    Default: assumes runtime already initialized"
+          << std::endl;
     }
     MPI_Finalize();
     return 1;
@@ -415,7 +447,8 @@ int main(int argc, char **argv) {
     // Initialize runtime
     if (!chi::CHIMAERA_RUNTIME_INIT()) {
       if (rank == 0) {
-        std::cerr << "Error: Failed to initialize Chimaera runtime" << std::endl;
+        std::cerr << "Error: Failed to initialize Chimaera runtime"
+                  << std::endl;
       }
       MPI_Finalize();
       return 1;
@@ -437,7 +470,9 @@ int main(int argc, char **argv) {
     }
   } else {
     if (rank == 0) {
-      std::cout << "Initializing CTE client only (runtime assumed initialized)..." << std::endl;
+      std::cout
+          << "Initializing CTE client only (runtime assumed initialized)..."
+          << std::endl;
     }
 
     // Initialize client only

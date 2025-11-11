@@ -25,7 +25,7 @@ WORKDIR /benchmarks
 
 # Set default environment variables for CTE runtime
 ENV CTE_INIT_RUNTIME=0
-ENV WRP_CTE_CONF=/benchmarks/cte_config.yaml
+ENV WRP_RUNTIME_CONF=/benchmarks/cte_config.yaml
 
 # Default benchmark parameters (can be overridden with environment variables)
 ENV TEST_CASE=Put

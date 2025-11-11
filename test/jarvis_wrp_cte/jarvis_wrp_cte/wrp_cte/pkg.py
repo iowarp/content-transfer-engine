@@ -70,7 +70,7 @@ class WrpCte(Service):
         Configure the CTE service with provided keyword arguments.
         
         This method generates the CTE YAML configuration file and sets
-        the WRP_CTE_CONF environment variable.
+        the WRP_RUNTIME_CONF environment variable.
         
         Args:
             **kwargs: Configuration arguments from _configure_menu.
@@ -106,8 +106,8 @@ class WrpCte(Service):
             raise
         
         # Set environment variable
-        self.setenv('WRP_CTE_CONF', self.config_file_path)
-        self.log(f"Environment variable WRP_CTE_CONF set to: {self.config_file_path}")
+        self.setenv('WRP_RUNTIME_CONF', self.config_file_path)
+        self.log(f"Environment variable WRP_RUNTIME_CONF set to: {self.config_file_path}")
 
         # Create parent directories for each device
         self.log("Creating parent directories for storage devices...")
@@ -444,7 +444,7 @@ class WrpCte(Service):
                 "running": True,
                 "details": "Configuration service active",
                 "config_file": self.config_file_path,
-                "env_var_set": 'WRP_CTE_CONF' in (self.env or {})
+                "env_var_set": 'WRP_RUNTIME_CONF' in (self.env or {})
             }
         else:
             return {
